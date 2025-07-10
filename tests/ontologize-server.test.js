@@ -16,12 +16,12 @@ describe("OntologizeServer", function () {
       assert.isFunction(ontologizeServer.extractProperties);
       assert.isFunction(ontologizeServer.getLabel);
       assert.isFunction(ontologizeServer.getVersion);
-      
+
       // Should have new server-only methods
       assert.isFunction(ontologizeServer.loadOntologyFromFile);
       assert.isFunction(ontologizeServer.loadOntologiesFromDirectory);
-      assert.isFunction(ontologizeServer.saveToMongoDB);
-      assert.isFunction(ontologizeServer.importOntologyToMongoDB);
+      assert.isFunction(ontologizeServer.saveToCollection);
+      assert.isFunction(ontologizeServer.importOntology);
       assert.isFunction(ontologizeServer.queryMongoDB);
     });
 
@@ -35,7 +35,7 @@ describe("OntologizeServer", function () {
         "@type": "owl:Class",
         "rdfs:label": "Test Class"
       };
-      
+
       // Should work like parent class
       assert.isTrue(ontologizeServer.isValidOntologyResource(validResource));
       assert.equal(ontologizeServer.getLabel(validResource), "Test Class");
@@ -47,8 +47,8 @@ describe("OntologizeServer", function () {
       assert.isFunction(ontologizeServer.loadOntologyFromFile);
     });
 
-    it("should have saveToMongoDB method", function () {
-      assert.isFunction(ontologizeServer.saveToMongoDB);
+    it("should have saveToCollection method", function () {
+      assert.isFunction(ontologizeServer.saveToCollection);
     });
 
     it("should have queryMongoDB method", function () {
