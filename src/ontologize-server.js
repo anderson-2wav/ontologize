@@ -86,7 +86,7 @@ export class OntologizeServer extends Ontologize {
    * Handles multiple JSON-LD formats and uses LD.compact for proper normalization
    *
    * @param {object|Array} data - Parsed JSON-LD object or array of resources
-   * @param {object} ontologyCollection - MongoDB Ontology collection instance
+   * @param {object} collection - MongoDB Ontology collection instance
    * @param {object} contextCollection - MongoDB Context collection instance
    * @param {object} [opts] - Import options
    * @param {object} [opts.context] - JSON-LD context to use for compaction
@@ -97,9 +97,9 @@ export class OntologizeServer extends Ontologize {
    * @param {boolean} [opts.ensureArrayTypes=true] - Ensure @type is always an array
    * @returns {Promise<object>} Import result with detailed statistics
    */
-  async importOntologyData(data, ontologyCollection, contextCollection, opts = {}) {
+  async importOntologyData(data, collection, contextCollection, opts = {}) {
     check(data, Match.OneOf(Object, Array));
-    check(ontologyCollection, Object);
+    check(collection, Object);
     check(contextCollection, Object);
     check(opts, Object);
 
@@ -119,8 +119,9 @@ export class OntologizeServer extends Ontologize {
       // Step 2: Clear collections if requested
       if (clearCollections) {
         await Promise.all([
-          ontologyCollection.deleteMany({}),
-          contextCollection.deleteMany({})
+          collection.deleteMany({}),
+          // we don't want to empty the contextCollection here
+          // contextCollection.deleteMany({})
         ]);
       }
 
@@ -147,7 +148,7 @@ export class OntologizeServer extends Ontologize {
           const processed = await this._normalizeResource(
             resource,
             contextToUse,
-            ontologyCollection,
+            collection,
             contextCollection,
             { normalize, ontologize, shareTBox, ensureArrayTypes }
           );
