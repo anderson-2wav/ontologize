@@ -185,7 +185,7 @@ export class OntologizeServer extends Ontologize {
   /**
    * Import ontology from file path with BOLD resource normalization
    * Loads JSON-LD file and imports with proper normalization using LD.compact
-   * 
+   *
    * @param {string} filePath - Path to JSON-LD ontology file
    * @param {object} ontologyCollection - MongoDB Ontology collection instance
    * @param {object} contextCollection - MongoDB Context collection instance
@@ -207,17 +207,18 @@ export class OntologizeServer extends Ontologize {
     try {
       // Load JSON-LD file
       const jsonldData = await this.loadOntologyFromFile(filePath);
-      
+
       // Import the loaded data
       const result = await this.importOntologyData(jsonldData, ontologyCollection, contextCollection, opts);
-      
+
       // Add file path information to result
       return {
         ...result,
         inputSource: "file",
         filePath
       };
-    } catch (error) {
+    }
+    catch (error) {
       throw new Error(`Failed to import ontology from file ${filePath}: ${error.message}`);
     }
   }
@@ -225,7 +226,7 @@ export class OntologizeServer extends Ontologize {
   /**
    * Import ontology from parsed JSON-LD data with BOLD resource normalization
    * Handles multiple JSON-LD formats and uses LD.compact for proper normalization
-   * 
+   *
    * @param {object|Array} data - Parsed JSON-LD object or array of resources
    * @param {object} ontologyCollection - MongoDB Ontology collection instance
    * @param {object} contextCollection - MongoDB Context collection instance
@@ -256,7 +257,7 @@ export class OntologizeServer extends Ontologize {
     try {
       // Step 1: Extract context and resources
       const { extractedContext, resources } = this._extractContextAndResources(data);
-      
+
       // Step 2: Clear collections if requested
       if (clearCollections) {
         await Promise.all([
@@ -268,7 +269,7 @@ export class OntologizeServer extends Ontologize {
       // Step 3: Import context
       let contextImported = false;
       let contextToUse = context || extractedContext;
-      
+
       if (extractedContext) {
         await this._importBOLDContext(extractedContext, contextCollection);
         contextImported = true;
@@ -292,16 +293,18 @@ export class OntologizeServer extends Ontologize {
             contextCollection,
             { normalize, ontologize, shareTBox, ensureArrayTypes }
           );
-          
+
           if (processed) {
             stats.processedResources++;
             if (processed.isTBox) {
               stats.tboxResources++;
-            } else {
+            }
+            else {
               stats.aboxResources++;
             }
           }
-        } catch (error) {
+        }
+        catch (error) {
           stats.errors.push({
             resource: resource._id || resource["@id"] || "unknown",
             error: error.message
@@ -316,7 +319,8 @@ export class OntologizeServer extends Ontologize {
         contextImported,
         ...stats
       };
-    } catch (error) {
+    }
+    catch (error) {
       throw new Error(`Failed to import ontology data: ${error.message}`);
     }
   }
@@ -332,10 +336,11 @@ export class OntologizeServer extends Ontologize {
    */
   async importBOLDResources(input, ontologyCollection, contextCollection, opts = {}) {
     check(input, Match.OneOf(String, Object, Array));
-    
+
     if (typeof input === "string") {
       return await this.importOntologyFromFile(input, ontologyCollection, contextCollection, opts);
-    } else {
+    }
+    else {
       return await this.importOntologyData(input, ontologyCollection, contextCollection, opts);
     }
   }
@@ -528,15 +533,18 @@ export class OntologizeServer extends Ontologize {
       for (const item of jsonldData) {
         if (item._id === "@context" && item["@context"]) {
           extractedContext = item["@context"];
-        } else {
+        }
+        else {
           resources.push(item);
         }
       }
-    } else if (jsonldData["@graph"]) {
+    }
+    else if (jsonldData["@graph"]) {
       // @graph format
       extractedContext = jsonldData["@context"] || null;
       resources = jsonldData["@graph"] || [];
-    } else {
+    }
+    else {
       // Single resource
       resources = [jsonldData];
     }
@@ -567,7 +575,7 @@ export class OntologizeServer extends Ontologize {
    */
   async _processBOLDResource(resource, context, ontologyCollection, contextCollection, opts) {
     const { normalize = true, ontologize = true, shareTBox = false, ensureArrayTypes = true } = opts;
-    
+
     let processedResource = { ...resource };
     let isTBoxResource = false;
 
@@ -580,16 +588,19 @@ export class OntologizeServer extends Ontologize {
           ensureSafeKeys: true,
           showContext: false
         });
-        
+
         // Handle the case where compact returns an array or @graph
         if (Array.isArray(compacted)) {
           processedResource = compacted[0] || processedResource;
-        } else if (compacted["@graph"]) {
+        }
+        else if (compacted["@graph"]) {
           processedResource = compacted["@graph"][0] || processedResource;
-        } else {
+        }
+        else {
           processedResource = compacted;
         }
-      } catch (error) {
+      }
+      catch (error) {
         console.warn(`Failed to compact resource ${resource._id || resource["@id"]}: ${error.message}`);
       }
     }
@@ -632,7 +643,8 @@ export class OntologizeServer extends Ontologize {
           { upsert: true }
         );
       }
-    } else {
+    }
+    else {
       // ABox resource - save to main collection
       await ontologyCollection.replaceOne(
         { _id: processedResource._id },
@@ -641,10 +653,10 @@ export class OntologizeServer extends Ontologize {
       );
     }
 
-    return { 
-      success: true, 
+    return {
+      success: true,
       isTBox: isTBoxResource,
-      resource: processedResource 
+      resource: processedResource
     };
   }
 }
