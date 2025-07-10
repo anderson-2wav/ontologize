@@ -16,10 +16,12 @@ export class OntologizeServer extends Ontologize {
   /**
    * Create a new OntologizeServer instance
    *
+   * @param {object} ontologyCollection
+   * @param {object} contextCollection
    * @param {object} [opts] - Configuration options (same as Ontologize)
    */
-  constructor(opts = {}) {
-    super(opts);
+  constructor(ontologyCollection, contextCollection, opts = {}) {
+    super(ontologyCollection, contextCollection, opts);
   }
 
   /**

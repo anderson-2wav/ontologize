@@ -17,15 +17,27 @@ import jsonPath from "./lib/jsonpath.js";
 export class Ontologize {
   /**
    * Create a new Ontologize instance
-   * 
+   *
+   * @param {object} ontologyCollection
+   * @param {object} contextCollection
    * @param {object} [opts] - Configuration options
+   * @param {object} [opts.collections] - named collections in addition to ontology and context
    * @param {object} [opts.context] - Default JSON-LD context
    * @param {boolean} [opts.debug=false] - Enable debug logging
    */
-  constructor(opts = {}) {
+  constructor(ontologyCollection, contextCollection, opts = {}) {
+    check(ontologyCollection, Object);
+    check(contextCollection, Object);
+    this.collections = {
+      Ontology: ontologyCollection,
+      Context: contextCollection
+    };
     this.opts = opts;
     this.opts.context = this.opts.context || {};
     this.opts.debug = this.opts.debug || false;
+    if (this.opts.collections) {
+      Object.assign(this.collections, this.opts.collections);
+    }
     this.version = "0.1.0";
   }
 
