@@ -36,7 +36,8 @@
   },
   "dependencies": {
     "lodash": "^4.17.21",
-    "chai": "^4.3.10"
+    "chai": "^4.3.10",
+    "ld": "file:../ld"
   },
   "devDependencies": {
     "mocha": "^10.2.0",
