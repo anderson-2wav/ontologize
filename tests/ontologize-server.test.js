@@ -19,10 +19,8 @@ describe("OntologizeServer", function () {
 
       // Should have new server-only methods
       assert.isFunction(ontologizeServer.loadOntologyFromFile);
-      assert.isFunction(ontologizeServer.loadOntologiesFromDirectory);
-      assert.isFunction(ontologizeServer.saveToCollection);
-      assert.isFunction(ontologizeServer.importOntology);
-      assert.isFunction(ontologizeServer.queryMongoDB);
+      assert.isFunction(ontologizeServer.importOntologyFromFile);
+      assert.isFunction(ontologizeServer.importOntologyData);
     });
 
     it("should have same version as parent class", function () {
@@ -47,12 +45,12 @@ describe("OntologizeServer", function () {
       assert.isFunction(ontologizeServer.loadOntologyFromFile);
     });
 
-    it("should have saveToCollection method", function () {
-      assert.isFunction(ontologizeServer.saveToCollection);
+    it("should have importOntologyFromFile method", function () {
+      assert.isFunction(ontologizeServer.importOntologyFromFile);
     });
 
-    it("should have queryMongoDB method", function () {
-      assert.isFunction(ontologizeServer.queryMongoDB);
+    it("should have importOntologyData method", function () {
+      assert.isFunction(ontologizeServer.importOntologyData);
     });
   });
 });
