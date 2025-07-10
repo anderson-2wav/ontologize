@@ -129,7 +129,7 @@ export class OntologizeServer extends Ontologize {
       let contextToUse = context || extractedContext;
 
       if (extractedContext) {
-        await this._importBOLDContext(extractedContext, contextCollection);
+        await this._importContext(extractedContext, contextCollection);
         contextImported = true;
       }
 
@@ -144,7 +144,7 @@ export class OntologizeServer extends Ontologize {
 
       for (const resource of resources) {
         try {
-          const processed = await this._processBOLDResource(
+          const processed = await this._normalizeResource(
             resource,
             contextToUse,
             ontologyCollection,
@@ -239,7 +239,7 @@ export class OntologizeServer extends Ontologize {
    * Import context into Context collection with BOLD normalization
    * @private
    */
-  async _importBOLDContext(contextData, contextCollection) {
+  async _importContext(contextData, contextCollection) {
     const contextResource = {
       _id: "@context",
       ...contextData
@@ -256,7 +256,7 @@ export class OntologizeServer extends Ontologize {
    * Process a single resource with BOLD normalization using LD.compact
    * @private
    */
-  async _processBOLDResource(resource, context, ontologyCollection, contextCollection, opts) {
+  async _normalizeResource(resource, context, ontologyCollection, contextCollection, opts) {
     const { normalize = true, ontologize = true, shareTBox = false, ensureArrayTypes = true } = opts;
 
     let processedResource = { ...resource };
