@@ -1,0 +1,547 @@
+import { assert } from "chai";
+import { OntologizeServer } from "../src/ontologize-server.js";
+import { readFile } from "fs/promises";
+import { join } from "path";
+
+describe("OntologizeServer Import", function () {
+  let ontologizeServer;
+  let mockOntologyCollection;
+  let mockContextCollection;
+  let ontologyData = [];
+  let contextData = {};
+
+  beforeEach(function () {
+    ontologizeServer = new OntologizeServer();
+
+    // Mock collections
+    ontologyData = [];
+    contextData = {};
+
+    mockOntologyCollection = {
+      deleteMany: async () => {
+        const deletedCount = ontologyData.length;
+        ontologyData.length = 0;
+        return { deletedCount };
+      },
+      replaceOne: async (filter, doc, opts) => {
+        const index = ontologyData.findIndex(item => item._id === filter._id);
+        if (index >= 0) {
+          ontologyData[index] = doc;
+        }
+        else {
+          ontologyData.push(doc);
+        }
+        return { acknowledged: true, matchedCount: index >= 0 ? 1 : 0, modifiedCount: 1, upsertedId: null };
+      },
+      find: (query) => ({
+        toArray: async () => ontologyData.filter(item => {
+          return Object.keys(query).every(key => item[key] === query[key]);
+        })
+      })
+    };
+
+    mockContextCollection = {
+      deleteMany: async () => {
+        const wasEmpty = Object.keys(contextData).length === 0;
+        contextData = {};
+        return { deletedCount: wasEmpty ? 0 : 1 };
+      },
+      replaceOne: async (filter, doc, opts) => {
+        contextData = doc;
+        return { acknowledged: true, matchedCount: 1, modifiedCount: 1, upsertedId: null };
+      },
+      findOne: async (filter) => {
+        return filter._id === "@context" ? contextData : null;
+      }
+    };
+  });
+
+  describe("importOntologyFromFile", function () {
+    it("should exist as a method", function () {
+      assert.isFunction(ontologizeServer.importOntologyFromFile);
+    });
+
+    it("should import simple ontology array", async function () {
+      // Create test data
+      const testData = [
+        {
+          "_id": "@context",
+          "@context": {
+            "@vocab": "http://example.org/",
+            "rdfs": "http://www.w3.org/2000/01/rdf-schema#"
+          }
+        },
+        {
+          "_id": "ex:TestClass",
+          "@type": "rdfs:Class",
+          "rdfs:label": "Test Class"
+        },
+        {
+          "_id": "ex:testProperty",
+          "@type": "owl:ObjectProperty",
+          "rdfs:label": "Test Property"
+        }
+      ];
+
+      // Mock file loading
+      ontologizeServer.loadOntologyFromFile = async (filePath) => testData;
+
+      const result = await ontologizeServer.importOntologyFromFile(
+        "test.json",
+        mockOntologyCollection,
+        mockContextCollection
+      );
+
+      assert.isTrue(result.success);
+      assert.isTrue(result.contextImported);
+      assert.equal(result.processedResources, 2);
+      assert.equal(result.totalResources, 2);
+
+      // Check context was imported
+      assert.equal(contextData._id, "@context");
+      assert.equal(contextData["@vocab"], "http://example.org/");
+
+      // Check resources were imported
+      assert.equal(ontologyData.length, 2);
+      assert.isTrue(ontologyData.some(r => r._id === "ex:TestClass"));
+      assert.isTrue(ontologyData.some(r => r._id === "ex:testProperty"));
+    });
+
+    it("should handle @graph format", async function () {
+      const testData = {
+        "@context": {
+          "@vocab": "http://example.org/",
+          "rdfs": "http://www.w3.org/2000/01/rdf-schema#"
+        },
+        "@graph": [
+          {
+            "@id": "ex:TestClass",
+            "@type": "rdfs:Class",
+            "rdfs:label": "Test Class"
+          }
+        ]
+      };
+
+      ontologizeServer.loadOntologyFromFile = async (filePath) => testData;
+
+      const result = await ontologizeServer.importOntologyFromFile(
+        "test.json",
+        mockOntologyCollection,
+        mockContextCollection
+      );
+
+      assert.isTrue(result.success);
+      // Note: @graph format doesn't set contextImported flag in our current implementation
+      assert.equal(contextData["@vocab"], "http://example.org/");
+    });
+
+    it("should handle clearCollections option", async function () {
+      // Pre-populate collections
+      ontologyData.push({ _id: "existing", data: "old" });
+      contextData = { _id: "@context", old: "data" };
+
+      const testData = [
+        {
+          "_id": "@context",
+          "@context": {
+            "@vocab": "http://example.org/"
+          }
+        },
+        {
+          "_id": "ex:NewClass",
+          "@type": "rdfs:Class"
+        }
+      ];
+
+      ontologizeServer.loadOntologyFromFile = async (filePath) => testData;
+
+      const result = await ontologizeServer.importOntologyFromFile(
+        "test.json",
+        mockOntologyCollection,
+        mockContextCollection,
+        { clearCollections: true }
+      );
+
+      assert.isTrue(result.success);
+      assert.equal(ontologyData.length, 1);
+      assert.equal(ontologyData[0]._id, "ex:NewClass");
+    });
+  });
+
+  describe("_isTBoxResource", function () {
+    it("should identify owl:Class as TBox resource", function () {
+      const resource = {
+        "_id": "ex:TestClass",
+        "@type": "owl:Class"
+      };
+
+      assert.isTrue(ontologizeServer._isTBoxResource(resource));
+    });
+
+    it("should identify rdfs:Class as TBox resource", function () {
+      const resource = {
+        "_id": "ex:TestClass",
+        "@type": "rdfs:Class"
+      };
+
+      assert.isTrue(ontologizeServer._isTBoxResource(resource));
+    });
+
+    it("should identify owl:ObjectProperty as TBox resource", function () {
+      const resource = {
+        "_id": "ex:testProperty",
+        "@type": "owl:ObjectProperty"
+      };
+
+      assert.isTrue(ontologizeServer._isTBoxResource(resource));
+    });
+
+    it("should identify multiple types including TBox", function () {
+      const resource = {
+        "_id": "ex:TestClass",
+        "@type": ["owl:Class", "ex:SpecialClass"]
+      };
+
+      assert.isTrue(ontologizeServer._isTBoxResource(resource));
+    });
+
+    it("should not identify regular resources as TBox", function () {
+      const resource = {
+        "_id": "ex:instance",
+        "@type": "ex:Person"
+      };
+
+      assert.isFalse(ontologizeServer._isTBoxResource(resource));
+    });
+
+    it("should handle resources without @type", function () {
+      const resource = {
+        "_id": "ex:instance",
+        "rdfs:label": "Test"
+      };
+
+      assert.isFalse(ontologizeServer._isTBoxResource(resource));
+    });
+  });
+
+  describe("real file import", function () {
+    it("should import actual ontology.json file", async function () {
+      this.timeout(10000); // Increase timeout for file operations
+
+      const filePath = "../../../data/ontology.json";
+
+      // Test loading the file
+      let fileData;
+      try {
+        fileData = await ontologizeServer.loadOntologyFromFile(filePath);
+      }
+      catch (error) {
+        // Skip test if file doesn't exist
+        this.skip("ontology.json file not found");
+        return;
+      }
+
+      assert.isArray(fileData);
+      assert.isTrue(fileData.length > 0);
+
+      // First element should be context
+      const firstElement = fileData[0];
+      assert.equal(firstElement._id, "@context");
+      assert.isObject(firstElement["@context"]);
+
+      // Should have ontology resources
+      const ontologyResources = fileData.slice(1);
+      assert.isTrue(ontologyResources.length > 0);
+
+      // Test actual import
+      const result = await ontologizeServer.importOntologyFromFile(
+        filePath,
+        mockOntologyCollection,
+        mockContextCollection
+      );
+
+      assert.isTrue(result.success);
+      assert.isTrue(result.contextImported);
+      assert.isTrue(result.resourcesProcessed > 0);
+
+      // Check that context was imported
+      assert.equal(contextData._id, "@context");
+      assert.isString(contextData["@vocab"]);
+
+      // Check that ontology resources were imported
+      assert.isTrue(ontologyData.length > 0);
+
+      // Check for specific CTB ontology resources
+      const ctbClasses = ontologyData.filter(r =>
+        r._id && r._id.startsWith("ctb:") &&
+        (r["@type"] === "rdfs:Class" || (Array.isArray(r["@type"]) && r["@type"].includes("rdfs:Class")))
+      );
+      assert.isTrue(ctbClasses.length > 0);
+
+      console.log(`Imported ${result.resourcesProcessed} resources from ${result.totalResources} total`);
+      console.log(`Found ${ctbClasses.length} CTB classes`);
+    });
+  });
+
+  describe("New Import Methods", function () {
+    it("should have importOntologyFromFile method", function () {
+      assert.isFunction(ontologizeServer.importOntologyFromFile);
+    });
+
+    it("should have importOntologyData method", function () {
+      assert.isFunction(ontologizeServer.importOntologyData);
+    });
+
+    it("should import from file path using importOntologyFromFile", async function () {
+      const testData = [
+        {
+          "_id": "@context",
+          "@context": {
+            "@vocab": "http://example.org/",
+            "rdfs": "http://www.w3.org/2000/01/rdf-schema#"
+          }
+        },
+        {
+          "_id": "ex:TestClass",
+          "@type": "rdfs:Class",
+          "rdfs:label": "Test Class"
+        }
+      ];
+
+      // Mock file loading
+      ontologizeServer.loadOntologyFromFile = async (filePath) => testData;
+
+      const result = await ontologizeServer.importOntologyFromFile(
+        "test.json",
+        mockOntologyCollection,
+        mockContextCollection
+      );
+
+      assert.isTrue(result.success);
+      assert.equal(result.inputSource, "file");
+      assert.equal(result.filePath, "test.json");
+      assert.isTrue(result.contextImported);
+      assert.equal(result.totalResources, 1);
+      assert.equal(result.processedResources, 1);
+      assert.equal(result.tboxResources, 1);
+      assert.equal(result.aboxResources, 0);
+    });
+
+    it("should import from parsed object using importOntologyData", async function () {
+      const testData = {
+        "@context": {
+          "@vocab": "http://example.org/",
+          "rdfs": "http://www.w3.org/2000/01/rdf-schema#"
+        },
+        "@graph": [
+          {
+            "@id": "ex:TestClass",
+            "@type": "rdfs:Class",
+            "rdfs:label": "Test Class"
+          }
+        ]
+      };
+
+      const result = await ontologizeServer.importOntologyData(
+        testData,
+        mockOntologyCollection,
+        mockContextCollection
+      );
+
+      assert.isTrue(result.success);
+      assert.equal(result.inputSource, "object");
+      assert.isNull(result.filePath);
+      assert.isTrue(result.contextImported);
+      assert.equal(result.totalResources, 1);
+      assert.equal(result.processedResources, 1);
+    });
+
+    it("should import from array using importOntologyData", async function () {
+      const testData = [
+        {
+          "_id": "ex:TestClass",
+          "@type": "rdfs:Class",
+          "rdfs:label": "Test Class"
+        },
+        {
+          "_id": "ex:Instance",
+          "@type": "ex:Person",
+          "rdfs:label": "Test Instance"
+        }
+      ];
+
+      const result = await ontologizeServer.importOntologyData(
+        testData,
+        mockOntologyCollection,
+        mockContextCollection
+      );
+
+      assert.isTrue(result.success);
+      assert.equal(result.inputSource, "object");
+      assert.equal(result.totalResources, 2);
+      assert.equal(result.processedResources, 2);
+      assert.equal(result.tboxResources, 1);
+      assert.equal(result.aboxResources, 1);
+    });
+
+    it("should normalize @type to array", async function () {
+      const testData = [
+        {
+          "_id": "ex:TestClass",
+          "@type": "rdfs:Class",
+          "rdfs:label": "Test Class"
+        }
+      ];
+
+      const result = await ontologizeServer.importOntologyData(
+        testData,
+        mockOntologyCollection,
+        mockContextCollection,
+        { ensureArrayTypes: true }
+      );
+
+      assert.isTrue(result.success);
+      assert.equal(result.processedResources, 1);
+
+      // Check that @type was converted to array
+      const savedResource = ontologyData[0];
+      assert.isArray(savedResource["@type"]);
+      assert.equal(savedResource["@type"][0], "rdfs:Class");
+    });
+
+    it("should handle clearCollections option", async function () {
+      // Pre-populate collections
+      ontologyData.push({ _id: "existing", data: "old" });
+      contextData = { _id: "@context", old: "data" };
+
+      const testData = [
+        {
+          "_id": "ex:NewClass",
+          "@type": "rdfs:Class"
+        }
+      ];
+
+      const result = await ontologizeServer.importOntologyData(
+        testData,
+        mockOntologyCollection,
+        mockContextCollection,
+        { clearCollections: true }
+      );
+
+      assert.isTrue(result.success);
+      assert.equal(ontologyData.length, 1);
+      assert.equal(ontologyData[0]._id, "ex:NewClass");
+    });
+
+    it("should provide detailed error information", async function () {
+      const testData = [
+        {
+          // Missing _id should cause error
+          "@type": "rdfs:Class",
+          "rdfs:label": "Invalid Resource"
+        }
+      ];
+
+      const result = await ontologizeServer.importOntologyData(
+        testData,
+        mockOntologyCollection,
+        mockContextCollection
+      );
+
+      assert.isTrue(result.success);
+      assert.equal(result.errors.length, 1);
+      assert.include(result.errors[0].error.toLowerCase(), "resource");
+    });
+
+    it("should work without normalization", async function () {
+      const testData = [
+        {
+          "_id": "ex:TestClass",
+          "@type": "rdfs:Class",
+          "rdfs:label": "Test Class"
+        }
+      ];
+
+      const result = await ontologizeServer.importOntologyData(
+        testData,
+        mockOntologyCollection,
+        mockContextCollection,
+        { normalize: false }
+      );
+
+      assert.isTrue(result.success);
+      assert.equal(result.processedResources, 1);
+    });
+
+    it("should handle custom context", async function () {
+      const customContext = {
+        "@vocab": "http://custom.org/",
+        "test": "http://test.org/"
+      };
+
+      const testData = [
+        {
+          "_id": "test:CustomClass",
+          "@type": "rdfs:Class"
+        }
+      ];
+
+      const result = await ontologizeServer.importOntologyData(
+        testData,
+        mockOntologyCollection,
+        mockContextCollection,
+        { context: customContext }
+      );
+
+      assert.isTrue(result.success);
+      assert.equal(result.processedResources, 1);
+    });
+  });
+
+  describe("BOLD Resource Normalization", function () {
+    it("should ensure @type is array after import", async function () {
+      this.timeout(15000);
+      
+      // Test with actual CTB ontology if available
+      const filePath = "../../../data/ontology.json";
+      
+      let fileData;
+      try {
+        fileData = await ontologizeServer.loadOntologyFromFile(filePath);
+      } catch (error) {
+        this.skip("ontology.json file not found");
+        return;
+      }
+
+      // Import with BOLD normalization
+      const result = await ontologizeServer.importOntologyFromFile(
+        filePath,
+        mockOntologyCollection,
+        mockContextCollection,
+        { 
+          normalize: true, 
+          ensureArrayTypes: true,
+          clearCollections: true 
+        }
+      );
+
+      assert.isTrue(result.success);
+      assert.isTrue(result.processedResources > 0);
+
+      // Check that all resources have @type as array
+      const resourcesWithTypes = ontologyData.filter(r => r["@type"]);
+      assert.isTrue(resourcesWithTypes.length > 0);
+
+      for (const resource of resourcesWithTypes) {
+        assert.isArray(resource["@type"], `Resource ${resource._id} should have @type as array`);
+      }
+
+      console.log(`Normalized ${result.processedResources} resources`);
+      console.log(`TBox resources: ${result.tboxResources}`);
+      console.log(`ABox resources: ${result.aboxResources}`);
+      if (result.errors.length > 0) {
+        console.log(`Errors: ${result.errors.length}`);
+      }
+    });
+  });
+});
