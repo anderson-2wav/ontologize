@@ -4,8 +4,10 @@
  */
 
 export interface OntologizeOptions {
+  /** Named collections in addition to ontology and context */
+  collections?: Record<string, any>;
   /** Default JSON-LD context */
-  context?: Record<string, any>;
+  defaultContext?: Record<string, any>;
   /** Enable debug logging */
   debug?: boolean;
 }
@@ -16,12 +18,26 @@ export type OntologyResource = Resource & {
   "@type": string | string[];
 };
 
+export interface MongoCollection {
+  deleteMany(filter: Record<string, any>): Promise<{ deletedCount: number }>;
+  replaceOne(filter: Record<string, any>, replacement: any, options?: any): Promise<{ acknowledged: boolean; matchedCount: number; modifiedCount: number; upsertedId: any }>;
+  insertOne(document: any): Promise<any>;
+  find(filter: Record<string, any>, options?: any): { toArray(): Promise<any[]> };
+  findOne(filter: Record<string, any>): Promise<any | null>;
+}
+
 /**
  * Ontologize - Utilities for working with ontology data in JSON-LD format
- * 
+ *
  * This class provides client/server safe functions for ontology processing.
  */
 export declare class Ontologize {
+  /** MongoDB collections */
+  collections: {
+    Ontology: MongoCollection;
+    Context: MongoCollection;
+    [key: string]: MongoCollection;
+  };
   /** Configuration options */
   opts: OntologizeOptions;
   /** Module version */
@@ -30,7 +46,7 @@ export declare class Ontologize {
   /**
    * Create a new Ontologize instance
    */
-  constructor(opts?: OntologizeOptions);
+  constructor(ontologyCollection: MongoCollection, contextCollection: MongoCollection, opts?: OntologizeOptions);
 
   /**
    * Validate that a resource is a valid ontology resource
@@ -56,6 +72,9 @@ export declare class Ontologize {
    * Get module version
    */
   getVersion(): string;
+
+  /** Default context with common namespace mappings */
+  static DEFAULT_CONTEXT: Record<string, any>;
 }
 
 export default Ontologize;
