@@ -148,6 +148,192 @@ export class Ontologize {
   getVersion() {
     return this.version;
   }
+
+  static DEFAULT_CONTEXT = {
+    "@vocab" : "https://ontology.2wav.com#",
+    "rdf" : "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+    "rdfs" : "http://www.w3.org/2000/01/rdf-schema#",
+    "owl" : "http://www.w3.org/2002/07/owl#",
+    "xsd" : "http://www.w3.org/2001/XMLSchema#",
+    "foaf" : "http://xmlns.com/foaf/0.1/",
+    "dc" : "http://purl.org/dc/elements/1.1/",
+    "org" : "http://www.w3.org/ns/org#",
+    "uo" : "http://purl.obolibrary.org/obo/uo.owl",
+    "bfo" : "http://purl.obolibrary.org/obo/bfo.owl",
+    "2wav" : "https://ontology.2wav.com#",
+    "2do" : "https://ontology.2wav.com/display#",
+    "ctb" : "https://ontology.2wav.com/bridge#",
+    "ctl" : "https://ontology.2wav.com/800-53#",
+    "ctl5" : "https://ontology.2wav.com/800-53/rev5#",
+    "nice" : "https://ontology.2wav.com/nice#",
+    "acrt" : "https://privatealpha.com/ontology/certification/1#",
+    "time" : "http://www.w3.org/2006/time#",
+    "skos" : "http://www.w3.org/2004/02/skos/core#",
+    "wot" : "http://xmlns.com/wot/0.1/",
+    "vs" : "http://www.w3.org/2003/06/sw-vocab-status/ns#",
+    "brick": "https://brickschema.org/schema/Brick#",
+    "csvw": "http://www.w3.org/ns/csvw#",
+    "dcam": "http://purl.org/dc/dcam/",
+    "dcat": "http://www.w3.org/ns/dcat#",
+    "dcmitype": "http://purl.org/dc/dcmitype/",
+    "dcterms": "http://purl.org/dc/terms/",
+    "doap": "http://usefulinc.com/ns/doap#",
+    "odrl": "http://www.w3.org/ns/odrl/2/",
+    "prof": "http://www.w3.org/ns/dx/prof/",
+    "prov": "http://www.w3.org/ns/prov#",
+    "qb": "http://purl.org/linked-data/cube#",
+    "schema": "https://schema.org/",
+    "sh": "http://www.w3.org/ns/shacl#",
+    "sosa": "http://www.w3.org/ns/sosa/",
+    "ssn": "http://www.w3.org/ns/ssn/",
+    "vann": "http://purl.org/vocab/vann/",
+    "void": "http://rdfs.org/ns/void#",
+    "_id" : "@id",
+    "rdfs:range" : {
+      "@type" : "@id"
+    },
+    "rdfs:domain" : {
+      "@type" : "@id"
+    },
+    "ctb:importance" : {
+      "@type" : "http://www.w3.org/2001/XMLSchema#integer"
+    },
+    "ctb:when" : {
+      "@type" : "http://www.w3.org/2001/XMLSchema#dateTime"
+    },
+    "rdfs:comment" : {
+      "@type" : "http://www.w3.org/2001/XMLSchema#string"
+    },
+    "ctb:confidence" : {
+      "@type" : "http://www.w3.org/2001/XMLSchema#string"
+    },
+    "ctb:hasBeginning" : {
+      "@type" : "http://www.w3.org/2001/XMLSchema#dateTime"
+    },
+    "ctb:hasCertification" : {
+      "@type" : "@id"
+    },
+    "ctb:hasEnd" : {
+      "@type" : "http://www.w3.org/2001/XMLSchema#dateTime"
+    },
+    "ctb:hasKnowledge" : {
+      "@type" : "@id"
+    },
+    "ctb:hasPosition" : {
+      "@type" : "@id"
+    },
+    "ctb:hasSkill" : {
+      "@type" : "@id"
+    },
+    "ctb:hasTask" : {
+      "@type" : "@id"
+    },
+    "ctb:jobTitle" : {
+      "@type" : "http://www.w3.org/2001/XMLSchema#string"
+    },
+    "org:memberDuring" : {
+      "@type" : "@id"
+    },
+    "org:memberOf" : {
+      "@type" : "@id"
+    },
+    "org:organization" : {
+      "@type" : "@id"
+    },
+    "org:role" : {
+      "@type" : "@id"
+    },
+    "rdfs:subClassOf" : {
+      "@type" : "@id"
+    },
+    "2do:schema" : {
+
+    },
+    "dc:description" : {
+      "@type" : "http://www.w3.org/2001/XMLSchema#string"
+    },
+    "ctb:collection" : {
+      "@type" : "http://www.w3.org/2001/XMLSchema#string"
+    },
+    "owl:sameAs" : {
+      "@type" : "@id"
+    },
+    "ctb:completedDate" : {
+      "@type" : "http://www.w3.org/2001/XMLSchema#dateTime"
+    },
+    "ctb:dueDate" : {
+      "@type" : "http://www.w3.org/2001/XMLSchema#dateTime"
+    },
+    "ctb:projectStatus" : {
+      "@type" : "http://www.w3.org/2001/XMLSchema#string"
+    },
+    "ctb:severity" : {
+      "@type" : "http://www.w3.org/2001/XMLSchema#string"
+    },
+    "ctb:startDate" : {
+      "@type" : "http://www.w3.org/2001/XMLSchema#dateTime"
+    },
+    "schema:eligibleRegion" : {
+
+    },
+    "rdfs:subPropertyOf" : {
+      "@type" : "@id"
+    },
+    "vs:term_status" : {
+      "@type" : "@id"
+    },
+    "wot:assurance" : {
+      "@type" : "@id"
+    },
+    "wot:src_assurance" : {
+      "@type" : "@id"
+    },
+    "nice:description" : {
+
+    },
+    "nice:inCategory" : {
+      "@type" : "@id"
+    },
+    "nice:inSpecialtyArea" : {
+      "@type" : "@id"
+    },
+    "nice:name" : {
+
+    },
+    "nice:abbrev" : {
+
+    },
+    "nice:requiresAbility" : {
+      "@type" : "@id"
+    },
+    "nice:requiresKnowledge" : {
+      "@type" : "@id"
+    },
+    "nice:requiresSkill" : {
+      "@type" : "@id"
+    },
+    "nice:requiresTask" : {
+      "@type" : "@id"
+    },
+    "nice:title" : {
+
+    },
+    "nice:competencyType" : {
+      "@type" : "@id"
+    },
+    "ctl:related" : {
+      "@type" : "@id"
+    },
+    "ctl:memberOf": {
+      "@type" : "@id"
+    },
+    "owl:cardinality": {
+      "@type": "http://www.w3.org/2001/XMLSchema#integer"
+    },
+    "owl:maxCardinality": {
+      "@type": "http://www.w3.org/2001/XMLSchema#integer"
+    }
+  };
 }
 
 // Export the class as default

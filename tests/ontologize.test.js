@@ -16,7 +16,7 @@ describe("Ontologize", function () {
       assert.isObject(ontologize);
       assert.equal(ontologize.version, "0.1.0");
       assert.isObject(ontologize.opts);
-      assert.isObject(ontologize.opts.context);
+      assert.isObject(ontologize.opts.defaultContext);
       assert.equal(ontologize.opts.debug, false);
     });
 
@@ -24,12 +24,12 @@ describe("Ontologize", function () {
       const mockOntologyCollection = {};
       const mockContextCollection = {};
       const customOpts = {
-        context: { "@vocab": "http://example.org/" },
+        defaultContext: { "@vocab": "http://example.org/" },
         debug: true
       };
       const customOntologize = new Ontologize(mockOntologyCollection, mockContextCollection, customOpts);
       assert.equal(customOntologize.opts.debug, true);
-      assert.equal(customOntologize.opts.context["@vocab"], "http://example.org/");
+      assert.equal(customOntologize.opts.defaultContext["@vocab"], "http://example.org/");
     });
   });
 

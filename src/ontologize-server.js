@@ -283,6 +283,38 @@ export class OntologizeServer extends Ontologize {
   }
 
   /**
+   * Get context for compaction from provided context, Context collection, or default
+   * TODO better name
+   * @private
+   */
+  async _getContextForCompaction(providedContext, contextCollection) {
+    // Use provided context if available
+    if (providedContext) {
+      return providedContext;
+    }
+
+    // Try to get context from Context collection
+    try {
+      const contextDoc = await contextCollection.findOne({ _id: "@context" });
+      if (contextDoc) {
+        // Extract context data (excluding _id)
+        const { _id, ...contextData } = contextDoc;
+
+        // Only use context from collection if it has meaningful data
+        if (Object.keys(contextData).length > 0) {
+          return contextData;
+        }
+      }
+    }
+    catch (error) {
+      console.warn(`Failed to load context from Context collection: ${error.message}`);
+    }
+
+    // Fall back to default ontology context
+    return this.opts.defaultContext;
+  }
+
+  /**
    * Process a single resource with BOLD normalization using LD.compact
    * @private
    */
@@ -299,10 +331,13 @@ export class OntologizeServer extends Ontologize {
     let isTBoxResource = false;
 
     // Step 1: Normalize resource using LD.compact if requested
-    if (normalize && context) {
+    if (normalize) {
       try {
+        // Get context for compaction (provided, from Context collection, or default)
+        const contextForCompaction = await this._getContextForCompaction(context, contextCollection);
+
         const ld = new LD();
-        const compacted = await ld.compact(processedResource, context, {
+        const compacted = await ld.compact(processedResource, contextForCompaction, {
           ensureArrayProps: ensureArrayProps,
           ensureSafeKeys: true,
           showContext: false,
