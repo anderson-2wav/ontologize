@@ -11,8 +11,6 @@ describe("OntologizeServer Import", function () {
   let contextData = {};
 
   beforeEach(function () {
-    ontologizeServer = new OntologizeServer();
-
     // Mock collections
     ontologyData = [];
     contextData = {};
@@ -54,6 +52,9 @@ describe("OntologizeServer Import", function () {
         return filter._id === "@context" ? contextData : null;
       }
     };
+
+    // Create the ontologize server instance with the mock collections
+    ontologizeServer = new OntologizeServer(mockOntologyCollection, mockContextCollection);
   });
 
   describe("importOntologyFromFile", function () {
@@ -88,8 +89,7 @@ describe("OntologizeServer Import", function () {
 
       const result = await ontologizeServer.importOntologyFromFile(
         "test.json",
-        mockOntologyCollection,
-        mockContextCollection
+        mockOntologyCollection
       );
 
       assert.isTrue(result.success);
@@ -126,8 +126,7 @@ describe("OntologizeServer Import", function () {
 
       const result = await ontologizeServer.importOntologyFromFile(
         "test.json",
-        mockOntologyCollection,
-        mockContextCollection
+        mockOntologyCollection
       );
 
       assert.isTrue(result.success);
@@ -158,7 +157,6 @@ describe("OntologizeServer Import", function () {
       const result = await ontologizeServer.importOntologyFromFile(
         "test.json",
         mockOntologyCollection,
-        mockContextCollection,
         { clearCollections: true }
       );
 
@@ -256,13 +254,12 @@ describe("OntologizeServer Import", function () {
       // Test actual import
       const result = await ontologizeServer.importOntologyFromFile(
         filePath,
-        mockOntologyCollection,
-        mockContextCollection
+        mockOntologyCollection
       );
 
       assert.isTrue(result.success);
       assert.isTrue(result.contextImported);
-      assert.isTrue(result.resourcesProcessed > 0);
+      assert.isTrue(result.processedResources > 0);
 
       // Check that context was imported
       assert.equal(contextData._id, "@context");
@@ -278,7 +275,7 @@ describe("OntologizeServer Import", function () {
       );
       assert.isTrue(ctbClasses.length > 0);
 
-      console.log(`Imported ${result.resourcesProcessed} resources from ${result.totalResources} total`);
+      console.log(`Imported ${result.processedResources} resources from ${result.totalResources} total`);
       console.log(`Found ${ctbClasses.length} CTB classes`);
     });
   });
@@ -313,8 +310,7 @@ describe("OntologizeServer Import", function () {
 
       const result = await ontologizeServer.importOntologyFromFile(
         "test.json",
-        mockOntologyCollection,
-        mockContextCollection
+        mockOntologyCollection
       );
 
       assert.isTrue(result.success);
@@ -344,8 +340,7 @@ describe("OntologizeServer Import", function () {
 
       const result = await ontologizeServer.importOntologyData(
         testData,
-        mockOntologyCollection,
-        mockContextCollection
+        mockOntologyCollection
       );
 
       assert.isTrue(result.success);
@@ -372,8 +367,7 @@ describe("OntologizeServer Import", function () {
 
       const result = await ontologizeServer.importOntologyData(
         testData,
-        mockOntologyCollection,
-        mockContextCollection
+        mockOntologyCollection
       );
 
       assert.isTrue(result.success);
@@ -396,7 +390,6 @@ describe("OntologizeServer Import", function () {
       const result = await ontologizeServer.importOntologyData(
         testData,
         mockOntologyCollection,
-        mockContextCollection,
         { ensureArrayTypes: true }
       );
 
@@ -424,7 +417,6 @@ describe("OntologizeServer Import", function () {
       const result = await ontologizeServer.importOntologyData(
         testData,
         mockOntologyCollection,
-        mockContextCollection,
         { clearCollections: true }
       );
 
@@ -444,8 +436,7 @@ describe("OntologizeServer Import", function () {
 
       const result = await ontologizeServer.importOntologyData(
         testData,
-        mockOntologyCollection,
-        mockContextCollection
+        mockOntologyCollection
       );
 
       assert.isTrue(result.success);
@@ -465,7 +456,6 @@ describe("OntologizeServer Import", function () {
       const result = await ontologizeServer.importOntologyData(
         testData,
         mockOntologyCollection,
-        mockContextCollection,
         { normalize: false }
       );
 
@@ -489,12 +479,84 @@ describe("OntologizeServer Import", function () {
       const result = await ontologizeServer.importOntologyData(
         testData,
         mockOntologyCollection,
-        mockContextCollection,
         { context: customContext }
       );
 
       assert.isTrue(result.success);
       assert.equal(result.processedResources, 1);
+    });
+  });
+
+  describe("Context Merge Strategy", function () {
+    it("should merge contexts without conflicts", async function () {
+      // First import with initial context
+      const firstData = [
+        {
+          "_id": "@context",
+          "@context": {
+            "@vocab": "http://example.org/",
+            "rdfs": "http://www.w3.org/2000/01/rdf-schema#"
+          }
+        }
+      ];
+
+      ontologizeServer.loadOntologyFromFile = async (filePath) => firstData;
+      await ontologizeServer.importOntologyFromFile("first.json", mockOntologyCollection);
+
+      // Second import with additional context
+      const secondData = [
+        {
+          "_id": "@context", 
+          "@context": {
+            "owl": "http://www.w3.org/2002/07/owl#",
+            "dc": "http://purl.org/dc/elements/1.1/"
+          }
+        }
+      ];
+
+      ontologizeServer.loadOntologyFromFile = async (filePath) => secondData;
+      await ontologizeServer.importOntologyFromFile("second.json", mockOntologyCollection);
+
+      // Check that both contexts were merged
+      assert.equal(contextData["@vocab"], "http://example.org/");
+      assert.equal(contextData["rdfs"], "http://www.w3.org/2000/01/rdf-schema#");
+      assert.equal(contextData["owl"], "http://www.w3.org/2002/07/owl#");
+      assert.equal(contextData["dc"], "http://purl.org/dc/elements/1.1/");
+    });
+
+    it("should handle context key sorting", async function () {
+      const testData = [
+        {
+          "_id": "@context",
+          "@context": {
+            "zprefix": "http://z.example.org/",
+            "@vocab": "http://example.org/",
+            "aprefix": "http://a.example.org/",
+            "@base": "http://base.example.org/",
+            "rdfs:subClassOf": {"@type": "@id"}
+          }
+        }
+      ];
+
+      ontologizeServer.loadOntologyFromFile = async (filePath) => testData;
+      await ontologizeServer.importOntologyFromFile("test.json", mockOntologyCollection);
+
+      // Check that keys are properly sorted (excluding _id)
+      const allKeys = Object.keys(contextData);
+      const keys = allKeys.filter(k => k !== "_id");
+      const atKeys = keys.filter(k => k.startsWith("@"));
+      const namespaceKeys = keys.filter(k => !k.startsWith("@") && !k.includes(":"));
+      const prefixedKeys = keys.filter(k => !k.startsWith("@") && k.includes(":"));
+
+      // @-keys should come first
+      assert.isTrue(atKeys.every(atKey => 
+        namespaceKeys.every(nsKey => keys.indexOf(atKey) < keys.indexOf(nsKey))
+      ));
+
+      // Namespace keys should come before prefixed keys
+      assert.isTrue(namespaceKeys.every(nsKey =>
+        prefixedKeys.every(prefixKey => keys.indexOf(nsKey) < keys.indexOf(prefixKey))
+      ));
     });
   });
 
@@ -517,7 +579,6 @@ describe("OntologizeServer Import", function () {
       const result = await ontologizeServer.importOntologyFromFile(
         filePath,
         mockOntologyCollection,
-        mockContextCollection,
         { 
           normalize: true, 
           ensureArrayTypes: true,

@@ -5,7 +5,10 @@ describe("Ontologize", function () {
   let ontologize;
 
   beforeEach(function () {
-    ontologize = new Ontologize();
+    // Mock collections for testing
+    const mockOntologyCollection = {};
+    const mockContextCollection = {};
+    ontologize = new Ontologize(mockOntologyCollection, mockContextCollection);
   });
 
   describe("constructor", function () {
@@ -18,11 +21,13 @@ describe("Ontologize", function () {
     });
 
     it("should accept custom options", function () {
+      const mockOntologyCollection = {};
+      const mockContextCollection = {};
       const customOpts = {
         context: { "@vocab": "http://example.org/" },
         debug: true
       };
-      const customOntologize = new Ontologize(customOpts);
+      const customOntologize = new Ontologize(mockOntologyCollection, mockContextCollection, customOpts);
       assert.equal(customOntologize.opts.debug, true);
       assert.equal(customOntologize.opts.context["@vocab"], "http://example.org/");
     });

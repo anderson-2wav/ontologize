@@ -7,6 +7,7 @@ import { readFile } from "fs/promises";
 import { check, Match } from "./lib/check.js";
 import { Ontologize } from "./ontologize.js";
 import { LD } from "ld";
+import _ from "lodash";
 
 /**
  * Server-only extension of the Ontologize class
@@ -47,8 +48,7 @@ export class OntologizeServer extends Ontologize {
    * Loads JSON-LD file and imports with proper normalization using LD.compact
    *
    * @param {string} filePath - Path to JSON-LD ontology file
-   * @param {object} ontologyCollection - MongoDB Ontology collection instance
-   * @param {object} contextCollection - MongoDB Context collection instance
+   * @param {object} collection - MongoDB collection to import into
    * @param {object} [opts] - Import options
    * @param {object} [opts.context] - JSON-LD context to use for compaction
    * @param {boolean} [opts.normalize=true] - Use LD.compact for BOLD resource normalization
@@ -58,18 +58,17 @@ export class OntologizeServer extends Ontologize {
    * @param {boolean} [opts.ensureArrayTypes=true] - Ensure @type is always an array
    * @returns {Promise<object>} Import result with detailed statistics
    */
-  async importOntologyFromFile(filePath, ontologyCollection, contextCollection, opts = {}) {
+  async importOntologyFromFile(filePath, collection, opts = {}) {
     check(filePath, String);
-    check(ontologyCollection, Object);
-    check(contextCollection, Object);
+    check(collection, Object);
     check(opts, Object);
 
     try {
       // Load JSON-LD file
       const jsonldData = await this.loadOntologyFromFile(filePath);
 
-      // Import the loaded data
-      const result = await this.importOntologyData(jsonldData, ontologyCollection, contextCollection, opts);
+      // Import the loaded data using the Context collection from this.collections
+      const result = await this.importOntologyData(jsonldData, collection, opts);
 
       // Add file path information to result
       return {
@@ -89,7 +88,6 @@ export class OntologizeServer extends Ontologize {
    *
    * @param {object|Array} data - Parsed JSON-LD object or array of resources
    * @param {object} collection - MongoDB Ontology collection instance
-   * @param {object} contextCollection - MongoDB Context collection instance
    * @param {object} [opts] - Import options
    * @param {object} [opts.context] - JSON-LD context to use for compaction
    * @param {boolean} [opts.normalize=true] - Use LD.compact for BOLD resource normalization
@@ -99,10 +97,9 @@ export class OntologizeServer extends Ontologize {
    * @param {boolean} [opts.ensureArrayTypes=true] - Ensure @type is always an array
    * @returns {Promise<object>} Import result with detailed statistics
    */
-  async importOntologyData(data, collection, contextCollection, opts = {}) {
+  async importOntologyData(data, collection, opts = {}) {
     check(data, Match.OneOf(Object, Array));
     check(collection, Object);
-    check(contextCollection, Object);
     check(opts, Object);
 
     const {
@@ -132,7 +129,7 @@ export class OntologizeServer extends Ontologize {
       let contextToUse = context || extractedContext;
 
       if (extractedContext) {
-        await this._importContext(extractedContext, contextCollection);
+        await this._importContext(extractedContext, this.collections.Context);
         contextImported = true;
       }
 
@@ -151,7 +148,7 @@ export class OntologizeServer extends Ontologize {
             resource,
             contextToUse,
             collection,
-            contextCollection,
+            this.collections.Context,
             { normalize, ontologize, shareTBox, ensureArrayTypes }
           );
 
@@ -239,18 +236,34 @@ export class OntologizeServer extends Ontologize {
   }
 
   /**
-   * Import context into Context collection with BOLD normalization
+   * Import context into Context collection with sophisticated merge strategy
+   * Merges new context data with existing context using specialized conflict resolution
+   * In BOLD, the context document contains the context data directly (no nested @context)
    * @private
    */
   async _importContext(contextData, contextCollection) {
-    const contextResource = {
-      _id: "@context",
-      ...contextData
-    };
-
+    check(contextData, Object);
+    
+    // Get existing context from the Context collection
+    let existingContextDoc = await contextCollection.findOne({ _id: "@context" });
+    let existingContext = {};
+    
+    // Extract existing context data (excluding _id)
+    if (existingContextDoc) {
+      existingContext = { ...existingContextDoc };
+      delete existingContext._id;
+    }
+    
+    // Merge the contexts using specialized merge strategy
+    const mergedContext = _.assignWith(existingContext, contextData, this._contextAssignCustomizer);
+    
+    // Sort context keys for consistent ordering
+    const sortedContext = this._sortContextKeys(mergedContext);
+    
+    // Update the context document with merged context data directly
     await contextCollection.replaceOne(
       { _id: "@context" },
-      contextResource,
+      { _id: "@context", ...sortedContext },
       { upsert: true }
     );
   }
@@ -344,6 +357,120 @@ export class OntologizeServer extends Ontologize {
       isTBox: isTBoxResource,
       resource: processedResource
     };
+  }
+
+  /**
+   * Customizer function for merging context objects with specialized conflict resolution
+   * Handles namespace conflicts intelligently based on BOLD/CTB patterns
+   * @private
+   */
+  _contextAssignCustomizer(objValue, srcValue, key) {
+    // If original objValue exists and is different from new srcValue, we have a conflict
+    if (objValue && !_.isEqual(objValue, srcValue)) {
+      // Handle specific known namespace conflicts
+      if (key === "dc" && srcValue === "http://purl.org/dc/elements/1.1/") {
+        console.warn(`Context conflict for ${key}, old=${JSON.stringify(objValue)} new=${JSON.stringify(srcValue)}. Using new value.`);
+        return undefined; // Let lodash use the new value
+      }
+      
+      if (key === "ctb" && srcValue === "https://ontology.2wav.com/bridge#") {
+        console.warn(`Context conflict for ${key}, old=${JSON.stringify(objValue)} new=${JSON.stringify(srcValue)}. Keeping existing value.`);
+        return objValue; // Keep the existing value
+      }
+      
+      if (key === "dcterms") {
+        console.warn(`Context conflict for ${key}, old=${JSON.stringify(objValue)} new=${JSON.stringify(srcValue)}. Using canonical value.`);
+        return "http://purl.org/dc/terms/"; // Use canonical value
+      }
+
+      // BOLD namespace handling - prefer BOLD over CTB
+      if (key === "bold" || (key === "ctb" && srcValue.includes("bold"))) {
+        console.warn(`Context conflict for ${key}, preferring BOLD namespace. old=${JSON.stringify(objValue)} new=${JSON.stringify(srcValue)}`);
+        return srcValue; // Prefer BOLD namespace
+      }
+      
+      // If both are objects, merge them recursively
+      if (_.isObject(objValue) && _.isObject(srcValue)) {
+        const merged = _.mergeWith(objValue, srcValue, this._schemaMergeCustomizer);
+        console.warn(`Context conflict for ${key}, merging objects. old=${JSON.stringify(objValue)} new=${JSON.stringify(srcValue)} result=${JSON.stringify(merged)}`);
+        return merged;
+      }
+      
+      // For any other conflicting combination, throw an error
+      throw new Error(`Namespace conflict for ${key}: existing=${JSON.stringify(objValue)} vs new=${JSON.stringify(srcValue)}`);
+    }
+    
+    // No conflict, let lodash handle the default assignment
+    return undefined;
+  }
+
+  /**
+   * Schema merge customizer for handling array merging in contexts
+   * Ensures arrays are properly merged using union to avoid duplicates
+   * @private
+   */
+  _schemaMergeCustomizer(objValue, srcValue, key, object, source, stack) {
+    // Ensure we merge arrays from either side
+    if (_.isArray(objValue) || _.isArray(srcValue)) {
+      // Handle null/undefined values
+      if (objValue === null || objValue === undefined) {
+        objValue = [];
+      }
+      if (srcValue === null || srcValue === undefined) {
+        srcValue = [];
+      }
+      
+      // Convert non-arrays to arrays when one side is an array
+      if (!_.isArray(objValue)) {
+        objValue = [objValue];
+      }
+      if (!_.isArray(srcValue)) {
+        srcValue = [srcValue];
+      }
+      
+      // Use union to merge arrays and remove duplicates
+      return _.union(objValue, srcValue);
+    }
+    
+    // For non-arrays, let lodash use default behavior
+    return undefined;
+  }
+
+  /**
+   * Sort context keys for consistent ordering
+   * Places @-prefixed keys first, then namespaces (no colon), then prefixed terms
+   * @private
+   */
+  _sortContextKeys(context) {
+    const sortedKeys = Object.keys(context).sort((a, b) => {
+      // Check if keys are namespace declarations (no colon)
+      const aNamespace = !a.includes(":");
+      const bNamespace = !b.includes(":");
+      
+      // Namespaces sort before prefixed terms
+      if (aNamespace !== bNamespace) {
+        return aNamespace ? -1 : 1;
+      }
+      
+      // @-prefixed keys (like @vocab, @base) sort to the front
+      if (a[0] === "@" && b[0] !== "@") {
+        return -1;
+      }
+      if (b[0] === "@" && a[0] !== "@") {
+        return 1;
+      }
+      
+      // Standard lexical sorting
+      return a.localeCompare(b);
+    });
+    
+    // Rebuild the context object with sorted keys
+    const sortedContext = {};
+    for (const key of sortedKeys) {
+      sortedContext[key] = context[key];
+    }
+    
+    return sortedContext;
   }
 }
 

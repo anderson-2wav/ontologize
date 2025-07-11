@@ -5,7 +5,10 @@ describe("OntologizeServer", function () {
   let ontologizeServer;
 
   beforeEach(function () {
-    ontologizeServer = new OntologizeServer();
+    // Mock collections for testing
+    const mockOntologyCollection = {};
+    const mockContextCollection = {};
+    ontologizeServer = new OntologizeServer(mockOntologyCollection, mockContextCollection);
   });
 
   describe("inheritance", function () {
