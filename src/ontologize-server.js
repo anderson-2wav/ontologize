@@ -305,7 +305,8 @@ export class OntologizeServer extends Ontologize {
         const compacted = await ld.compact(processedResource, context, {
           ensureArrayProps: ensureArrayProps,
           ensureSafeKeys: true,
-          showContext: false
+          showContext: false,
+          proxy: false // this is important! so that we don't persist the proxy-modified content
         });
 
         // Handle the case where compact returns an array or @graph
