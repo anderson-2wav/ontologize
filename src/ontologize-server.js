@@ -350,8 +350,10 @@ export class OntologizeServer extends Ontologize {
       // TBox resource - save to Ontology collection with merge strategy.
       await this._saveResourceWithMerge(processedResource, ontologyCollection, { mergeOntology });
 
-      // Also save to main collection if shareTBox is true
-      if (shareTBox) {
+      // Also save to main collection if shareTBox is true,
+      // But not if the collection we're importing into is the ontologyCollection,
+      // cause we already did that above.
+      if (shareTBox && collection !== ontologyCollection) {
         await collection.replaceOne(
           { _id: processedResource._id },
           processedResource,
