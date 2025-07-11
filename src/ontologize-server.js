@@ -259,7 +259,7 @@ export class OntologizeServer extends Ontologize {
     check(contextData, Object);
 
     // Get existing context from the Context collection
-    let existingContextDoc = await contextCollection.findOne({ _id: "@context" });
+    let existingContextDoc = await contextCollection.findOne({ _id: "@id" });
     let existingContext = {};
 
     // Extract existing context data (excluding _id)
@@ -276,8 +276,8 @@ export class OntologizeServer extends Ontologize {
 
     // Update the context document with merged context data directly
     await contextCollection.replaceOne(
-      { _id: "@context" },
-      { _id: "@context", ...sortedContext },
+      { _id: "@id" },
+      { _id: "@id", ...sortedContext },
       { upsert: true }
     );
   }
@@ -295,10 +295,9 @@ export class OntologizeServer extends Ontologize {
 
     // Try to get context from Context collection
     try {
-      const contextDoc = await contextCollection.findOne({ _id: "@context" });
+      const contextDoc = await contextCollection.findOne({ _id: "@id" });
       if (contextDoc) {
-        // Extract context data (excluding _id)
-        const { _id, ...contextData } = contextDoc;
+        const { ...contextData } = contextDoc;
 
         // Only use context from collection if it has meaningful data
         if (Object.keys(contextData).length > 0) {
@@ -334,10 +333,6 @@ export class OntologizeServer extends Ontologize {
     if (normalize) {
       // Get context for compaction (provided, from Context collection, or default)
       const contextForCompaction = await this._getContextForCompaction(context, contextCollection);
-      // TODO temporary consideration for context problem with _id
-      if (contextForCompaction._id === undefined) {
-        contextForCompaction._id = "@id";
-      }
       try {
         const ld = new LD();
         const compacted = await ld.compact(processedResource, contextForCompaction, {

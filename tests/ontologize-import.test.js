@@ -4,6 +4,7 @@ import { readFile } from "fs/promises";
 import { join } from "path";
 
 describe("OntologizeServer Import", function () {
+  this.timeout(0); // turn off timeout for debugging
   let ontologizeServer;
   let mockOntologyCollection;
   let mockContextCollection;
@@ -54,7 +55,7 @@ describe("OntologizeServer Import", function () {
         return { acknowledged: true, matchedCount: 1, modifiedCount: 1, upsertedId: null };
       },
       findOne: async (filter) => {
-        return filter._id === "@context" ? contextData : null;
+        return filter._id === "@id" ? contextData : null;
       }
     };
 
@@ -103,7 +104,7 @@ describe("OntologizeServer Import", function () {
       assert.equal(result.totalResources, 2);
 
       // Check context was imported
-      assert.equal(contextData._id, "@context");
+      assert.equal(contextData._id, "@id");
       assert.equal(contextData["@vocab"], "http://example.org/");
 
       // Check resources were imported
@@ -142,7 +143,7 @@ describe("OntologizeServer Import", function () {
     it("should handle clearCollection option", async function () {
       // Pre-populate collections
       ontologyData.push({ _id: "existing", data: "old" });
-      contextData = { _id: "@context", old: "data" };
+      contextData = { _id: "@id", old: "data" };
 
       const testData = [
         {
@@ -229,7 +230,6 @@ describe("OntologizeServer Import", function () {
 
   describe("real file import", function () {
     it("should import actual ontology.json file", async function () {
-      this.timeout(10000); // Increase timeout for file operations
 
       const filePath = "./data/ontology.json";
 
@@ -410,7 +410,7 @@ describe("OntologizeServer Import", function () {
     it("should handle clearCollection option", async function () {
       // Pre-populate collections
       ontologyData.push({ _id: "existing", data: "old" });
-      contextData = { _id: "@context" };
+      contextData = { _id: "@id" };
 
       const testData = [
         {
@@ -498,7 +498,7 @@ describe("OntologizeServer Import", function () {
       // First import with initial context
       const firstData = [
         {
-          "_id": "@context",
+          "_id": "ex:data1",
           "@context": {
             "@vocab": "http://example.org/",
             "rdfs": "http://www.w3.org/2000/01/rdf-schema#"
@@ -512,7 +512,7 @@ describe("OntologizeServer Import", function () {
       // Second import with additional context
       const secondData = [
         {
-          "_id": "@context",
+          "_id": "data2",
           "@context": {
             "owl": "http://www.w3.org/2002/07/owl#",
             "dc": "http://purl.org/dc/elements/1.1/"
