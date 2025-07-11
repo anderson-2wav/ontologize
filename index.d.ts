@@ -69,6 +69,11 @@ export declare class Ontologize {
   getLabel(resource: Resource, fallback?: string): string;
 
   /**
+   * Get context for compaction from provided context, Context collection, or default
+   */
+  getContext(providedContext?: Record<string, any> | null): Promise<Record<string, any>>;
+
+  /**
    * Get module version
    */
   getVersion(): string;

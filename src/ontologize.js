@@ -141,6 +141,39 @@ export class Ontologize {
   }
 
   /**
+   * Get context for compaction from provided context, Context collection, or default
+   * 
+   * @param {object} [providedContext] - Optional context to use instead of collection/default
+   * @returns {Promise<object>} Context object for JSON-LD operations
+   */
+  async getContext(providedContext = null) {
+    // Use provided context if available
+    if (providedContext) {
+      return providedContext;
+    }
+
+    // Try to get context from Context collection
+    try {
+      const contextDoc = await this.collections.Context.findOne({ _id: "@context" });
+      if (contextDoc) {
+        // Extract context data (excluding _id)
+        const { _id, ...contextData } = contextDoc;
+        
+        // Only use context from collection if it has meaningful data
+        if (Object.keys(contextData).length > 0) {
+          return contextData;
+        }
+      }
+    }
+    catch (error) {
+      console.warn(`Failed to load context from Context collection: ${error.message}`);
+    }
+
+    // Fall back to default ontology context
+    return this.opts.defaultContext || Ontologize.DEFAULT_CONTEXT;
+  }
+
+  /**
    * Get module version
    *
    * @returns {string} The module version
