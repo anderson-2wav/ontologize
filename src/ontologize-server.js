@@ -6,7 +6,7 @@
 import { readFile } from "fs/promises";
 import { check, Match } from "./lib/check.js";
 import { Ontologize } from "./ontologize.js";
-import { LD } from "ld";
+import { LD } from "bold-ld";
 import _ from "lodash";
 
 /**

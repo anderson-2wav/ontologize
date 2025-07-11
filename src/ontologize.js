@@ -154,7 +154,7 @@ export class Ontologize {
 
     // Try to get context from Context collection
     try {
-      const contextDoc = await this.collections.Context.findOne({ _id: "@context" });
+      const contextDoc = await this.collections.Context.findOne({ _id: "@id" });
       if (contextDoc) {
         // Extract context data (excluding _id)
         const { _id, ...contextData } = contextDoc;
