@@ -35,7 +35,12 @@ describe("OntologizeServer Import", function () {
         toArray: async () => ontologyData.filter(item => {
           return Object.keys(query).every(key => item[key] === query[key]);
         })
-      })
+      }),
+      findOne: async (filter) => {
+        return ontologyData.find(item => {
+          return Object.keys(filter).every(key => item[key] === filter[key]);
+        }) || null;
+      }
     };
 
     mockContextCollection = {
@@ -524,6 +529,49 @@ describe("OntologizeServer Import", function () {
       assert.equal(contextData["dc"], "http://purl.org/dc/elements/1.1/");
     });
 
+    it("should merge multiple contexts in single array", async function () {
+      // Import data with multiple context items in the same array
+      const multiContextData = [
+        {
+          "_id": "first-context",
+          "@context": {
+            "@vocab": "http://example.org/",
+            "rdfs": "http://www.w3.org/2000/01/rdf-schema#"
+          }
+        },
+        {
+          "_id": "second-context",
+          "@context": {
+            "owl": "http://www.w3.org/2002/07/owl#",
+            "dc": "http://purl.org/dc/elements/1.1/"
+          }
+        },
+        {
+          "_id": "ex:TestClass",
+          "@type": "rdfs:Class",
+          "rdfs:label": "Test Class"
+        }
+      ];
+
+      ontologizeServer.loadOntologyFromFile = async (filePath) => multiContextData;
+      const result = await ontologizeServer.importOntologyFromFile("multi.json", mockOntologyCollection);
+
+      assert.isTrue(result.success);
+      assert.isTrue(result.contextImported);
+      assert.equal(result.totalResources, 1); // Only the TestClass should be counted as resource
+      assert.equal(result.processedResources, 1);
+
+      // Check that both contexts were merged
+      assert.equal(contextData["@vocab"], "http://example.org/");
+      assert.equal(contextData["rdfs"], "http://www.w3.org/2000/01/rdf-schema#");
+      assert.equal(contextData["owl"], "http://www.w3.org/2002/07/owl#");
+      assert.equal(contextData["dc"], "http://purl.org/dc/elements/1.1/");
+
+      // Check that the resource was imported
+      assert.equal(ontologyData.length, 1);
+      assert.equal(ontologyData[0]._id, "ex:TestClass");
+    });
+
     it("should handle context key sorting", async function () {
       const testData = [
         {
@@ -603,6 +651,129 @@ describe("OntologizeServer Import", function () {
       if (result.errors.length > 0) {
         console.log(`Errors: ${result.errors.length}`);
       }
+    });
+  });
+
+  describe("TBox Resource Merge Strategy", function () {
+    it("should merge TBox resources with existing resources", async function () {
+      // First import a TBox resource
+      const firstData = [
+        {
+          "_id": "ex:TestClass",
+          "@type": "rdfs:Class",
+          "rdfs:label": "Test Class",
+          "rdfs:comment": "Initial comment"
+        }
+      ];
+
+      const result1 = await ontologizeServer.importOntologyData(
+        firstData,
+        mockOntologyCollection
+      );
+
+      assert.isTrue(result1.success);
+      assert.equal(result1.processedResources, 1);
+      assert.equal(result1.tboxResources, 1);
+
+      // Second import with additional properties for the same resource
+      const secondData = [
+        {
+          "_id": "ex:TestClass",
+          "@type": "rdfs:Class", 
+          "rdfs:label": "Updated Test Class",
+          "rdfs:subClassOf": "ex:ParentClass",
+          "ex:newProperty": "added value"
+        }
+      ];
+
+      const result2 = await ontologizeServer.importOntologyData(
+        secondData,
+        mockOntologyCollection
+      );
+
+      assert.isTrue(result2.success);
+      assert.equal(result2.processedResources, 1);
+      assert.equal(result2.tboxResources, 1);
+
+      // Check that the resource was merged, not replaced
+      const finalResource = ontologyData.find(r => r._id === "ex:TestClass");
+      assert.isObject(finalResource);
+      
+      // Should have the updated label
+      assert.equal(finalResource["rdfs:label"], "Updated Test Class");
+      
+      // Should keep the original comment
+      assert.equal(finalResource["rdfs:comment"], "Initial comment");
+      
+      // Should have the new properties
+      assert.equal(finalResource["rdfs:subClassOf"], "ex:ParentClass");
+      assert.equal(finalResource["ex:newProperty"], "added value");
+    });
+
+    it("should merge array properties using union", async function () {
+      // First import with array property
+      const firstData = [
+        {
+          "_id": "ex:TestClass",
+          "@type": "rdfs:Class",
+          "rdfs:seeAlso": ["ex:RelatedClass1", "ex:RelatedClass2"]
+        }
+      ];
+
+      await ontologizeServer.importOntologyData(firstData, mockOntologyCollection);
+
+      // Second import with additional array items
+      const secondData = [
+        {
+          "_id": "ex:TestClass",
+          "@type": "rdfs:Class",
+          "rdfs:seeAlso": ["ex:RelatedClass2", "ex:RelatedClass3"] // Note: RelatedClass2 is duplicate
+        }
+      ];
+
+      await ontologizeServer.importOntologyData(secondData, mockOntologyCollection);
+
+      // Check that arrays were merged using union (no duplicates)
+      const finalResource = ontologyData.find(r => r._id === "ex:TestClass");
+      assert.isArray(finalResource["rdfs:seeAlso"]);
+      assert.equal(finalResource["rdfs:seeAlso"].length, 3);
+      assert.isTrue(finalResource["rdfs:seeAlso"].includes("ex:RelatedClass1"));
+      assert.isTrue(finalResource["rdfs:seeAlso"].includes("ex:RelatedClass2"));
+      assert.isTrue(finalResource["rdfs:seeAlso"].includes("ex:RelatedClass3"));
+    });
+
+    it("should respect mergeOntology=false option", async function () {
+      // First import
+      const firstData = [
+        {
+          "_id": "ex:TestClass",
+          "@type": "rdfs:Class",
+          "rdfs:label": "Original Label",
+          "rdfs:comment": "Original comment"
+        }
+      ];
+
+      await ontologizeServer.importOntologyData(firstData, mockOntologyCollection);
+
+      // Second import with mergeOntology=false
+      const secondData = [
+        {
+          "_id": "ex:TestClass",
+          "@type": "rdfs:Class",
+          "rdfs:label": "Replaced Label"
+        }
+      ];
+
+      await ontologizeServer.importOntologyData(
+        secondData,
+        mockOntologyCollection,
+        { mergeOntology: false }
+      );
+
+      // Check that resource was replaced, not merged
+      const finalResource = ontologyData.find(r => r._id === "ex:TestClass");
+      assert.equal(finalResource["rdfs:label"], "Replaced Label");
+      assert.isUndefined(finalResource["rdfs:comment"]); // Should be gone
     });
   });
 });

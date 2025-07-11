@@ -55,7 +55,8 @@ export class OntologizeServer extends Ontologize {
    * @param {boolean} [opts.ontologize=true] - Classify resources as TBox/ABox
    * @param {boolean} [opts.shareTBox=false] - Store TBox resources in both collections
    * @param {boolean} [opts.clearCollections=false] - Clear collections before importing
-   * @param {boolean} [opts.ensureArrayTypes=true] - Ensure @type is always an array
+   * @param {boolean} [opts.ensureArrayProps=true] - Ensure array props including @type
+   * @param {boolean} [opts.mergeOntology=true] - Merge TBox resources with existing resources using schema merge strategy
    * @returns {Promise<object>} Import result with detailed statistics
    */
   async importOntologyFromFile(filePath, collection, opts = {}) {
@@ -94,7 +95,8 @@ export class OntologizeServer extends Ontologize {
    * @param {boolean} [opts.ontologize=true] - Classify resources as TBox/ABox
    * @param {boolean} [opts.shareTBox=false] - Store TBox resources in both collections
    * @param {boolean} [opts.clearCollections=false] - Clear collections before importing
-   * @param {boolean} [opts.ensureArrayTypes=true] - Ensure @type is always an array
+   * @param {boolean} [opts.ensureArrayProps=true] - Ensure array props including @type
+   * @param {boolean} [opts.mergeOntology=true] - Merge TBox resources with existing resources using schema merge strategy
    * @returns {Promise<object>} Import result with detailed statistics
    */
   async importOntologyData(data, collection, opts = {}) {
@@ -108,7 +110,8 @@ export class OntologizeServer extends Ontologize {
       ontologize = true,
       shareTBox = false,
       clearCollections = false,
-      ensureArrayTypes = true
+      ensureArrayProps = true,
+      mergeOntology = true
     } = opts;
 
     try {
@@ -144,12 +147,12 @@ export class OntologizeServer extends Ontologize {
 
       for (const resource of resources) {
         try {
-          const processed = await this._normalizeResource(
+          const processed = await this._normalizeAndSaveResource(
             resource,
             contextToUse,
             collection,
             this.collections.Context,
-            { normalize, ontologize, shareTBox, ensureArrayTypes }
+            { normalize, ontologize, shareTBox, ensureArrayProps, mergeOntology }
           );
 
           if (processed) {
@@ -205,6 +208,7 @@ export class OntologizeServer extends Ontologize {
   /**
    * Extract context and resources from JSON-LD input
    * Handles both @graph format and array format
+   * Merges all contexts found in array items like CTB Ontology.importContext
    * @private
    */
   _extractContextAndResources(jsonldData) {
@@ -212,13 +216,23 @@ export class OntologizeServer extends Ontologize {
     let resources = [];
 
     if (Array.isArray(jsonldData)) {
-      // Array format - first element might be context
+      // Array format - collect all contexts and merge them
+      const foundContexts = [];
+
       for (const item of jsonldData) {
-        if (item._id === "@context" && item["@context"]) {
-          extractedContext = item["@context"];
+        if (item["@context"]) {
+          foundContexts.push(item["@context"]);
         }
         else {
           resources.push(item);
+        }
+      }
+
+      // Merge all found contexts using the same strategy as _importContext
+      if (foundContexts.length > 0) {
+        extractedContext = {};
+        for (const contextData of foundContexts) {
+          extractedContext = _.assignWith(extractedContext, contextData, this._contextAssignCustomizer.bind(this));
         }
       }
     }
@@ -243,23 +257,23 @@ export class OntologizeServer extends Ontologize {
    */
   async _importContext(contextData, contextCollection) {
     check(contextData, Object);
-    
+
     // Get existing context from the Context collection
     let existingContextDoc = await contextCollection.findOne({ _id: "@context" });
     let existingContext = {};
-    
+
     // Extract existing context data (excluding _id)
     if (existingContextDoc) {
       existingContext = { ...existingContextDoc };
       delete existingContext._id;
     }
-    
+
     // Merge the contexts using specialized merge strategy
     const mergedContext = _.assignWith(existingContext, contextData, this._contextAssignCustomizer);
-    
+
     // Sort context keys for consistent ordering
     const sortedContext = this._sortContextKeys(mergedContext);
-    
+
     // Update the context document with merged context data directly
     await contextCollection.replaceOne(
       { _id: "@context" },
@@ -272,9 +286,15 @@ export class OntologizeServer extends Ontologize {
    * Process a single resource with BOLD normalization using LD.compact
    * @private
    */
-  async _normalizeResource(resource, context, ontologyCollection, contextCollection, opts) {
-    const { normalize = true, ontologize = true, shareTBox = false, ensureArrayTypes = true } = opts;
-
+  async _normalizeAndSaveResource(resource, context, collection, contextCollection, opts) {
+    const {
+      normalize = true,
+      ontologize = true,
+      shareTBox = false,
+      ensureArrayProps = true,
+      mergeOntology = true
+    } = opts;
+    const ontologyCollection = this.collections.Ontology;
     let processedResource = { ...resource };
     let isTBoxResource = false;
 
@@ -283,7 +303,7 @@ export class OntologizeServer extends Ontologize {
       try {
         const ld = new LD();
         const compacted = await ld.compact(processedResource, context, {
-          ensureArrayProps: ensureArrayTypes,
+          ensureArrayProps: ensureArrayProps,
           ensureSafeKeys: true,
           showContext: false
         });
@@ -304,8 +324,8 @@ export class OntologizeServer extends Ontologize {
       }
     }
 
-    // Step 2: Ensure @type is array if ensureArrayTypes is true
-    if (ensureArrayTypes && processedResource["@type"] && !Array.isArray(processedResource["@type"])) {
+    // Step 2: Ensure @type is array. This _should be
+    if (ensureArrayProps && processedResource["@type"] && !Array.isArray(processedResource["@type"])) {
       processedResource["@type"] = [processedResource["@type"]];
     }
 
@@ -327,16 +347,12 @@ export class OntologizeServer extends Ontologize {
 
     // Step 6: Save to appropriate collection(s)
     if (isTBoxResource) {
-      // Save to Ontology collection
-      await ontologyCollection.replaceOne(
-        { _id: processedResource._id },
-        processedResource,
-        { upsert: true }
-      );
+      // TBox resource - save to Ontology collection with merge strategy.
+      await this._saveResourceWithMerge(processedResource, ontologyCollection, { mergeOntology });
 
       // Also save to main collection if shareTBox is true
       if (shareTBox) {
-        await ontologyCollection.replaceOne(
+        await collection.replaceOne(
           { _id: processedResource._id },
           processedResource,
           { upsert: true }
@@ -345,7 +361,7 @@ export class OntologizeServer extends Ontologize {
     }
     else {
       // ABox resource - save to main collection
-      await ontologyCollection.replaceOne(
+      await collection.replaceOne(
         { _id: processedResource._id },
         processedResource,
         { upsert: true }
@@ -372,12 +388,12 @@ export class OntologizeServer extends Ontologize {
         console.warn(`Context conflict for ${key}, old=${JSON.stringify(objValue)} new=${JSON.stringify(srcValue)}. Using new value.`);
         return undefined; // Let lodash use the new value
       }
-      
+
       if (key === "ctb" && srcValue === "https://ontology.2wav.com/bridge#") {
         console.warn(`Context conflict for ${key}, old=${JSON.stringify(objValue)} new=${JSON.stringify(srcValue)}. Keeping existing value.`);
         return objValue; // Keep the existing value
       }
-      
+
       if (key === "dcterms") {
         console.warn(`Context conflict for ${key}, old=${JSON.stringify(objValue)} new=${JSON.stringify(srcValue)}. Using canonical value.`);
         return "http://purl.org/dc/terms/"; // Use canonical value
@@ -388,18 +404,18 @@ export class OntologizeServer extends Ontologize {
         console.warn(`Context conflict for ${key}, preferring BOLD namespace. old=${JSON.stringify(objValue)} new=${JSON.stringify(srcValue)}`);
         return srcValue; // Prefer BOLD namespace
       }
-      
+
       // If both are objects, merge them recursively
       if (_.isObject(objValue) && _.isObject(srcValue)) {
         const merged = _.mergeWith(objValue, srcValue, this._schemaMergeCustomizer);
         console.warn(`Context conflict for ${key}, merging objects. old=${JSON.stringify(objValue)} new=${JSON.stringify(srcValue)} result=${JSON.stringify(merged)}`);
         return merged;
       }
-      
+
       // For any other conflicting combination, throw an error
       throw new Error(`Namespace conflict for ${key}: existing=${JSON.stringify(objValue)} vs new=${JSON.stringify(srcValue)}`);
     }
-    
+
     // No conflict, let lodash handle the default assignment
     return undefined;
   }
@@ -419,7 +435,7 @@ export class OntologizeServer extends Ontologize {
       if (srcValue === null || srcValue === undefined) {
         srcValue = [];
       }
-      
+
       // Convert non-arrays to arrays when one side is an array
       if (!_.isArray(objValue)) {
         objValue = [objValue];
@@ -427,13 +443,51 @@ export class OntologizeServer extends Ontologize {
       if (!_.isArray(srcValue)) {
         srcValue = [srcValue];
       }
-      
+
       // Use union to merge arrays and remove duplicates
       return _.union(objValue, srcValue);
     }
-    
+
     // For non-arrays, let lodash use default behavior
     return undefined;
+  }
+
+  /**
+   * Save a resource to a collection with intelligent merge strategy
+   * Similar to CTB Ontology.updateOntology, merges with existing resources to preserve data
+   * @private
+   */
+  async _saveResourceWithMerge(resource, collection, opts = {}) {
+    const { mergeOntology = true } = opts;
+    check(resource, Object);
+    check(collection, Object);
+
+    if (!resource._id) {
+      throw new Error("Resource must have _id for MongoDB storage");
+    }
+
+    // Check if a resource with this _id already exists
+    const existingResource = await collection.findOne({ _id: resource._id });
+
+    if (existingResource && mergeOntology) {
+      // Merge existing resource with new resource using schema merge strategy
+      // Clone the existing resource to avoid modifying the original
+      const mergedResource = _.mergeWith(_.cloneDeep(existingResource), resource, this._schemaMergeCustomizer.bind(this));
+
+      // Update the existing resource with merged data
+      await collection.replaceOne(
+        { _id: resource._id },
+        mergedResource,
+        { upsert: true }
+      );
+    } else {
+      // Either no existing resource, or mergeOntology is false - just replace
+      await collection.replaceOne(
+        { _id: resource._id },
+        resource,
+        { upsert: true }
+      );
+    }
   }
 
   /**
@@ -446,12 +500,12 @@ export class OntologizeServer extends Ontologize {
       // Check if keys are namespace declarations (no colon)
       const aNamespace = !a.includes(":");
       const bNamespace = !b.includes(":");
-      
+
       // Namespaces sort before prefixed terms
       if (aNamespace !== bNamespace) {
         return aNamespace ? -1 : 1;
       }
-      
+
       // @-prefixed keys (like @vocab, @base) sort to the front
       if (a[0] === "@" && b[0] !== "@") {
         return -1;
@@ -459,17 +513,17 @@ export class OntologizeServer extends Ontologize {
       if (b[0] === "@" && a[0] !== "@") {
         return 1;
       }
-      
+
       // Standard lexical sorting
       return a.localeCompare(b);
     });
-    
+
     // Rebuild the context object with sorted keys
     const sortedContext = {};
     for (const key of sortedKeys) {
       sortedContext[key] = context[key];
     }
-    
+
     return sortedContext;
   }
 }
