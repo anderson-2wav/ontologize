@@ -539,6 +539,7 @@
   } ]
 }, {
   "@id" : "http://xmlns.com/foaf/0.1/givenname",
+  "@type" : [ "http://www.w3.org/2002/07/owl#DatatypeProperty" ],
   "http://www.w3.org/2000/01/rdf-schema#comment" : [ {
     "@value" : "The given name of some person."
   } ],
@@ -991,6 +992,7 @@
   } ]
 }, {
   "@id" : "http://xmlns.com/foaf/0.1/phone",
+  "@type" : [ "http://www.w3.org/2002/07/owl#DatatypeProperty" ],
   "http://www.w3.org/2000/01/rdf-schema#comment" : [ {
     "@value" : "A phone,  specified using fully qualified tel: URI scheme (refs: http://www.w3.org/Addressing/schemes.html#tel)."
   } ],
@@ -1194,6 +1196,7 @@
   } ]
 }, {
   "@id" : "http://xmlns.com/foaf/0.1/title",
+  "@type" : [ "http://www.w3.org/2002/07/owl#DatatypeProperty" ],
   "http://www.w3.org/2000/01/rdf-schema#comment" : [ {
     "@value" : "Title (Mr, Mrs, Ms, Dr. etc)"
   } ],
