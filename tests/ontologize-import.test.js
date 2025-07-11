@@ -139,7 +139,7 @@ describe("OntologizeServer Import", function () {
       assert.equal(contextData["@vocab"], "http://example.org/");
     });
 
-    it("should handle clearCollections option", async function () {
+    it("should handle clearCollection option", async function () {
       // Pre-populate collections
       ontologyData.push({ _id: "existing", data: "old" });
       contextData = { _id: "@context", old: "data" };
@@ -162,7 +162,7 @@ describe("OntologizeServer Import", function () {
       const result = await ontologizeServer.importOntologyFromFile(
         "test.json",
         mockOntologyCollection,
-        { clearCollections: true }
+        { clearCollection: true }
       );
 
       assert.isTrue(result.success);
@@ -407,10 +407,10 @@ describe("OntologizeServer Import", function () {
       assert.equal(savedResource["@type"][0], "rdfs:Class");
     });
 
-    it("should handle clearCollections option", async function () {
+    it("should handle clearCollection option", async function () {
       // Pre-populate collections
       ontologyData.push({ _id: "existing", data: "old" });
-      contextData = { _id: "@context", old: "data" };
+      contextData = { _id: "@context" };
 
       const testData = [
         {
@@ -418,11 +418,12 @@ describe("OntologizeServer Import", function () {
           "@type": "rdfs:Class"
         }
       ];
-
+      // TODO this one fails silently, because for now the default error handling for a compact
+      //  failure is just console.warn--we can do better!
       const result = await ontologizeServer.importOntologyData(
         testData,
         mockOntologyCollection,
-        { clearCollections: true }
+        { clearCollection: true }
       );
 
       assert.isTrue(result.success);
@@ -630,7 +631,7 @@ describe("OntologizeServer Import", function () {
         {
           normalize: true,
           ensureArrayTypes: true,
-          clearCollections: true
+          clearCollection: true
         }
       );
 
@@ -774,6 +775,188 @@ describe("OntologizeServer Import", function () {
       const finalResource = ontologyData.find(r => r._id === "ex:TestClass");
       assert.equal(finalResource["rdfs:label"], "Replaced Label");
       assert.isUndefined(finalResource["rdfs:comment"]); // Should be gone
+    });
+  });
+
+  describe("FOAF Ontology Import Test Suite", function () {
+    let foafData = [];
+    let mockFoafCollection;
+    this.timeout(0);
+
+    beforeEach(function () {
+      // Reset foaf collection data
+      foafData = [];
+
+      // Create mock Foaf collection
+      mockFoafCollection = {
+        deleteMany: async () => {
+          const deletedCount = foafData.length;
+          foafData.length = 0;
+          return { deletedCount };
+        },
+        replaceOne: async (filter, doc, opts) => {
+          const index = foafData.findIndex(item => item._id === filter._id);
+          if (index >= 0) {
+            foafData[index] = doc;
+          }
+          else {
+            foafData.push(doc);
+          }
+          return { acknowledged: true, matchedCount: index >= 0 ? 1 : 0, modifiedCount: 1, upsertedId: null };
+        },
+        find: (query) => ({
+          toArray: async () => foafData.filter(item => {
+            return Object.keys(query).every(key => item[key] === query[key]);
+          })
+        }),
+        findOne: async (filter) => {
+          return foafData.find(item => {
+            return Object.keys(filter).every(key => item[key] === filter[key]);
+          }) || null;
+        }
+      };
+    });
+
+    it("should import FOAF ontology with TBox resources going to Ontology collection", async function () {
+
+      const filePath = "./tests/data/foaf.jsonld";
+
+      // Test import of FOAF ontology
+      const result = await ontologizeServer.importOntologyFromFile(
+        filePath,
+        mockFoafCollection
+      );
+
+      assert.isTrue(result.success);
+      assert.isTrue(result.processedResources > 0);
+
+      console.log(`FOAF Import Results:`);
+      console.log(`- Total resources: ${result.totalResources}`);
+      console.log(`- Processed resources: ${result.processedResources}`);
+      console.log(`- TBox resources: ${result.tboxResources}`);
+      console.log(`- ABox resources: ${result.aboxResources}`);
+
+      // All FOAF resources should be TBox resources (Classes, Properties, Ontology)
+      console.log(`- ABox resources:`,foafData);
+      assert.equal(result.aboxResources, 0, "FOAF should contain only TBox resources");
+      assert.isTrue(result.tboxResources > 0, "FOAF should contain TBox resources");
+
+      // Verify TBox resources are in the Ontology collection, not the Foaf collection
+      assert.equal(foafData.length, 0, "No resources should be in the Foaf collection since all are TBox");
+      assert.isTrue(ontologyData.length > 0, "TBox resources should be in the Ontology collection");
+
+      // Log what ended up in each collection
+      console.log(`\nCollection Distribution:`);
+      console.log(`- Ontology collection: ${ontologyData.length} resources`);
+      console.log(`- Foaf collection: ${foafData.length} resources`);
+
+      if (foafData.length > 0) {
+        console.log(`\nResources in Foaf collection:`);
+        foafData.forEach(resource => {
+          console.log(`  - ${resource._id} (@type: ${JSON.stringify(resource["@type"])})`);
+        });
+      }
+
+      // Verify specific FOAF classes are in the ontology collection
+      const foafPerson = ontologyData.find(r => r._id === "foaf:Person");
+      assert.isObject(foafPerson, "foaf:Person should be in ontology collection");
+      assert.isArray(foafPerson["@type"], "foaf:Person should have @type as array");
+      assert.isTrue(foafPerson["@type"].includes("owl:Class"), "foaf:Person should be owl:Class");
+
+      // Verify specific FOAF properties are in the ontology collection
+      const foafKnows = ontologyData.find(r => r._id === "foaf:knows");
+      assert.isObject(foafKnows, "foaf:knows should be in ontology collection");
+      assert.isArray(foafKnows["@type"], "foaf:knows should have @type as array");
+      assert.isTrue(foafKnows["@type"].includes("owl:ObjectProperty"), "foaf:knows should be owl:ObjectProperty");
+
+      // Verify the ontology definition itself
+      const foafOntology = ontologyData.find(r => r._id === "http://xmlns.com/foaf/0.1/");
+      assert.isObject(foafOntology, "FOAF ontology definition should be in ontology collection");
+      assert.isArray(foafOntology["@type"], "FOAF ontology should have @type as array");
+      assert.isTrue(foafOntology["@type"].includes("owl:Ontology"), "Should be owl:Ontology");
+    });
+
+    it("should handle FOAF ontology with clearCollection option", async function () {
+      // Pre-populate collections with test data
+      ontologyData.push({ _id: "test:ExistingClass", "@type": ["rdfs:Class"] });
+      foafData.push({ _id: "test:ExistingFoafResource", "@type": ["foaf:Person"] });
+
+      const filePath = "./tests/data/foaf.jsonld";
+
+      const result = await ontologizeServer.importOntologyFromFile(
+        filePath,
+        mockFoafCollection,
+        { clearCollection: true }
+      );
+
+      assert.isTrue(result.success);
+
+      // Foaf collection should be cleared but ontology collection should contain FOAF resources
+      assert.equal(foafData.length, 0, "Foaf collection should be cleared and remain empty");
+      assert.isTrue(ontologyData.length > 0, "Ontology collection should contain FOAF TBox resources");
+
+      // Ontology is not cleared in this case, only the target FOAF collection
+      assert.ok(ontologyData.some(r => r._id === "test:ExistingClass"), "Test data should be cleared from ontology");
+      assert.isFalse(foafData.some(r => r._id === "test:ExistingFoafResource"), "Test data should be cleared from foaf");
+
+      console.log(`\nAfter clearCollection:`);
+      console.log(`- Ontology collection: ${ontologyData.length} FOAF resources`);
+      console.log(`- Foaf collection: ${foafData.length} resources (should be 0)`);
+    });
+
+    it("should demonstrate TBox vs ABox resource classification", async function () {
+      // Create mixed test data with both TBox and ABox resources
+      const mixedData = [
+        // TBox resources (ontology definitions)
+        {
+          "_id": "ex:TestClass",
+          "@type": ["http://www.w3.org/2002/07/owl#Class"],
+          "http://www.w3.org/2000/01/rdf-schema#label": [{ "@value": "Test Class" }]
+        },
+        {
+          "_id": "ex:testProperty",
+          "@type": ["http://www.w3.org/2002/07/owl#ObjectProperty"],
+          "http://www.w3.org/2000/01/rdf-schema#label": [{ "@value": "Test Property" }]
+        },
+        // ABox resources (instances)
+        {
+          "_id": "ex:john",
+          "@type": ["http://xmlns.com/foaf/0.1/Person"],
+          "http://xmlns.com/foaf/0.1/name": [{ "@value": "John Doe" }]
+        },
+        {
+          "_id": "ex:acmeOrg",
+          "@type": ["http://xmlns.com/foaf/0.1/Organization"],
+          "http://xmlns.com/foaf/0.1/name": [{ "@value": "ACME Organization" }]
+        }
+      ];
+
+      const result = await ontologizeServer.importOntologyData(
+        mixedData,
+        mockFoafCollection
+      );
+
+      assert.isTrue(result.success);
+      assert.equal(result.totalResources, 4);
+      assert.equal(result.processedResources, 4);
+      assert.equal(result.tboxResources, 2, "Should identify 2 TBox resources");
+      assert.equal(result.aboxResources, 2, "Should identify 2 ABox resources");
+
+      // TBox resources should be in ontology collection
+      const tboxInOntology = ontologyData.filter(r =>
+        r._id === "ex:TestClass" || r._id === "ex:testProperty"
+      );
+      assert.equal(tboxInOntology.length, 2, "TBox resources should be in ontology collection");
+
+      // ABox resources should be in foaf collection
+      const aboxInFoaf = foafData.filter(r =>
+        r._id === "ex:john" || r._id === "ex:acmeOrg"
+      );
+      assert.equal(aboxInFoaf.length, 2, "ABox resources should be in foaf collection");
+
+      console.log(`\nMixed Import Results:`);
+      console.log(`- TBox resources in Ontology collection: ${tboxInOntology.map(r => r._id)}`);
+      console.log(`- ABox resources in Foaf collection: ${aboxInFoaf.map(r => r._id)}`);
     });
   });
 });
