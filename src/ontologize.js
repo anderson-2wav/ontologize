@@ -33,7 +33,7 @@ export class Ontologize {
       Context: contextCollection
     };
     this.opts = opts;
-    this.opts.context = this.opts.context || {};
+    this.opts.defaultContext = this.opts.defaultContext || Ontologize.DEFAULT_CONTEXT;
     this.opts.debug = this.opts.debug || false;
     if (this.opts.collections) {
       Object.assign(this.collections, this.opts.collections);
