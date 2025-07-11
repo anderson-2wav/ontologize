@@ -15,7 +15,7 @@ export interface ImportOptions {
   /** Store TBox resources in both collections */
   shareTBox?: boolean;
   /** Clear collections before importing */
-  clearCollections?: boolean;
+  clearCollection?: boolean;
   /** Ensure array props including @type */
   ensureArrayProps?: boolean;
   /** Merge TBox resources with existing resources using schema merge strategy */

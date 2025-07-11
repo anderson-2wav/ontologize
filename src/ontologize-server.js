@@ -54,7 +54,7 @@ export class OntologizeServer extends Ontologize {
    * @param {boolean} [opts.normalize=true] - Use LD.compact for BOLD resource normalization
    * @param {boolean} [opts.ontologize=true] - Classify resources as TBox/ABox
    * @param {boolean} [opts.shareTBox=false] - Store TBox resources in both collections
-   * @param {boolean} [opts.clearCollections=false] - Clear collections before importing
+   * @param {boolean} [opts.clearCollection=false] - Clear collections before importing
    * @param {boolean} [opts.ensureArrayProps=true] - Ensure array props including @type
    * @param {boolean} [opts.mergeOntology=true] - Merge TBox resources with existing resources using schema merge strategy
    * @returns {Promise<object>} Import result with detailed statistics
@@ -94,7 +94,7 @@ export class OntologizeServer extends Ontologize {
    * @param {boolean} [opts.normalize=true] - Use LD.compact for BOLD resource normalization
    * @param {boolean} [opts.ontologize=true] - Classify resources as TBox/ABox
    * @param {boolean} [opts.shareTBox=false] - Store TBox resources in both collections
-   * @param {boolean} [opts.clearCollections=false] - Clear collections before importing
+   * @param {boolean} [opts.clearCollection=false] - Clear collections before importing
    * @param {boolean} [opts.ensureArrayProps=true] - Ensure array props including @type
    * @param {boolean} [opts.mergeOntology=true] - Merge TBox resources with existing resources using schema merge strategy
    * @returns {Promise<object>} Import result with detailed statistics
@@ -109,7 +109,7 @@ export class OntologizeServer extends Ontologize {
       normalize = true,
       ontologize = true,
       shareTBox = false,
-      clearCollections = false,
+      clearCollection = false,
       ensureArrayProps = true,
       mergeOntology = true
     } = opts;
@@ -119,7 +119,7 @@ export class OntologizeServer extends Ontologize {
       const { extractedContext, resources } = this._extractContextAndResources(data);
 
       // Step 2: Clear collections if requested
-      if (clearCollections) {
+      if (clearCollection) {
         await Promise.all([
           collection.deleteMany({}),
           // we don't want to empty the contextCollection here
@@ -332,10 +332,13 @@ export class OntologizeServer extends Ontologize {
 
     // Step 1: Normalize resource using LD.compact if requested
     if (normalize) {
+      // Get context for compaction (provided, from Context collection, or default)
+      const contextForCompaction = await this._getContextForCompaction(context, contextCollection);
+      // TODO temporary consideration for context problem with _id
+      if (contextForCompaction._id === undefined) {
+        contextForCompaction._id = "@id";
+      }
       try {
-        // Get context for compaction (provided, from Context collection, or default)
-        const contextForCompaction = await this._getContextForCompaction(context, contextCollection);
-
         const ld = new LD();
         const compacted = await ld.compact(processedResource, contextForCompaction, {
           ensureArrayProps: ensureArrayProps,
