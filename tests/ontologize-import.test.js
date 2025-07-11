@@ -231,7 +231,7 @@ describe("OntologizeServer Import", function () {
     it("should import actual ontology.json file", async function () {
       this.timeout(10000); // Increase timeout for file operations
 
-      const filePath = "../../../data/ontology.json";
+      const filePath = "./data/ontology.json";
 
       // Test loading the file
       let fileData;
@@ -511,7 +511,7 @@ describe("OntologizeServer Import", function () {
       // Second import with additional context
       const secondData = [
         {
-          "_id": "@context", 
+          "_id": "@context",
           "@context": {
             "owl": "http://www.w3.org/2002/07/owl#",
             "dc": "http://purl.org/dc/elements/1.1/"
@@ -597,7 +597,7 @@ describe("OntologizeServer Import", function () {
       const prefixedKeys = keys.filter(k => !k.startsWith("@") && k.includes(":"));
 
       // @-keys should come first
-      assert.isTrue(atKeys.every(atKey => 
+      assert.isTrue(atKeys.every(atKey =>
         namespaceKeys.every(nsKey => keys.indexOf(atKey) < keys.indexOf(nsKey))
       ));
 
@@ -611,10 +611,10 @@ describe("OntologizeServer Import", function () {
   describe("BOLD Resource Normalization", function () {
     it("should ensure @type is array after import", async function () {
       this.timeout(15000);
-      
+
       // Test with actual CTB ontology if available
       const filePath = "../../../data/ontology.json";
-      
+
       let fileData;
       try {
         fileData = await ontologizeServer.loadOntologyFromFile(filePath);
@@ -627,10 +627,10 @@ describe("OntologizeServer Import", function () {
       const result = await ontologizeServer.importOntologyFromFile(
         filePath,
         mockOntologyCollection,
-        { 
-          normalize: true, 
+        {
+          normalize: true,
           ensureArrayTypes: true,
-          clearCollections: true 
+          clearCollections: true
         }
       );
 
@@ -679,7 +679,7 @@ describe("OntologizeServer Import", function () {
       const secondData = [
         {
           "_id": "ex:TestClass",
-          "@type": "rdfs:Class", 
+          "@type": "rdfs:Class",
           "rdfs:label": "Updated Test Class",
           "rdfs:subClassOf": "ex:ParentClass",
           "ex:newProperty": "added value"
@@ -698,13 +698,13 @@ describe("OntologizeServer Import", function () {
       // Check that the resource was merged, not replaced
       const finalResource = ontologyData.find(r => r._id === "ex:TestClass");
       assert.isObject(finalResource);
-      
+
       // Should have the updated label
       assert.equal(finalResource["rdfs:label"], "Updated Test Class");
-      
+
       // Should keep the original comment
       assert.equal(finalResource["rdfs:comment"], "Initial comment");
-      
+
       // Should have the new properties
       assert.equal(finalResource["rdfs:subClassOf"], "ex:ParentClass");
       assert.equal(finalResource["ex:newProperty"], "added value");

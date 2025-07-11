@@ -1,0 +1,1110 @@
+
+[
+  {
+    "_id": "@context",
+    "@context": {
+      "@vocab" : "https://ontology.2wav.com/bold#",
+      "rdf" : "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+      "rdfs" : "http://www.w3.org/2000/01/rdf-schema#",
+      "owl" : "http://www.w3.org/2002/07/owl#",
+      "xsd" : "http://www.w3.org/2001/XMLSchema#",
+      "foaf" : "http://xmlns.com/foaf/0.1/",
+      "dc" : "http://purl.org/dc/elements/1.1/",
+      "org" : "http://www.w3.org/ns/org#",
+      "uo" : "http://purl.obolibrary.org/obo/uo.owl",
+      "bfo" : "http://purl.obolibrary.org/obo/bfo.owl",
+      "wwav" : "https://ontology.2wav.com#",
+      "bui" : "https://ontology.2wav.com/bold-ui#",
+      "bold" : "https://ontology.2wav.com/bold#",
+      "ctl" : "https://ontology.2wav.com/800-53#",
+      "ctl5" : "https://ontology.2wav.com/800-53/rev5#",
+      "nice" : "https://ontology.2wav.com/nice#",
+      "acrt" : "https://privatealpha.com/ontology/certification/1#",
+      "time" : "http://www.w3.org/2006/time#",
+      "skos" : "http://www.w3.org/2004/02/skos/core#",
+      "wot" : "http://xmlns.com/wot/0.1/",
+      "vs" : "http://www.w3.org/2003/06/sw-vocab-status/ns#",
+      "brick": "https://brickschema.org/schema/Brick#",
+      "csvw": "http://www.w3.org/ns/csvw#",
+      "dcam": "http://purl.org/dc/dcam/",
+      "dcat": "http://www.w3.org/ns/dcat#",
+      "dcmitype": "http://purl.org/dc/dcmitype/",
+      "dcterms": "http://purl.org/dc/terms/",
+      "doap": "http://usefulinc.com/ns/doap#",
+      "odrl": "http://www.w3.org/ns/odrl/2/",
+      "prof": "http://www.w3.org/ns/dx/prof/",
+      "prov": "http://www.w3.org/ns/prov#",
+      "qb": "http://purl.org/linked-data/cube#",
+      "schema": "https://schema.org/",
+      "sh": "http://www.w3.org/ns/shacl#",
+      "sosa": "http://www.w3.org/ns/sosa/",
+      "ssn": "http://www.w3.org/ns/ssn/",
+      "vann": "http://purl.org/vocab/vann/",
+      "void": "http://rdfs.org/ns/void#",
+      "_id" : "@id",
+      "rdfs:range" : {
+        "@type" : "@id"
+      },
+      "rdfs:domain" : {
+        "@type" : "@id"
+      },
+      "bold:importance" : {
+        "@type" : "http://www.w3.org/2001/XMLSchema#integer"
+      },
+      "bold:when" : {
+        "@type" : "http://www.w3.org/2001/XMLSchema#dateTime"
+      },
+      "rdfs:comment" : {
+        "@type" : "http://www.w3.org/2001/XMLSchema#string"
+      },
+      "bold:confidence" : {
+        "@type" : "http://www.w3.org/2001/XMLSchema#string"
+      },
+      "bold:hasBeginning" : {
+        "@type" : "http://www.w3.org/2001/XMLSchema#dateTime"
+      },
+      "bold:hasCertification" : {
+        "@type" : "@id"
+      },
+      "bold:hasEnd" : {
+        "@type" : "http://www.w3.org/2001/XMLSchema#dateTime"
+      },
+      "bold:hasKnowledge" : {
+        "@type" : "@id"
+      },
+      "bold:hasPosition" : {
+        "@type" : "@id"
+      },
+      "bold:hasSkill" : {
+        "@type" : "@id"
+      },
+      "bold:hasTask" : {
+        "@type" : "@id"
+      },
+      "bold:jobTitle" : {
+        "@type" : "http://www.w3.org/2001/XMLSchema#string"
+      },
+      "org:memberDuring" : {
+        "@type" : "@id"
+      },
+      "org:memberOf" : {
+        "@type" : "@id"
+      },
+      "org:organization" : {
+        "@type" : "@id"
+      },
+      "org:role" : {
+        "@type" : "@id"
+      },
+      "rdfs:subClassOf" : {
+        "@type" : "@id"
+      },
+      "bui:schema" : {
+
+      },
+      "dc:description" : {
+        "@type" : "http://www.w3.org/2001/XMLSchema#string"
+      },
+      "bold:collection" : {
+        "@type" : "http://www.w3.org/2001/XMLSchema#string"
+      },
+      "owl:sameAs" : {
+        "@type" : "@id"
+      },
+      "bold:completedDate" : {
+        "@type" : "http://www.w3.org/2001/XMLSchema#dateTime"
+      },
+      "bold:dueDate" : {
+        "@type" : "http://www.w3.org/2001/XMLSchema#dateTime"
+      },
+      "bold:projectStatus" : {
+        "@type" : "http://www.w3.org/2001/XMLSchema#string"
+      },
+      "bold:severity" : {
+        "@type" : "http://www.w3.org/2001/XMLSchema#string"
+      },
+      "bold:startDate" : {
+        "@type" : "http://www.w3.org/2001/XMLSchema#dateTime"
+      },
+      "schema:eligibleRegion" : {
+
+      },
+      "rdfs:subPropertyOf" : {
+        "@type" : "@id"
+      },
+      "vs:term_status" : {
+        "@type" : "@id"
+      },
+      "wot:assurance" : {
+        "@type" : "@id"
+      },
+      "wot:src_assurance" : {
+        "@type" : "@id"
+      },
+      "nice:description" : {
+
+      },
+      "nice:inCategory" : {
+        "@type" : "@id"
+      },
+      "nice:inSpecialtyArea" : {
+        "@type" : "@id"
+      },
+      "nice:name" : {
+
+      },
+      "nice:abbrev" : {
+
+      },
+      "nice:requiresAbility" : {
+        "@type" : "@id"
+      },
+      "nice:requiresKnowledge" : {
+        "@type" : "@id"
+      },
+      "nice:requiresSkill" : {
+        "@type" : "@id"
+      },
+      "nice:requiresTask" : {
+        "@type" : "@id"
+      },
+      "nice:title" : {
+
+      },
+      "nice:competencyType" : {
+        "@type" : "@id"
+      },
+      "ctl:related" : {
+        "@type" : "@id"
+      },
+      "ctl:memberOf": {
+        "@type" : "@id"
+      },
+      "owl:cardinality": {
+        "@type": "http://www.w3.org/2001/XMLSchema#integer"
+      },
+      "owl:maxCardinality": {
+        "@type": "http://www.w3.org/2001/XMLSchema#integer"
+      }
+    }
+  },
+  {
+    "_id" : "bars",
+    "rdfs:comment": "For Ld test.",
+    "owl:maxCardinality" : 9007199254740991
+  },
+  {
+    "_id": "bui:schema",
+    "rdfs:comment": "An enhanced JSON-Schema object of display/editor constraints for a property. Common schema fields are enum, enumLabels, enumColors (see https://json-schema.org).",
+    "@type": "owl:DatatypeProperty",
+    "rdfs:range": "bui:Schema"
+  },
+  {
+    "_id": "bui:Schema",
+    "rdfs:comment": "The Datatype of a 2do Schema, an enhanced JSON-Schema object of display/editor constraints for a property. Common schema fields are enum, enumLabels, enumColors (see https://json-schema.org).",
+    "@type": "rdfs:Class",
+    "rdfs:subClassOf": "bui:JSON"
+  },
+  {
+    "_id": "bui:JSON",
+    "rdfs:comment": "The Datatype of a JSON object. This would be serialized as an xsd:string for export, but represented as a full object in the Ontology collection.",
+    "@type": "rdfs:Class",
+    "rdfs:subClassOf": "schema:Text"
+  },
+  {
+    "_id": "@type",
+    "rdfs:comment": "@type will be enforced to be an Array.",
+    "owl:maxCardinality": 9007199254740991
+  },
+  {
+    "_id": "bold:Ascriber",
+    "rdfs:comment": "A source that ascribes nice:Capabilities to a bold:Credential, e.g. Position or Certification",
+    "@type": "rdfs:Class",
+    "rdfs:subClassOf": "org:Role",
+    "bold:collection": "Passport",
+    "bui:schema": {
+      "properties": {
+        "dc:description": {
+          "required": true
+        }
+      }
+    }
+  },
+  {
+    "_id": "bold:BridgeSource",
+    "@type": "rdfs:Class",
+    "rdfs:label": "Bridge Source",
+    "rdfs:comment": "A source which generates or causes the generation of a Bridge statement."
+  },
+  {
+    "_id": "bold:Certification",
+    "@type": "rdfs:Class",
+    "rdfs:subClassOf": "bold:Ascriber",
+    "owl:sameAs": ["acrt:Certification"],
+    "rdfs:comment": "This is the CyberTalent Bridge implementation of a Cybersecurity Certification, like Security+",
+    "bold:collection": "Passport"
+  },
+  {
+    "_id": "bold:CertificationInstance",
+    "@type": "rdfs:Class",
+    "rdfs:subClassOf": "bold:Credential",
+    "rdfs:comment": "This is an instance of a bold:Certification for a bold:Talent"
+  },
+  {
+    "_id": "bold:Credential",
+    "rdfs:comment": "An instance of a bold:Ascriber (e.g. PositionInstance), in a Passport. But also can be a bold:Ascriber, with its own bold:impartsCabability",
+    "@type": "rdfs:Class",
+    "rdfs:subClassOf": [
+      "org:Membership",
+      "bold:Ascriber"
+    ]
+  },
+  {
+    "_id": "bold:DefaultSource",
+    "@type": "bold:BridgeSource",
+    "rdfs:comment": "Original internal CTB algorithm."
+  },
+  {
+    "_id": "bold:ExternalLink",
+    "rdfs:comment": "Usually an embedded document linking a resource to an external system. Typically has bold:externalSystem and bold:externalResource properties.",
+    "@type": "rdfs:Class"
+  },
+  {
+    "_id": "bold:GroupAdmin",
+    "@type": "org:Role",
+    "rdfs:label": "Group Admin"
+  },
+  {
+    "_id": "bold:OpenSearch",
+    "@type": "bold:BridgeSource",
+    "rdfs:comment": "OpenSearch based CTB importance algorithm."
+  },
+  {
+    "_id": "bold:OrganizationAdmin",
+    "@type": "org:Role",
+    "rdfs:label": "Org Admin"
+  },
+  {
+    "_id": "bold:POAM",
+    "rdfs:comment": "A CTB Plan of Action & Milestones, a bold:Project consisting of all assigned controls from every Project.",
+    "@type": "rdfs:Class",
+    "rdfs:subClassOf": "bold:Project",
+    "bold:collection": "Projects"
+  },
+  {
+    "_id": "bold:PersonalInfo",
+    "@type": "rdfs:Class",
+    "rdfs:subClassOf": "bold:Ascriber",
+    "bui:schema": {
+      "title": "Personal Statement",
+      "properties": {
+        "dc:description": {
+          "title": false
+        }
+      }
+    }
+  },
+  {
+    "_id": "bold:Position",
+    "@type": "rdfs:Class",
+    "rdfs:subClassOf": "bold:Ascriber",
+    "bold:collection": "Passport"
+  },
+  {
+    "_id": "bold:PositionInstance",
+    "@type": "rdfs:Class",
+    "rdfs:subClassOf": "bold:Credential",
+    "rdfs:label": "Position",
+    "rdfs:comment": "This is an instance of a bold:Position for a bold:Talent"
+  },
+  {
+    "_id": "bold:Project",
+    "rdfs:comment": "A CyberTalent Bridge Project, consisting of assigned controls.",
+    "@type": "rdfs:Class",
+    "rdfs:subClassOf": "foaf:Project",
+    "bold:collection": "Projects",
+    "bui:schema": {
+      "properties": {
+        "dc:description": {
+          "title": "Project Description",
+          "required": true
+        },
+        "bold:severity": {
+          "required": true
+        },
+        "bold:projectStatus": {
+          "required": true
+        },
+        "bold:startDate": {
+          "required": true
+        },
+        "bold:dueDate": {
+          "required": true
+        },
+        "bold:completedDate": {
+          "required": true
+        }
+      }
+    }
+  },
+  {
+    "_id": "bold:Recommendation",
+    "@type": "rdfs:Class",
+    "rdfs:subClassOf": "bold:Ascriber",
+    "bui:schema": {
+      "title": "Recommendation",
+      "properties": {
+        "dc:description": {
+          "title": false
+        }
+      }
+    }
+  },
+  {
+    "_id": "bold:SuperAdmin",
+    "@type": "org:Role",
+    "rdfs:label": "Super Admin"
+  },
+  {
+    "_id": "bold:Talent",
+    "rdfs:comment": "A person with a CyberTalent Passport.",
+    "@type": "rdfs:Class",
+    "rdfs:subClassOf": "foaf:Person",
+    "bold:collection": "Talent"
+  },
+  {
+    "_id": "bold:TalentPreference",
+    "rdfs:comment": "A possible value of schema:seeks of a bold:PersonalInfo",
+    "@type": "rdfs:Class",
+    "rdfs:subClassOf": "schema:Demand",
+    "bui:schema": {
+      "properties": {
+        "schema:eligibleRegion": {
+          "title": "Region of Interest",
+          "editor": "multiselect"
+        },
+        "schema:itemOffered": {
+          "title": "NICE work if you can get it",
+          "editor": "multiselect"
+        }
+      }
+    }
+  },
+  {
+    "_id": "bold:Training",
+    "@type": "rdfs:Class",
+    "rdfs:subClassOf": [
+      "bold:Education",
+      "bold:Ascriber"
+    ],
+    "bold:collection": "Passport"
+  },
+  {
+    "_id": "bold:User",
+    "rdfs:comment": "A CyberTalent Bridge user.",
+    "@type": "rdfs:Class",
+    "rdfs:subClassOf": "foaf:Person",
+    "bold:collection": "Users"
+  },
+  {
+    "_id": "bold:accountStatus",
+    "@type": "owl:DatatypeProperty",
+    "rdfs:domain": "bold:User",
+    "rdfs:range": "xsd:string",
+    "rdfs:comment": "active, suspended",
+    "bui:schema": {
+      "enum": [
+        "active",
+        "suspended"
+      ]
+    }
+  },
+  {
+    "_id": "bold:activeOrg",
+    "@type": "owl:ObjectProperty",
+    "rdfs:comment": "The user is currently, or last worked in this org.",
+    "rdfs:range": "org:Organization",
+    "owl:cardinality": 1
+  },
+  {
+    "_id": "bold:assignedTo",
+    "rdfs:comment": "Talent who are assigned to this Project.",
+    "@type": "owl:ObjectProperty",
+    "rdfs:domain": "bold:Project",
+    "rdfs:range": "bold:Talent",
+    "owl:maxCardinality": 9007199254740991
+  },
+  {
+    "_id": "bold:authority",
+    "rdfs:comment": "Organization who attests an Ascriber. Currently used in Certifications.",
+    "@type": "owl:ObjectProperty",
+    "rdfs:domain": "bold:Ascriber",
+    "rdfs:range": "org:Organization",
+    "owl:cardinality": 1
+  },
+  {
+    "_id": "bold:availableOrgs",
+    "@type": "owl:ObjectProperty",
+    "rdfs:comment": "List of orgs which user may switch to, not sub-units",
+    "rdfs:range": "org:Organization",
+    "owl:maxCardinality": 9007199254740991
+  },
+  {
+    "_id": "bold:axiom",
+    "rdfs:comment": "The fully resolved axiom which created this inferred statement.",
+    "@type": "owl:DatatypeProperty",
+    "rdfs:range": "xsd:string",
+    "rdfs:domain": "rdf:Statement"
+  },
+  {
+    "_id": "bold:boolean",
+    "rdfs:comment": "A test property.",
+    "@type": "owl:DatatypeProperty",
+    "rdfs:range": "xsd:boolean",
+    "bui:schema": {
+      "enum": [
+        true,
+        false
+      ],
+      "enumLabels": [
+        "You bet!",
+        "No way!"
+      ]
+    }
+  },
+  {
+    "_id": "bold:collection",
+    "rdfs:comment": "The name of the Collection which contains resources of this type.",
+    "@type": "owl:DatatypeProperty",
+    "rdfs:range": "xsd:string",
+    "rdfs:domain": "rdfs:Class"
+  },
+  {
+    "_id": "bold:completedDate",
+    "rdfs:comment": "Project competed date.",
+    "@type": "owl:DatatypeProperty",
+    "rdfs:domain": "bold:Project",
+    "rdfs:range": "xsd:dateTime",
+    "owl:cardinality": 1
+  },
+  {
+    "_id": "bold:confidence",
+    "@type": "owl:DatatypeProperty",
+    "rdfs:range": "xsd:string",
+    "rdfs:comment": "The confidence of an assertion, typically about a Talent."
+  },
+  {
+    "_id": "bold:controls",
+    "@type": "owl:ObjectProperty",
+    "rdfs:comment": "Controls required by this Project.",
+    "rdfs:domain": "bold:Project",
+    "rdfs:range": "ctl:Control",
+    "owl:maxCardinality": 9007199254740991
+  },
+  {
+    "_id": "bold:createdBy",
+    "rdfs:comment": "A unique identifier (usually email) of the Person who created this Project or Bridge~Statement",
+    "@type": "owl:DatatypeProperty",
+    "rdfs:range": "xsd:string",
+    "owl:cardinality": 1
+  },
+  {
+    "_id": "bold:createdById",
+    "rdfs:comment": "User who created thing. DEPRECATED—now using bold:createdBy",
+    "@type": "owl:ObjectProperty",
+    "rdfs:range": "foaf:Person"
+  },
+  {
+    "_id": "bold:decimal",
+    "rdfs:comment": "A test property.",
+    "@type": "owl:DatatypeProperty",
+    "rdfs:range": "xsd:decimal"
+  },
+  {
+    "_id": "bold:derivedFrom",
+    "rdfs:comment": "Object resource is originally derived from subject. In the case of Ascribers, this means copied.",
+    "@type": "owl:ObjectProperty",
+    "owl:cardinality": 1,
+    "schema:domainIncludes": ["bold:Ascriber"],
+    "schema:rangeIncludes": ["bold:Ascriber"]
+  },
+  {
+    "_id": "bold:dueDate",
+    "rdfs:comment": "Project due date.",
+    "@type": "owl:DatatypeProperty",
+    "rdfs:domain": "bold:Project",
+    "rdfs:range": "xsd:dateTime",
+    "owl:cardinality": 1
+  },
+  {
+    "_id": "bold:explanation",
+    "rdfs:comment": "Explanation of a Bridge statement.",
+    "@type": "owl:DatatypeProperty",
+    "rdfs:range": "xsd:string",
+    "rdfs:domain": "rdf:Statement"
+  },
+  {
+    "_id": "bold:externalLink",
+    "rdfs:comment": "Links to external partner application or platform(s) to which this Resource is linked. The mapping of this resource to the partner may be system dependent.",
+    "@type": "owl:ObjectProperty",
+    "rdfs:range": "bold:ExternalLink",
+    "owl:maxCardinality": 9007199254740991
+  },
+  {
+    "_id": "bold:externalResource",
+    "rdfs:comment": "_id of an external resource in a bold:ExternalLink",
+    "@type": "owl:ObjectProperty",
+    "rdfs:domain": "bold:ExternalLink",
+    "owl:cardinality": 1
+  },
+  {
+    "_id": "bold:externalResourceType",
+    "rdfs:comment": "@type of an external resource in a bold:ExternalLink",
+    "@type": "owl:ObjectProperty",
+    "rdfs:domain": "bold:ExternalLink",
+    "owl:cardinality": 1
+  },
+  {
+    "_id": "bold:externalSystem",
+    "rdfs:comment": "_id of an external system in a bold:ExternalLink",
+    "@type": "owl:ObjectProperty",
+    "rdfs:domain": "bold:ExternalLink",
+    "owl:cardinality": 1
+  },
+  {
+    "_id": "bold:hasAbility",
+    "@type": "owl:ObjectProperty",
+    "rdfs:range": "nice:Ability",
+    "owl:maxCardinality": 9007199254740991
+  },
+  {
+    "_id": "bold:hasBeginning",
+    "@type": "owl:DatatypeProperty",
+    "rdfs:range": "xsd:dateTime",
+    "rdfs:subPropertyOf": "time:inXSDDateTime",
+    "rdfs:comment": "A general purpose timestamp that a time interval begins.",
+    "bui:schema": {
+      "format": "MMMM YYYY",
+      "required": true
+    }
+  },
+  {
+    "_id": "bold:hasCertification",
+    "@type": "owl:ObjectProperty",
+    "rdfs:domain": "bold:Talent",
+    "rdfs:range": "bold:Credential",
+    "rdfs:subPropertyOf": "bold:hasCredential",
+    "owl:maxCardinality": 9007199254740991
+  },
+  {
+    "_id": "bold:hasCompetency",
+    "@type": "owl:ObjectProperty",
+    "rdfs:range": "nice:Competency",
+    "owl:maxCardinality": 9007199254740991
+  },
+  {
+    "_id": "bold:hasCredential",
+    "@type": "owl:ObjectProperty",
+    "rdfs:domain": "bold:Talent",
+    "rdfs:range": "bold:Credential",
+    "rdfs:subPropertyOf": "org:hasMembership",
+    "owl:maxCardinality": 9007199254740991
+  },
+  {
+    "_id": "bold:hasDirectTKS",
+    "@type": "owl:ObjectProperty",
+    "owl:maxCardinality": 9007199254740991,
+    "rdfs:comment": "DEPRECATED"
+  },
+  {
+    "_id": "bold:hasEnd",
+    "@type": "owl:DatatypeProperty",
+    "rdfs:range": "xsd:dateTime",
+    "rdfs:subPropertyOf": "time:inXSDDateTime",
+    "rdfs:comment": "A general purpose timestamp that a time interval ends.",
+    "bui:schema": {
+      "format": "MMMM YYYY",
+      "required": true,
+      "placeholder": "present"
+    }
+  },
+  {
+    "_id": "bold:hasKnowledge",
+    "@type": "owl:ObjectProperty",
+    "rdfs:range": "nice:Knowledge",
+    "owl:maxCardinality": 9007199254740991
+  },
+  {
+    "_id": "bold:hasPosition",
+    "@type": "owl:ObjectProperty",
+    "rdfs:domain": "bold:Talent",
+    "rdfs:range": "bold:Credential",
+    "rdfs:subPropertyOf": "bold:hasCredential",
+    "owl:maxCardinality": 9007199254740991
+  },
+  {
+    "_id": "bold:hasRole",
+    "@type": "owl:ObjectProperty",
+    "rdfs:domain": "foaf:Person",
+    "rdfs:range": "org:Role",
+    "owl:maxCardinality": 9007199254740991
+  },
+  {
+    "_id": "bold:hasSkill",
+    "@type": "owl:ObjectProperty",
+    "rdfs:range": "nice:Skill",
+    "owl:maxCardinality": 9007199254740991
+  },
+  {
+    "_id": "bold:hasTask",
+    "@type": "owl:ObjectProperty",
+    "rdfs:range": "nice:Task",
+    "owl:maxCardinality": 9007199254740991
+  },
+  {
+    "_id": "bold:hasWorkRole",
+    "@type": "owl:ObjectProperty",
+    "rdfs:comment": "A passport entity imparts a WorkRole capability through this property (legacy). Unfortunately can't be a subproperty of bold:impartsCapability, because then Talent become Ascribers through reasoning. :-(",
+    "rdfs:range": "nice:WorkRole",
+    "//rdfs:subPropertyOf": "bold:impartsCapability",
+    "owl:maxCardinality": 9007199254740991
+  },
+  {
+    "_id": "bold:ignored",
+    "@type": "owl:DatatypeProperty",
+    "rdfs:domain": "rdf:Statement",
+    "rdfs:range": "xsd:boolean",
+    "owl:cardinality": 1
+  },
+  {
+    "_id": "bold:impartsCapability",
+    "@type": "owl:ObjectProperty",
+    "rdfs:comment": "A passport Ascriber imparts a NICE Capability through this property.",
+    "rdfs:domain": "bold:Ascriber",
+    "rdfs:range": "nice:Capability",
+    "owl:maxCardinality": 9007199254740991
+  },
+  {
+    "_id": "bold:impartsTKS",
+    "@type": "owl:ObjectProperty",
+    "rdfs:comment": "UNUSED yet, but probably should replace nice:impartsTKS for Ascribers. A passport Ascriber imparts a NICE TKS through this property.",
+    "rdfs:domain": "bold:Ascriber",
+    "rdfs:range": "nice:TKS",
+    "owl:maxCardinality": 9007199254740991
+  },
+  {
+    "_id": "bold:importance",
+    "@type": "owl:DatatypeProperty",
+    "rdfs:range": "xsd:integer",
+    "rdfs:comment": "An weighting generally used to rank the importance of a Project's TKS requirements."
+  },
+  {
+    "_id": "bold:importanceScore",
+    "@type": "owl:DatatypeProperty",
+    "rdfs:range": "xsd:integer",
+    "rdfs:comment": "A portion of bold:importance which is credited to a Talent, affected by bold:confidence."
+  },
+  {
+    "_id": "bold:importanceSource",
+    "@type": "owl:ObjectProperty",
+    "rdfs:domain": "org:Organization",
+    "rdfs:comment": "The source algorithm used by an organization in CTB."
+  },
+  {
+    "_id": "bold:inferredFrom",
+    "rdfs:comment": "The resources from which a Bridge statement is inferred, from most to least immediate.",
+    "@type": "owl:ObjectProperty",
+    "rdfs:domain": "rdf:Statement",
+    "owl:maxCardinality": 9007199254740991
+  },
+  {
+    "_id": "bold:integer",
+    "rdfs:comment": "A test property.",
+    "@type": "owl:DatatypeProperty",
+    "rdfs:range": "xsd:integer",
+    "bui:schema": {
+      "minimum": 0,
+      "maximum": 100
+    }
+  },
+  {
+    "_id": "bold:isPublished",
+    "rdfs:comment": "Used to de-activate a credential in a passport, in particular used for passport Recommendations",
+    "@type": "owl:DatatypeProperty",
+    "rdfs:range": "xsd:boolean",
+    "rdfs:label": "Is visible",
+    "bui:schema": {
+      "enum": [
+        true,
+        false
+      ],
+      "enumLabels": [
+        "VISIBLE",
+        "HIDDEN"
+      ]
+    }
+  },
+  {
+    "_id": "bold:jobTitle",
+    "@type": "owl:DatatypeProperty",
+    "rdfs:range": "xsd:string"
+  },
+  {
+    "_id": "bold:lastLogin",
+    "@type": "owl:DatatypeProperty",
+    "rdfs:domain": "bold:User",
+    "rdfs:range": "xsd:dateTime",
+    "rdfs:comment": "User last login."
+  },
+  {
+    "_id": "bold:memberOfOrg",
+    "@type": "owl:ObjectProperty",
+    "rdfs:subPropertyOf": "org:memberOf",
+    "rdfs:domain": "bold:User",
+    "rdfs:range": "org:Organization",
+    "rdfs:comment": "This is a proposed property to record only the top level orgs of a user.",
+    "owl:maxCardinality": 9007199254740991
+  },
+  {
+    "_id": "bold:memberOfOrgGroup",
+    "@type": "owl:ObjectProperty",
+    "rdfs:subPropertyOf": "org:memberOf",
+    "rdfs:domain": "bold:User",
+    "rdfs:range": "org:Organization",
+    "rdfs:comment": "This is a proposed property to record org groups of a user.",
+    "owl:maxCardinality": 9007199254740991
+  },
+  {
+    "_id": "bold:mfa",
+    "@type": "owl:DatatypeProperty",
+    "rdfs:domain": "bold:User",
+    "rdfs:range": "xsd:boolean",
+    "rdfs:comment": "Has user activated multi-factor authentication?"
+  },
+  {
+    "_id": "bold:objectOfStatement",
+    "@type": "owl:ObjectProperty",
+    "rdfs:comment": "Relevant Bridge statements for which this resource is the object.",
+    "rdfs:range": "rdf:Statement",
+    "owl:maxCardinality": 9007199254740991
+  },
+  {
+    "_id": "bold:operation",
+    "rdfs:comment": "For Bridge statement, create or remove. DEPRECATED",
+    "@type": "owl:DatatypeProperty",
+    "rdfs:range": "xsd:string",
+    "rdfs:domain": "rdf:Statement"
+  },
+  {
+    "_id": "bold:organization",
+    "@type": "owl:ObjectProperty",
+    "rdfs:comment": "The org to which a Project, Statement, etc. belongs. THIS SHOULD BE org:organization",
+    "rdfs:range": "org:Organization",
+    "owl:cardinality": 1
+  },
+  {
+    "_id": "bold:owner",
+    "rdfs:comment": "The org which owns this Resource, currently used to determine who may modify the Resource, such as a bold:Credential.",
+    "@type": "owl:ObjectProperty",
+    "rdfs:range": "org:Organization",
+    "schema:domainIncludes": ["bold:Credential"],
+    "owl:inverseOf": "schema:owns",
+    "owl:cardinality": 1
+  },
+  {
+    "_id": "bold:projectStatus",
+    "rdfs:comment": "Project status",
+    "rdfs:label": "Status",
+    "@type": "owl:DatatypeProperty",
+    "rdfs:domain": "bold:Project",
+    "rdfs:range": "xsd:string",
+    "bui:schema": {
+      "enum": [
+        "Not Yet Started",
+        "In Progress",
+        "Completed",
+        "Approved"
+      ]
+    },
+    "owl:cardinality": 1
+  },
+  {
+    "_id": "bold:propertyVisibility",
+    "rdfs:comment": "A property applied to any document in the passport to restrict the export of specific properties. Each value of the array is like {_id: 'property', 'bold:visibleTo: []} (where empty [] means visible to none).",
+    "@type": "owl:ObjectProperty",
+    "owl:maxCardinality": 9007199254740991
+  },
+  {
+    "_id": "bold:recommendedAscriber",
+    "rdfs:comment": "bold:Ascriber (Positions, Certifications) recommended for the subject (e.g. Project).",
+    "@type": "owl:ObjectProperty",
+    "rdfs:range": "bold:Ascriber",
+    "owl:maxCardinality": 9007199254740991
+  },
+  {
+    "_id": "bold:recommendedCapability",
+    "rdfs:comment": "nice:Capabilities (WorkRoles, Competencies) recommended for the subject (e.g. Project).",
+    "@type": "owl:ObjectProperty",
+    "rdfs:range": "nice:Capability",
+    "owl:maxCardinality": 9007199254740991
+  },
+  {
+    "_id": "bold:relevantTks",
+    "rdfs:comment": "The TKS associated with a Control. Should be DEPRECATED",
+    "@type": "owl:ObjectProperty",
+    "rdfs:range": "nice:TKS",
+    "owl:maxCardinality": 9007199254740991
+  },
+  {
+    "_id": "bold:scope",
+    "rdfs:comment": "Indicates a context such as an Organization, in which the Statement is relevant.",
+    "@type": "owl:ObjectProperty",
+    "rdfs:domain": "rdf:Statement"
+  },
+  {
+    "_id": "bold:selfAsserted",
+    "rdfs:comment": "The subject statement is asserted by its subject. (bold:createdBy)",
+    "@type": "owl:DatatypeProperty",
+    "rdfs:domain": "rdf:Statement",
+    "owl:cardinality": 1,
+    "rdfs:range": "xsd:boolean"
+  },
+  {
+    "_id": "bold:severity",
+    "rdfs:comment": "Project severity",
+    "@type": "owl:DatatypeProperty",
+    "rdfs:domain": "bold:Project",
+    "rdfs:range": "xsd:string",
+    "bui:schema": {
+      "enum": [
+        "High",
+        "Moderate",
+        "Low",
+        "Not Assigned",
+        "none"
+      ],
+      "enumLabels": [
+        "HIGH",
+        "Moderate",
+        "Low",
+        "not assigned",
+        "not assigned"
+      ],
+      "//enumColors": [
+        "required",
+        "gold",
+        "circuit-board",
+        "disabled",
+        "disabled"
+      ]
+    },
+    "owl:cardinality": 1
+  },
+  {
+    "_id": "bold:source",
+    "rdfs:comment": "The source which generated a bridge statement.",
+    "@type": "owl:ObjectProperty",
+    "rdfs:domain": "rdf:Statement",
+    "rdfs:range": "bold:BridgeSource"
+  },
+  {
+    "_id": "bold:startDate",
+    "rdfs:comment": "Project start date.",
+    "@type": "owl:DatatypeProperty",
+    "rdfs:domain": "bold:Project",
+    "rdfs:range": "xsd:dateTime",
+    "owl:cardinality": 1
+  },
+  {
+    "_id": "bold:subjectOfStatement",
+    "@type": "owl:ObjectProperty",
+    "rdfs:comment": "Relevant Bridge statements for which this resource is the rdf:subject.",
+    "rdfs:range": "rdf:Statement",
+    "owl:maxCardinality": 9007199254740991
+  },
+  {
+    "_id": "bold:totalImportance",
+    "@type": "owl:DatatypeProperty",
+    "rdfs:range": "xsd:integer",
+    "rdfs:comment": "A total of all importance for TKS of a Project. Used to calculate % match."
+  },
+  {
+    "_id": "bold:unmatchedStatement",
+    "rdfs:comment": "The Statement(s) associated with Controls of a project which are not matched by any assigned Talent.",
+    "@type": "owl:ObjectProperty",
+    "rdfs:domain": "bold:Talent",
+    "rdfs:range": "rdf:Statement",
+    "owl:maxCardinality": 9007199254740991
+  },
+  {
+    "_id": "bold:unmatchedTKS",
+    "rdfs:comment": "The TKS associated with Controls of a project which are not matched by any assigned Talent.",
+    "@type": "owl:ObjectProperty",
+    "rdfs:domain": "bold:Project",
+    "rdfs:range": "rdf:Statement",
+    "owl:maxCardinality": 9007199254740991
+  },
+  {
+    "_id": "bold:visibleTo",
+    "rdfs:comment": "The Organizations to which an Ascriber (Position, Certification, other) should be visible.",
+    "@type": "owl:ObjectProperty",
+    "rdfs:range": "org:Organization",
+    "owl:maxCardinality": 9007199254740991
+  },
+  {
+    "_id": "bold:when",
+    "@type": "owl:DatatypeProperty",
+    "rdfs:range": "xsd:dateTime",
+    "rdfs:subPropertyOf": "time:inXSDDateTime",
+    "rdfs:comment": "A general purpose timestamp that an event or assertion happened."
+  },
+  {
+    "_id": "ctl:memberOf",
+    "@type": "owl:ObjectProperty",
+    "owl:cardinality": 1,
+    "rdfs:range": "ctl:Family"
+  },
+  {
+    "_id": "ctl:related",
+    "@type": "owl:ObjectProperty",
+    "rdfs:range": "ctl:Control",
+    "owl:maxCardinality": 9007199254740991
+  },
+  {
+    "_id": "dc:description",
+    "@type": "owl:DatatypeProperty",
+    "rdfs:label": "Description",
+    "rdfs:range": "xsd:string",
+    "bui:schema": {
+      "title": "Description",
+      "editor": "textarea"
+    }
+  },
+  {
+    "_id": "dc:relation",
+    "@type": "owl:DatatypeProperty",
+    "dc:description": "Any notes, footnotes, or URLs related to the subject.",
+    "owl:maxCardinality": 9007199254740991,
+    "bui:schema": {
+      "title": "Related",
+      "editor": "multiselect"
+    }
+  },
+  {
+    "_id": "foaf:phone",
+    "@type": "owl:DatatypeProperty",
+    "rdfs:range": "xsd:string",
+    "rdfs:label": "Phone number"
+  },
+  {
+    "_id": "foaf:mbox",
+    "@type": "owl:DatatypeProperty",
+    "rdfs:range": "xsd:string",
+    "rdfs:label": "Email"
+  },
+  {
+    "_id": "org:holds",
+    "@type": "owl:ObjectProperty",
+    "rdfs:comment": "A work position held by a Talent in CTB.",
+    "rdfs:range": "org:Post"
+  },
+  {
+    "_id": "org:memberDuring",
+    "@type": "owl:ObjectProperty",
+    "rdfs:range": "time:Interval"
+  },
+  {
+    "_id": "org:memberOf",
+    "@type": "owl:ObjectProperty",
+    "rdfs:range": "org:Organization",
+    "owl:maxCardinality": 9007199254740991
+  },
+  {
+    "_id": "org:organization",
+    "@type": "owl:ObjectProperty",
+    "rdfs:range": "org:Organization"
+  },
+  {
+    "_id": "org:role",
+    "@type": "owl:ObjectProperty",
+    "rdfs:range": "org:Role"
+  },
+  {
+    "_id": "owl:equivalentProperty",
+    "@type": "owl:ObjectProperty"
+  },
+  {
+    "_id": "owl:maxCardinality",
+    "@type": "owl:DatatypeProperty",
+    "rdfs:range": "xsd:integer"
+  },
+  {
+    "_id": "owl:sameAs",
+    "@type": "owl:ObjectProperty",
+    "owl:maxCardinality": 9007199254740991
+  },
+  {
+    "_id": "owl:versionInfo",
+    "@type": "owl:DatatypeProperty",
+    "owl:maxCardinality": 9007199254740991
+  },
+  {
+    "_id": "owl:inverseOf",
+    "@type": "owl:ObjectProperty"
+  },
+  {
+    "_id": "owl:versionInfo",
+    "@type": "owl:DatatypeProperty",
+    "owl:maxCardinality": 9007199254740991
+  },
+  {
+    "_id": "rdf:object",
+    "@type": "owl:ObjectProperty"
+  },
+  {
+    "_id": "rdf:predicate",
+    "@type": "owl:ObjectProperty"
+  },
+  {
+    "_id": "rdf:subject",
+    "@type": "owl:ObjectProperty"
+  },
+  {
+    "_id": "rdf:type",
+    "@type": "owl:ObjectProperty"
+  },
+  {
+    "_id": "rdfs:comment",
+    "rdfs:comment": "User comment on a Bridge statement.",
+    "@type": "owl:DatatypeProperty",
+    "rdfs:range": "xsd:string"
+  },
+  {
+    "_id": "rdfs:subClassOf",
+    "@type": "owl:ObjectProperty"
+  },
+  {
+    "_id": "rdfs:subPropertyOf",
+    "@type": "owl:ObjectProperty"
+  },
+  {
+    "_id": "schema:eligibleRegion",
+    "@type": "owl:DatatypeProperty"
+  },
+  {
+    "_id": "time:hasBeginning",
+    "@type": "owl:ObjectProperty",
+    "rdfs:range": "time:Instant"
+  },
+  {
+    "_id": "time:hasEnd",
+    "@type": "owl:ObjectProperty",
+    "rdfs:range": "time:Instant"
+  },
+  {
+    "_id": "time:inXSDDateTime",
+    "@type": "owl:DatatypeProperty",
+    "rdfs:range": "xsd:dateTime",
+    "rdfs:comment": "A general purpose timestamp that an event or assertion happened."
+  }
+]
