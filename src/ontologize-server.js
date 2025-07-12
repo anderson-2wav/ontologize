@@ -431,7 +431,7 @@ export class OntologizeServer extends Ontologize {
    * Ensures arrays are properly merged using union to avoid duplicates
    * @private
    */
-  _schemaMergeCustomizer(objValue, srcValue, key, object, source, stack) {
+  _schemaMergeCustomizer(objValue, srcValue, _key, _object, _source, _stack) {
     // Ensure we merge arrays from either side
     if (_.isArray(objValue) || _.isArray(srcValue)) {
       // Handle null/undefined values
@@ -486,7 +486,8 @@ export class OntologizeServer extends Ontologize {
         mergedResource,
         { upsert: true }
       );
-    } else {
+    }
+    else {
       // Either no existing resource, or mergeOntology is false - just replace
       await collection.replaceOne(
         { _id: resource._id },

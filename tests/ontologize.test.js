@@ -1,14 +1,28 @@
 import { assert } from "chai";
 import { Ontologize } from "../src/ontologize.js";
+import { MeteorCollectionAdapter } from "../src/adapters/MeteorCollectionAdapter.js";
 
 describe("Ontologize", function () {
   let ontologize;
 
   beforeEach(function () {
     // Mock collections for testing
-    const mockOntologyCollection = {};
-    const mockContextCollection = {};
-    ontologize = new Ontologize(mockOntologyCollection, mockContextCollection);
+    const mockOntologyCollection = {
+      findOne: () => null,
+      find: () => ({ fetch: () => [] }),
+      count: () => 0
+    };
+    const mockContextCollection = {
+      findOne: () => null,
+      find: () => ({ fetch: () => [] }),
+      count: () => 0
+    };
+
+    // Create adapters from mock collections
+    const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "Ontology");
+    const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "Context");
+    
+    ontologize = new Ontologize(ontologyAdapter, contextAdapter);
   });
 
   describe("constructor", function () {
@@ -21,13 +35,23 @@ describe("Ontologize", function () {
     });
 
     it("should accept custom options", function () {
-      const mockOntologyCollection = {};
-      const mockContextCollection = {};
+      const mockOntologyCollection = {
+        findOne: () => null,
+        find: () => ({ fetch: () => [] }),
+        count: () => 0
+      };
+      const mockContextCollection = {
+        findOne: () => null,
+        find: () => ({ fetch: () => [] }),
+        count: () => 0
+      };
       const customOpts = {
         defaultContext: { "@vocab": "http://example.org/" },
         debug: true
       };
-      const customOntologize = new Ontologize(mockOntologyCollection, mockContextCollection, customOpts);
+      const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "Ontology");
+      const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "Context");
+      const customOntologize = new Ontologize(ontologyAdapter, contextAdapter, customOpts);
       assert.equal(customOntologize.opts.debug, true);
       assert.equal(customOntologize.opts.defaultContext["@vocab"], "http://example.org/");
     });
@@ -105,6 +129,49 @@ describe("Ontologize", function () {
       };
       const label = ontologize.getLabel(resource);
       assert.equal(label, "Unknown");
+    });
+  });
+
+  describe("getLabelFromId", function () {
+    it("should return label from resource lookup", async function () {
+      // Mock collection with a test resource
+      const mockOntologyCollection = {
+        findOne: (query) => {
+          if (query._id === "ex:TestClass") {
+            return Promise.resolve({
+              "_id": "ex:TestClass",
+              "@type": ["owl:Class"],
+              "rdfs:label": "Test Class"
+            });
+          }
+          return Promise.resolve(null);
+        },
+        find: () => ({ fetch: () => [] }),
+        count: () => 0
+      };
+      
+      const mockContextCollection = {
+        findOne: () => Promise.resolve(null),
+        find: () => ({ fetch: () => [] }),
+        count: () => 0
+      };
+
+      const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "Ontology");
+      const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "Context");
+      const testOntologize = new Ontologize(ontologyAdapter, contextAdapter);
+
+      const label = await testOntologize.getLabelFromId("ex:TestClass");
+      assert.equal(label, "Test Class");
+    });
+
+    it("should extract label from ID when resource not found", async function () {
+      const label = await ontologize.getLabelFromId("ex:UnknownClass");
+      assert.equal(label, "UnknownClass");
+    });
+
+    it("should use fallback when extraction fails", async function () {
+      const label = await ontologize.getLabelFromId("", "Custom Fallback");
+      assert.equal(label, "Custom Fallback");
     });
   });
 

@@ -18,8 +18,8 @@ export class Ontologize {
   /**
    * Create a new Ontologize instance
    *
-   * @param {object} ontologyCollection
-   * @param {object} contextCollection
+   * @param {object} ontologyCollection collection or adapter
+   * @param {object} contextCollection collection or adapter
    * @param {object} [opts] - Configuration options
    * @param {object} [opts.collections] - named collections in addition to ontology and context
    * @param {object} [opts.context] - Default JSON-LD context
@@ -93,8 +93,38 @@ export class Ontologize {
   }
 
   /**
+   * Get the label for a resource by looking it up from the ontology collection
+   *
+   * @param {string} resourceId - The resource ID to look up
+   * @param {string} [fallback] - Fallback if no resource or label found
+   * @returns {Promise<string>} The label or fallback
+   */
+  async getLabelFromId(resourceId, fallback) {
+    check(resourceId, String);
+    check(fallback, Match.Optional(String));
+
+    try {
+      // Look up the resource from the ontology collection
+      const resource = await this.collections.Ontology.findOne({ _id: resourceId });
+
+      if (resource) {
+        // Use the synchronous getLabel method on the found resource
+        return this.getLabel(resource, fallback);
+      }
+    } catch (error) {
+      console.warn(`Failed to lookup resource ${resourceId}: ${error.message}`);
+    }
+
+    // If lookup failed or resource not found, extract from ID as fallback
+    const parts = resourceId.split(/[#\/:]/);
+    const extractedLabel = parts[parts.length - 1];
+
+    return extractedLabel || fallback || "Unknown";
+  }
+
+  /**
    * Get context for compaction from provided context, Context collection, or default
-   * 
+   *
    * @param {object} [providedContext] - Optional context to use instead of collection/default
    * @returns {Promise<object>} Context object for JSON-LD operations
    */
@@ -110,7 +140,7 @@ export class Ontologize {
       if (contextDoc) {
         // Extract context data (excluding _id)
         const { _id, ...contextData } = contextDoc;
-        
+
         // Only use context from collection if it has meaningful data
         if (Object.keys(contextData).length > 0) {
           return contextData;
