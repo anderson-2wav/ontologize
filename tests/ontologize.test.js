@@ -175,6 +175,180 @@ describe("Ontologize", function () {
     });
   });
 
+  describe("isArrayProperty", function () {
+    it("should return false for special properties", async function () {
+      assert.isFalse(await ontologize.isArrayProperty("__proto__"));
+      assert.isFalse(await ontologize.isArrayProperty("123"));
+    });
+
+    it("should return true when current context has @container @list", async function () {
+      const result = await ontologize.isArrayProperty("test:property", {
+        context: {
+          "test:property": {
+            "@container": "@list"
+          }
+        }
+      });
+      assert.isTrue(result);
+    });
+
+    it("should return true when current context has @container @set", async function () {
+      const result = await ontologize.isArrayProperty("test:property", {
+        context: {
+          "test:property": {
+            "@container": "@set"
+          }
+        }
+      });
+      assert.isTrue(result);
+    });
+
+    it("should return false when current context has other @container values", async function () {
+      const result = await ontologize.isArrayProperty("test:property", {
+        context: {
+          "test:property": {
+            "@container": "@language"
+          }
+        }
+      });
+      assert.isFalse(result);
+    });
+
+    it("should return true when global context has @container @list", async function () {
+      const mockContextCollection = {
+        findOne: (query) => {
+          if (query._id === "@id") {
+            return Promise.resolve({
+              "_id": "@id",
+              "test:property": {
+                "@container": "@list"
+              }
+            });
+          }
+          return Promise.resolve(null);
+        },
+        find: () => ({ fetch: () => [] }),
+        count: () => 0
+      };
+
+      const mockOntologyCollection = {
+        findOne: () => Promise.resolve(null),
+        find: () => ({ fetch: () => [] }),
+        count: () => 0
+      };
+
+      const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "Ontology");
+      const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "Context");
+      const testOntologize = new Ontologize(ontologyAdapter, contextAdapter);
+
+      const result = await testOntologize.isArrayProperty("test:property");
+      assert.isTrue(result);
+    });
+
+    it("should return true when ontology resource has bold:container @set", async function () {
+      const mockOntologyCollection = {
+        findOne: (query) => {
+          if (query._id === "test:property") {
+            return Promise.resolve({
+              "_id": "test:property",
+              "@type": ["rdf:Property"],
+              "bold:container": "@set"
+            });
+          }
+          return Promise.resolve(null);
+        },
+        find: () => ({ fetch: () => [] }),
+        count: () => 0
+      };
+
+      const mockContextCollection = {
+        findOne: () => Promise.resolve(null),
+        find: () => ({ fetch: () => [] }),
+        count: () => 0
+      };
+
+      const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "Ontology");
+      const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "Context");
+      const testOntologize = new Ontologize(ontologyAdapter, contextAdapter);
+
+      const result = await testOntologize.isArrayProperty("test:property");
+      assert.isTrue(result);
+    });
+
+    it("should return true when ontology resource has bold:container @list", async function () {
+      const mockOntologyCollection = {
+        findOne: (query) => {
+          if (query._id === "test:property") {
+            return Promise.resolve({
+              "_id": "test:property",
+              "@type": ["rdf:Property"],
+              "bold:container": "@list"
+            });
+          }
+          return Promise.resolve(null);
+        },
+        find: () => ({ fetch: () => [] }),
+        count: () => 0
+      };
+
+      const mockContextCollection = {
+        findOne: () => Promise.resolve(null),
+        find: () => ({ fetch: () => [] }),
+        count: () => 0
+      };
+
+      const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "Ontology");
+      const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "Context");
+      const testOntologize = new Ontologize(ontologyAdapter, contextAdapter);
+
+      const result = await testOntologize.isArrayProperty("test:property");
+      assert.isTrue(result);
+    });
+
+    it("should return false when no array indicators found", async function () {
+      const result = await ontologize.isArrayProperty("unknown:property");
+      assert.isFalse(result);
+    });
+
+    it("should prioritize current context over global context", async function () {
+      const mockContextCollection = {
+        findOne: (query) => {
+          if (query._id === "@id") {
+            return Promise.resolve({
+              "_id": "@id",
+              "test:property": {
+                "@container": "@set"
+              }
+            });
+          }
+          return Promise.resolve(null);
+        },
+        find: () => ({ fetch: () => [] }),
+        count: () => 0
+      };
+
+      const mockOntologyCollection = {
+        findOne: () => Promise.resolve(null),
+        find: () => ({ fetch: () => [] }),
+        count: () => 0
+      };
+
+      const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "Ontology");
+      const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "Context");
+      const testOntologize = new Ontologize(ontologyAdapter, contextAdapter);
+
+      // Current context says false, global context says true - should return false
+      const result = await testOntologize.isArrayProperty("test:property", {
+        context: {
+          "test:property": {
+            "@container": "@language"
+          }
+        }
+      });
+      assert.isFalse(result);
+    });
+  });
+
   describe("getVersion", function () {
     it("should return version string", function () {
       const version = ontologize.getVersion();

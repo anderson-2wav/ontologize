@@ -158,6 +158,58 @@ export class Ontologize {
   }
 
   /**
+   * Determine if a property should be treated as an array based on context and ontology information
+   *
+   * @param {string} property - The property to check
+   * @param {object} [opts] - Optional parameters
+   * @param {object} [opts.context] - Current JSON-LD context to check
+   * @param {boolean} [opts.cached=true] - Whether to use cached results
+   * @returns {Promise<boolean>} True if property should be treated as an array
+   */
+  async isArrayProperty(property, opts = {}) {
+    check(property, String);
+    check(opts, Match.Optional(Object));
+
+    opts.cached = opts.cached !== false;
+
+    // Skip special properties
+    if (property === "__proto__" || property.match(/^\d+$/)) {
+      return false;
+    }
+
+    // Check current context for @container
+    if (opts.context && opts.context[property] && opts.context[property]["@container"]) {
+      const container = opts.context[property]["@container"];
+      return container === "@list" || container === "@set";
+    }
+
+    // Check global context
+    try {
+      const globalContext = await this.getContext();
+      if (globalContext[property] && globalContext[property]["@container"]) {
+        const container = globalContext[property]["@container"];
+        return container === "@list" || container === "@set";
+      }
+    } catch (error) {
+      console.warn(`Failed to get global context: ${error.message}`);
+    }
+
+    // Check ontology collection for bold:container property
+    try {
+      const ontologyResource = await this.collections.Ontology.findOne({ _id: property });
+      if (ontologyResource && ontologyResource["bold:container"]) {
+        const container = ontologyResource["bold:container"];
+        return container === "@list" || container === "@set";
+      }
+
+    } catch (error) {
+      console.warn(`Failed to check ontology for property ${property}: ${error.message}`);
+    }
+
+    return false;
+  }
+
+  /**
    * Get module version
    *
    * @returns {string} The module version
