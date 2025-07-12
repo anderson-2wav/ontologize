@@ -18,8 +18,8 @@ export class Ontologize {
   /**
    * Create a new Ontologize instance
    *
-   * @param {object} ontologyCollection collection or adapter
-   * @param {object} contextCollection collection or adapter
+   * @param {object} ontologyCollection - Collection adapter or raw MongoDB collection
+   * @param {object} contextCollection - Collection adapter or raw MongoDB collection  
    * @param {object} [opts] - Configuration options
    * @param {object} [opts.collections] - named collections in addition to ontology and context
    * @param {object} [opts.context] - Default JSON-LD context
@@ -28,10 +28,12 @@ export class Ontologize {
   constructor(ontologyCollection, contextCollection, opts = {}) {
     check(ontologyCollection, Object);
     check(contextCollection, Object);
+    
     this.collections = {
       Ontology: ontologyCollection,
       Context: contextCollection
     };
+    
     this.opts = opts;
     this.opts.defaultContext = this.opts.defaultContext || Ontologize.DEFAULT_CONTEXT;
     this.opts.debug = this.opts.debug || false;
