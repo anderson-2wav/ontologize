@@ -3,6 +3,8 @@
  * @copyright 2025 2wav inc, Anderson Wiese
  */
 
+import type { Collection } from "mongodb";
+
 export interface OntologizeOptions {
   /** Named collections in addition to ontology and context */
   collections?: Record<string, any>;
@@ -18,13 +20,11 @@ export type OntologyResource = Resource & {
   "@type": string | string[];
 };
 
-export interface MongoCollection {
-  deleteMany(filter: Record<string, any>): Promise<{ deletedCount: number }>;
-  replaceOne(filter: Record<string, any>, replacement: any, options?: any): Promise<{ acknowledged: boolean; matchedCount: number; modifiedCount: number; upsertedId: any }>;
-  insertOne(document: any): Promise<any>;
-  find(filter: Record<string, any>, options?: any): { toArray(): Promise<any[]> };
-  findOne(filter: Record<string, any>): Promise<any | null>;
-}
+/**
+ * MongoDB Collection type for raw collections obtained via collection.rawCollection()
+ * Use Collection<Resource> for typed collections or Collection<any> for flexibility
+ */
+export type MongoCollection = Collection<any>;
 
 /**
  * Ontologize - Utilities for working with ontology data in JSON-LD format

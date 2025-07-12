@@ -17,8 +17,8 @@ export class OntologizeServer extends Ontologize {
   /**
    * Create a new OntologizeServer instance
    *
-   * @param {object} ontologyCollection
-   * @param {object} contextCollection
+   * @param {import('mongodb').Collection} ontologyCollection - Raw MongoDB collection for ontology resources
+   * @param {import('mongodb').Collection} contextCollection - Raw MongoDB collection for context data
    * @param {object} [opts] - Configuration options (same as Ontologize)
    */
   constructor(ontologyCollection, contextCollection, opts = {}) {
@@ -48,7 +48,7 @@ export class OntologizeServer extends Ontologize {
    * Loads JSON-LD file and imports with proper normalization using LD.compact
    *
    * @param {string} filePath - Path to JSON-LD ontology file
-   * @param {object} collection - MongoDB collection to import into
+   * @param {import('mongodb').Collection} collection - MongoDB collection to import into
    * @param {object} [opts] - Import options
    * @param {object} [opts.context] - JSON-LD context to use for compaction
    * @param {boolean} [opts.normalize=true] - Use LD.compact for BOLD resource normalization
@@ -88,7 +88,7 @@ export class OntologizeServer extends Ontologize {
    * Handles multiple JSON-LD formats and uses LD.compact for proper normalization
    *
    * @param {object|Array} data - Parsed JSON-LD object or array of resources
-   * @param {object} collection - MongoDB Ontology collection instance
+   * @param {import('mongodb').Collection} collection - MongoDB Ontology collection instance
    * @param {object} [opts] - Import options
    * @param {object} [opts.context] - JSON-LD context to use for compaction
    * @param {boolean} [opts.normalize=true] - Use LD.compact for BOLD resource normalization
