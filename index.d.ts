@@ -53,15 +53,6 @@ export declare class Ontologize {
    */
   isValidOntologyResource(resource: Resource): resource is OntologyResource;
 
-  /**
-   * Extract classes from an ontology resource
-   */
-  extractClasses(resource: Resource): OntologyResource[];
-
-  /**
-   * Extract properties from an ontology resource
-   */
-  extractProperties(resource: Resource): OntologyResource[];
 
   /**
    * Get the label for a resource, preferring rdfs:label

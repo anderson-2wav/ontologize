@@ -15,8 +15,6 @@ describe("OntologizeServer", function () {
     it("should extend Ontologize class", function () {
       // Should have methods from parent class
       assert.isFunction(ontologizeServer.isValidOntologyResource);
-      assert.isFunction(ontologizeServer.extractClasses);
-      assert.isFunction(ontologizeServer.extractProperties);
       assert.isFunction(ontologizeServer.getLabel);
       assert.isFunction(ontologizeServer.getVersion);
 

@@ -63,55 +63,7 @@ export class Ontologize {
     return true;
   }
 
-  /**
-   * Extract classes from an ontology resource
-   *
-   * @param {object} resource - The ontology resource
-   * @returns {Array} Array of class resources
-   */
-  extractClasses(resource) {
-    check(resource, Object);
 
-    const classes = [];
-    const classTypes = ["owl:Class", "rdfs:Class"];
-
-    // If this resource itself is a class
-    if (resource["@type"] && classTypes.some(type =>
-      Array.isArray(resource["@type"]) ?
-        resource["@type"].includes(type) :
-        resource["@type"] === type
-    )) {
-      classes.push(resource);
-      return classes; // Return early to avoid duplicates
-    }
-
-    return classes;
-  }
-
-  /**
-   * Extract properties from an ontology resource
-   *
-   * @param {object} resource - The ontology resource
-   * @returns {Array} Array of property resources
-   */
-  extractProperties(resource) {
-    check(resource, Object);
-
-    const properties = [];
-    const propertyTypes = ["owl:ObjectProperty", "owl:DatatypeProperty", "owl:AnnotationProperty", "rdf:Property"];
-
-    // If this resource itself is a property
-    if (resource["@type"] && propertyTypes.some(type =>
-      Array.isArray(resource["@type"]) ?
-        resource["@type"].includes(type) :
-        resource["@type"] === type
-    )) {
-      properties.push(resource);
-      return properties; // Return early to avoid duplicates
-    }
-
-    return properties;
-  }
 
   /**
    * Get the label for a resource, preferring rdfs:label
