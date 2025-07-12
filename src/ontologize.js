@@ -18,8 +18,8 @@ export class Ontologize {
   /**
    * Create a new Ontologize instance
    *
-   * @param {import('mongodb').Collection} ontologyCollection - Raw MongoDB collection for ontology resources
-   * @param {import('mongodb').Collection} contextCollection - Raw MongoDB collection for context data
+   * @param {object} ontologyCollection
+   * @param {object} contextCollection
    * @param {object} [opts] - Configuration options
    * @param {object} [opts.collections] - named collections in addition to ontology and context
    * @param {object} [opts.context] - Default JSON-LD context
