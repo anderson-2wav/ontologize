@@ -19,7 +19,7 @@ export class Ontologize {
    * Create a new Ontologize instance
    *
    * @param {object} ontologyCollection - Collection adapter or raw MongoDB collection
-   * @param {object} contextCollection - Collection adapter or raw MongoDB collection  
+   * @param {object} contextCollection - Collection adapter or raw MongoDB collection
    * @param {object} [opts] - Configuration options
    * @param {object} [opts.collections] - named collections in addition to ontology and context
    * @param {object} [opts.context] - Default JSON-LD context
@@ -28,12 +28,12 @@ export class Ontologize {
   constructor(ontologyCollection, contextCollection, opts = {}) {
     check(ontologyCollection, Object);
     check(contextCollection, Object);
-    
+
     this.collections = {
       Ontology: ontologyCollection,
       Context: contextCollection
     };
-    
+
     this.opts = opts;
     this.opts.defaultContext = this.opts.defaultContext || Ontologize.DEFAULT_CONTEXT;
     this.opts.debug = this.opts.debug || false;
@@ -201,8 +201,8 @@ export class Ontologize {
         const container = ontologyResource["bold:container"];
         return container === "@list" || container === "@set";
       }
-
-    } catch (error) {
+    }
+    catch (error) {
       console.warn(`Failed to check ontology for property ${property}: ${error.message}`);
     }
 
