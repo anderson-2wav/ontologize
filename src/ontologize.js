@@ -325,9 +325,6 @@ export class Ontologize {
     "ctb:collection" : {
       "@type" : "http://www.w3.org/2001/XMLSchema#string"
     },
-    "owl:sameAs" : {
-      "@type" : "@id"
-    },
     "ctb:completedDate" : {
       "@type" : "http://www.w3.org/2001/XMLSchema#dateTime"
     },
@@ -397,12 +394,30 @@ export class Ontologize {
     "ctl:memberOf": {
       "@type" : "@id"
     },
+    "owl:sameAs" : {
+      "@type" : "@id"
+    },
     "owl:cardinality": {
       "@type": "http://www.w3.org/2001/XMLSchema#integer"
     },
     "owl:maxCardinality": {
       "@type": "http://www.w3.org/2001/XMLSchema#integer"
-    }
+    },
+    "owl:allValuesFrom": {
+      "@type" : "@id"
+    },
+    "owl:onProperty": {
+      "@type" : "@id"
+    },
+    "owl:unionOf": {
+      "@type" : "@id"
+    },
+    "owl:intersectionOf": {
+      "@type" : "@id"
+    },
+    "owl:disjointWith": {
+      "@type" : "@id"
+    },
   };
 }
 

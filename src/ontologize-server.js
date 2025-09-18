@@ -3,7 +3,7 @@
  * @copyright 2025 2wav inc, Anderson Wiese
  */
 
-import { readFile } from "fs/promises";
+import { readFile, writeFile } from "fs/promises";
 import { check, Match } from "./lib/check.js";
 import { Ontologize } from "./ontologize.js";
 import { LD } from "bold-ld";
@@ -184,6 +184,197 @@ export class OntologizeServer extends Ontologize {
     catch (error) {
       throw new Error(`Failed to import ontology data: ${error.message}`);
     }
+  }
+
+  /**
+   * Export collection to file path with BOLD resource normalization
+   * to JSON-LD file.
+   *
+   * @param {string} filePath - Path to JSON-LD file
+   * @param {object} collection - MongoDB collection to export from
+   * @param {object} [opts] - Export options
+   * @param {object} [opts.context] - JSON-LD context to use for compaction (else use default context)
+   * @param {boolean} [opts.normalize=true] - Use LD.compact for BOLD resource normalization
+   * @param {boolean} [opts.ensureArrayProps=true] - Ensure array props including @type
+   * @param {boolean} [opts.expandUris=false] - Convert @id back to full URIs for JSON-LD
+   * @returns {Promise<object>} Export result with detailed statistics
+   */
+  async exportToFile(filePath, collection, opts = {}) {
+    check(filePath, String);
+    check(collection, Object);
+    check(opts, Object);
+
+    const {
+      context = null,
+      normalize = true,
+      ensureArrayProps = true,
+      expandUris = false
+    } = opts;
+
+    try {
+      // Export data from collection
+      const result = await this.exportData(collection, {
+        context,
+        normalize,
+        ensureArrayProps,
+        expandUris
+      });
+
+      // Write to file
+      const jsonldContent = JSON.stringify(result.data, null, 2);
+      await writeFile(filePath, jsonldContent, "utf-8");
+
+      return {
+        ...result,
+        outputTarget: "file",
+        filePath,
+        success: true
+      };
+    }
+    catch (error) {
+      throw new Error(`Failed to export to file ${filePath}: ${error.message}`);
+    }
+  }
+
+  /**
+   * Export collection data with BOLD resource normalization
+   *
+   * @param {object} collection - MongoDB collection to export from
+   * @param {object} [opts] - Export options
+   * @param {object} [opts.context] - JSON-LD context to use for compaction
+   * @param {boolean} [opts.normalize=true] - Use LD.compact for BOLD resource normalization
+   * @param {boolean} [opts.ensureArrayProps=true] - Ensure array props including @type
+   * @param {boolean} [opts.expandUris=false] - Convert @id back to full URIs for JSON-LD
+   * @returns {Promise<object>} Export result with data and statistics
+   */
+  async exportData(collection, opts = {}) {
+    check(collection, Object);
+    check(opts, Object);
+
+    const {
+      context = null,
+      normalize = true,
+      ensureArrayProps = true,
+      expandUris = false
+    } = opts;
+
+    try {
+      // Get all documents from collection
+      const cursor = collection.find({});
+      const documents = await cursor.toArray();
+
+      // Process each document for export
+      const processedResources = [];
+      const stats = {
+        totalResources: documents.length,
+        processedResources: 0,
+        errors: []
+      };
+
+      for (const doc of documents) {
+        try {
+          let processed = await this._prepareResourceForExport(
+            doc,
+            context,
+            { normalize, ensureArrayProps, expandUris }
+          );
+
+          if (processed) {
+            processedResources.push(processed);
+            stats.processedResources++;
+          }
+        }
+        catch (error) {
+          stats.errors.push({
+            resource: doc._id || doc["@id"] || "unknown",
+            error: error.message
+          });
+        }
+      }
+
+      // Create JSON-LD output structure
+      let data;
+      if (processedResources.length === 1) {
+        data = processedResources[0];
+      }
+      else {
+        data = processedResources;
+      }
+
+      return {
+        success: true,
+        outputTarget: "object",
+        data,
+        ...stats
+      };
+    }
+    catch (error) {
+      throw new Error(`Failed to export data: ${error.message}`);
+    }
+  }
+
+  /**
+   * Prepare a resource for export with BOLD normalization
+   * @private
+   */
+  async _prepareResourceForExport(resource, context, opts = {}) {
+    const {
+      normalize = true,
+      ensureArrayProps = true,
+      expandUris = false
+    } = opts;
+
+    let processed = { ...resource };
+
+    // Step 1: Convert _id back to @id for JSON-LD
+    if (processed._id && !processed["@id"]) {
+      processed["@id"] = processed._id;
+      delete processed._id;
+    }
+
+    // Step 2: Ensure @type is array if needed
+    if (ensureArrayProps && processed["@type"] && !Array.isArray(processed["@type"])) {
+      processed["@type"] = [processed["@type"]];
+    }
+
+    // Step 3: Apply normalization if requested
+    if (normalize) {
+      try {
+        const contextForCompaction = await this.getContext(context);
+        const ld = new LD();
+
+        // Use expand first if we want full URIs, then compact
+        if (expandUris) {
+          const expanded = await ld.expand(processed, contextForCompaction);
+          processed = expanded[0] || processed;
+        }
+        else {
+          // Regular compaction for BOLD format
+          const compacted = await ld.compact(processed, contextForCompaction, {
+            ensureArrayProps: ensureArrayProps,
+            ensureSafeKeys: false, // We want JSON-LD output, not MongoDB-safe keys
+            showContext: false,
+            proxy: false
+          });
+
+          // Handle the case where compact returns an array or @graph
+          if (Array.isArray(compacted)) {
+            processed = compacted[0] || processed;
+          }
+          else if (compacted["@graph"]) {
+            processed = compacted["@graph"][0] || processed;
+          }
+          else {
+            processed = compacted;
+          }
+        }
+      }
+      catch (error) {
+        console.warn(`Failed to process resource ${resource._id || resource["@id"]} for export: ${error.message}`);
+      }
+    }
+
+    return processed;
   }
 
   /**
