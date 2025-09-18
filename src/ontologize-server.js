@@ -292,13 +292,24 @@ export class OntologizeServer extends Ontologize {
         }
       }
 
-      // Create JSON-LD output structure
+      // Get context for output
+      const contextForOutput = await this.getContext(context);
+
+      // Create JSON-LD output structure with @context
       let data;
       if (processedResources.length === 1) {
-        data = processedResources[0];
+        // Single resource with context
+        data = {
+          "@context": contextForOutput,
+          ...processedResources[0]
+        };
       }
       else {
-        data = processedResources;
+        // Multiple resources in @graph format with context
+        data = {
+          "@context": contextForOutput,
+          "@graph": processedResources
+        };
       }
 
       return {

@@ -232,6 +232,7 @@ export class Ontologize {
     "obo" : "http://purl.obolibrary.org/obo/",
     "2wav" : "https://ontology.2wav.com#",
     "2do" : "https://ontology.2wav.com/display#",
+    "bfo" : "https://ontology.2wav.com/bfo#",
     "ctb" : "https://ontology.2wav.com/bridge#",
     "ctl" : "https://ontology.2wav.com/800-53#",
     "ctl5" : "https://ontology.2wav.com/800-53/rev5#",

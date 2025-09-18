@@ -176,13 +176,16 @@ describe("OntologizeServer", function () {
       assert.isObject(result);
       assert.isTrue(result.success);
       assert.equal(result.outputTarget, "object");
-      assert.isArray(result.data);
-      assert.equal(result.data.length, 2);
+      assert.isObject(result.data);
+      assert.property(result.data, "@context");
+      assert.property(result.data, "@graph");
+      assert.isArray(result.data["@graph"]);
+      assert.equal(result.data["@graph"].length, 2);
       assert.equal(result.totalResources, 2);
       assert.equal(result.processedResources, 2);
 
       // Check that _id was converted to @id
-      const exportedClass = result.data.find(r => r["@id"] === "ex:Class1");
+      const exportedClass = result.data["@graph"].find(r => r["@id"] === "ex:Class1");
       assert.isObject(exportedClass);
       assert.equal(exportedClass["@id"], "ex:Class1");
       assert.isUndefined(exportedClass._id);
@@ -214,6 +217,7 @@ describe("OntologizeServer", function () {
       const exportedData = JSON.parse(fileContent);
 
       assert.isObject(exportedData);
+      assert.property(exportedData, "@context");
       assert.equal(exportedData["@id"], "ex:TestClass");
       assert.deepEqual(exportedData["@type"], ["owl:Class"]);
       assert.equal(exportedData["rdfs:label"], "Test Class for Export");
@@ -261,11 +265,14 @@ describe("OntologizeServer", function () {
         const exportedContent = await readFile(exportPath, "utf-8");
         const exportedData = JSON.parse(exportedContent);
 
-        assert.isArray(exportedData);
-        assert.isAbove(exportedData.length, 0);
+        assert.isObject(exportedData);
+        assert.property(exportedData, "@context");
+        assert.property(exportedData, "@graph");
+        assert.isArray(exportedData["@graph"]);
+        assert.isAbove(exportedData["@graph"].length, 0);
 
         // Check that some BFO resources are present
-        const bfoResources = exportedData.filter(resource =>
+        const bfoResources = exportedData["@graph"].filter(resource =>
           resource["@id"] && resource["@id"].includes("obolibrary.org/obo/BFO_")
         );
         assert.isAbove(bfoResources.length, 0, "Should contain BFO resources");
