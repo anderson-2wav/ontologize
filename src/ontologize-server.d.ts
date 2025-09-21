@@ -48,6 +48,18 @@ export interface ProcessedResource {
   resource: Resource;
 }
 
+export interface ExplorerOptions {
+  /** Whether to recurse into embedded resources */
+  recurse?: boolean;
+}
+
+export interface ExplorerMap {
+  /** Informational README about the explorer map */
+  README: string;
+  /** Mapping of @types to their properties and ontology definitions */
+  [typeName: string]: any;
+}
+
 /**
  * Server-only extension of the Ontologize class
  * These methods require Node.js environment and should not be used in browser contexts
@@ -82,6 +94,32 @@ export declare class OntologizeServer extends Ontologize {
     collection: MongoCollection,
     opts?: ImportOptions
   ): Promise<ImportResult>;
+
+  /**
+   * Export collection to file path with BOLD resource normalization
+   */
+  exportToFile(
+    filePath: string,
+    collection: MongoCollection,
+    opts?: ImportOptions
+  ): Promise<ImportResult>;
+
+  /**
+   * Export collection data with BOLD resource normalization
+   */
+  exportData(
+    collection: MongoCollection,
+    opts?: ImportOptions
+  ): Promise<ImportResult>;
+
+  /**
+   * Create a JSON object that maps the ontology showing all @types and their properties
+   * found across collections, similar to CTB Ontology.explorer()
+   */
+  explorer(
+    collections: MongoCollection[],
+    opts?: ExplorerOptions
+  ): Promise<ExplorerMap>;
 
   /**
    * Determine if a resource is a TBox (ontology) resource

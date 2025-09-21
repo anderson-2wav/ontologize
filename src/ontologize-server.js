@@ -8,6 +8,7 @@ import { check, Match } from "./lib/check.js";
 import { Ontologize } from "./ontologize.js";
 import { LD } from "bold-ld";
 import _ from "lodash";
+import jsonPath from "./lib/jsonpath.js";
 
 /**
  * Server-only extension of the Ontologize class
@@ -734,6 +735,147 @@ export class OntologizeServer extends Ontologize {
     }
 
     return sortedContext;
+  }
+
+  /**
+   * Create a JSON object that maps the ontology showing all @types and their properties
+   * found across collections, similar to CTB Ontology.explorer()
+   *
+   * @param {Array<object>} collections - Array of MongoDB collection instances to analyze
+   * @param {object} [opts] - Options for exploration
+   * @param {boolean} [opts.recurse=true] - Whether to recurse into embedded resources
+   * @returns {object} Explorer map with README and @types mapped to their properties
+   */
+  async explorer(collections, opts = {}) {
+    check(collections, Array);
+    check(opts, Match.Optional(Object));
+
+    opts.recurse = opts.recurse !== false;
+
+    const ontMap = {};
+    ontMap.README = `This is a JSON map of all Resource top-level @types found in BOLD. Within each top-level type, are all of the properties found on any resource of that type. Each property includes its ontology resource. The @type property shows each @type found on those Resources, including super-types.`;
+
+    for (const collection of collections) {
+      // Get collection name - try different ways to access it
+      const collectionName = collection.collectionName || collection._name || "unknown";
+
+      const cursor = collection.find();
+      const documents = await cursor.toArray();
+
+      for (const resource of documents) {
+        let type = this._first(resource["@type"]);
+        if (type === undefined) {
+          type = collectionName + " unknown type";
+        }
+
+        ontMap[type] = ontMap[type] || {};
+
+        if (opts.recurse && collectionName !== "bridge" && collectionName !== "statements") {
+          const embeddedResources = [];
+          const paths = jsonPath(resource, "$..*['@type']", { resultType: "PATH" });
+
+          if (paths) {
+            for (const path of paths) {
+              // Skip @context paths
+              if (path.indexOf("@context") !== -1) {
+                continue;
+              }
+              if (path === "$['@type']") {
+                continue;
+              }
+
+              // Path less the $ start and the ['@type'] leaf element
+              const parentPath = path.substring(1, path.length - "['@type']".length);
+              const embeddedResource = _.get(resource, parentPath);
+
+              if (embeddedResource) {
+                // Skip embedded Statements
+                if (!this._is(embeddedResource, "rdf:Statement")) {
+                  embeddedResources.push(embeddedResource);
+                }
+              }
+            }
+
+            for (const _resource of embeddedResources) {
+              const _type = this._first(_resource["@type"]);
+              if (!_type) {
+                continue;
+              }
+
+              ontMap[_type] = ontMap[_type] || {};
+              for (const _prop in _resource) {
+                await this._mapOneProp(_type, _resource, _prop, ontMap);
+              }
+            }
+          }
+        }
+
+        for (const prop in resource) {
+          await this._mapOneProp(type, resource, prop, ontMap);
+        }
+      }
+    }
+
+    return ontMap;
+  }
+
+  /**
+   * Helper function to get the first element of an array or return the value if not an array
+   * Equivalent to CTB's first() function
+   * @private
+   */
+  _first(arrayOrVal) {
+    if (Array.isArray(arrayOrVal)) {
+      if (arrayOrVal.length) {
+        return arrayOrVal[0];
+      }
+      return undefined;
+    }
+    return arrayOrVal;
+  }
+
+  /**
+   * Helper function to check if a resource has a specific @type
+   * Equivalent to CTB's is() function
+   * @private
+   */
+  _is(resArrayOrVal, typ) {
+    typ = Array.isArray(typ) ? typ : [typ];
+
+    if (_.isObjectLike(resArrayOrVal)) {  // i.e., not null
+      if (resArrayOrVal["@type"]) {
+        resArrayOrVal = resArrayOrVal["@type"];
+      }
+    }
+
+    resArrayOrVal = Array.isArray(resArrayOrVal) ? resArrayOrVal : [resArrayOrVal];
+    return !!_.intersection(resArrayOrVal, typ).length;
+  }
+
+  /**
+   * Helper function to map one property in the ontology explorer
+   * @private
+   */
+  async _mapOneProp(type, resource, prop, ontMap) {
+    if (prop === "@type") {
+      ontMap[type]["@type"] = ontMap[type]["@type"] || {};
+      const types = ontMap[type]["@type"];
+      const resourceTypes = _.isArray(resource["@type"]) ? resource["@type"] : [resource["@type"]];
+
+      for (const typ of resourceTypes) {
+        if (types[typ]) {
+          continue;
+        }
+        // Try to find ontology information from the Ontology collection
+        const ontResource = await this.collections.Ontology.findOne({ _id: typ });
+        types[typ] = ontResource || {};
+      }
+      return;
+    }
+
+    // Try to find ontology information for this property
+    const ontResource = await this.collections.Ontology.findOne({ _id: prop });
+    ontMap[type][prop] = ontResource || {};
   }
 }
 
