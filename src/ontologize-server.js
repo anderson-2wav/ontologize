@@ -738,13 +738,13 @@ export class OntologizeServer extends Ontologize {
   }
 
   /**
-   * Create a JSON object that maps the ontology showing all @types and their properties
-   * found across collections, similar to CTB Ontology.explorer()
+   * Create a JSON object that maps the ontology showing all classes ordered by specificity
+   * and all properties grouped by type
    *
    * @param {Array<object>} collections - Array of MongoDB collection instances to analyze
    * @param {object} [opts] - Options for exploration
    * @param {boolean} [opts.recurse=true] - Whether to recurse into embedded resources
-   * @returns {object} Explorer map with README and @types mapped to their properties
+   * @returns {object} Explorer map with Classes and Properties sections
    */
   async explorer(collections, opts = {}) {
     check(collections, Array);
@@ -752,71 +752,296 @@ export class OntologizeServer extends Ontologize {
 
     opts.recurse = opts.recurse !== false;
 
+    // Step 1: Get all classes from the ontology
+    const allClasses = await this._getAllClassesFromOntology();
+
+    // Step 2: Order classes by specificity (least to most specific)
+    const orderedClasses = await this._orderClassesBySpecificity(allClasses);
+
+    // Step 3: For each class, get properties with this class as rdfs:domain
+    const domainProperties = await this._getPropertiesByDomain();
+
+    // Step 4: Collect properties directly found on instances of each class
+    const instanceProperties = await this._getInstancePropertiesByType(collections, opts);
+
+    // Step 5: Get all properties grouped by type
+    const allProperties = await this._getAllPropertiesGroupedByType();
+
+    // Step 6: Build the explorer map with Classes and Properties sections
     const ontMap = {};
-    ontMap.README = `This is a JSON map of all Resource top-level @types found in BOLD. Within each top-level type, are all of the properties found on any resource of that type. Each property includes its ontology resource. The @type property shows each @type found on those Resources, including super-types.`;
+    ontMap.README = "This is a JSON map of the ontology structure. Classes are ordered from least to most specific, showing domain properties and instance properties. Properties are grouped by ObjectProperties, DatatypeProperties, and general Properties.";
 
-    for (const collection of collections) {
-      // Get collection name - try different ways to access it
-      const collectionName = collection.collectionName || collection._name || "unknown";
+    // Classes section
+    ontMap.Classes = {};
+    for (const className of orderedClasses) {
+      const classInfo = allClasses[className] || {};
 
-      const cursor = collection.find();
-      const documents = await cursor.toArray();
+      ontMap.Classes[className] = {
+        classInfo: classInfo,
+        domainProperties: domainProperties[className] || {},
+        instanceProperties: instanceProperties[className] || {}
+      };
+    }
 
-      for (const resource of documents) {
-        let type = this._first(resource["@type"]);
-        if (type === undefined) {
-          type = collectionName + " unknown type";
+    // Properties section
+    ontMap.Properties = allProperties;
+
+    return ontMap;
+  }
+
+  /**
+   * Get all classes from the ontology collection
+   * @private
+   */
+  async _getAllClassesFromOntology() {
+    const classes = {};
+    const cursor = this.collections.Ontology.find({
+      "@type": { $in: ["owl:Class", "rdfs:Class"] }
+    });
+    const classResources = await cursor.toArray();
+
+    for (const classResource of classResources) {
+      classes[classResource._id] = classResource;
+    }
+
+    return classes;
+  }
+
+  /**
+   * Order classes by specificity using rdfs:subClassOf relationships
+   * Returns array of class names ordered from least to most specific, with blank nodes at the end
+   * @private
+   */
+  async _orderClassesBySpecificity(allClasses) {
+    const classNames = Object.keys(allClasses);
+    const subClassMap = {};
+
+    // Separate blank nodes from named classes
+    const namedClasses = classNames.filter(name => !this._isBlankNode(name));
+    const blankNodes = classNames.filter(name => this._isBlankNode(name));
+
+    // Build subclass relationships for named classes only
+    for (const className of namedClasses) {
+      const classResource = allClasses[className];
+      const subClassOf = classResource["rdfs:subClassOf"];
+
+      if (subClassOf) {
+        const parents = Array.isArray(subClassOf) ? subClassOf : [subClassOf];
+        subClassMap[className] = parents.map(parent =>
+          typeof parent === "object" ? parent["@id"] || parent._id : parent
+        ).filter(parent => parent && namedClasses.includes(parent));
+      } else {
+        subClassMap[className] = [];
+      }
+    }
+
+    // Topological sort to order by specificity (least to most specific)
+    const visited = new Set();
+    const result = [];
+    const visiting = new Set();
+
+    const visit = (className) => {
+      if (visiting.has(className)) {
+        // Circular dependency - skip to avoid infinite loop
+        return;
+      }
+      if (visited.has(className)) {
+        return;
+      }
+
+      visiting.add(className);
+
+      // Visit all parent classes first (they are less specific)
+      for (const parent of subClassMap[className] || []) {
+        if (namedClasses.includes(parent)) {
+          visit(parent);
         }
+      }
 
-        ontMap[type] = ontMap[type] || {};
+      visiting.delete(className);
+      visited.add(className);
+      result.push(className);
+    };
 
-        if (opts.recurse && collectionName !== "bridge" && collectionName !== "statements") {
-          const embeddedResources = [];
-          const paths = jsonPath(resource, "$..*['@type']", { resultType: "PATH" });
+    // Visit all named classes first
+    for (const className of namedClasses) {
+      visit(className);
+    }
 
-          if (paths) {
-            for (const path of paths) {
-              // Skip @context paths
-              if (path.indexOf("@context") !== -1) {
-                continue;
-              }
-              if (path === "$['@type']") {
-                continue;
-              }
+    // Add blank nodes at the end, sorted alphabetically for consistency
+    const sortedBlankNodes = blankNodes.sort();
+    result.push(...sortedBlankNodes);
 
-              // Path less the $ start and the ['@type'] leaf element
-              const parentPath = path.substring(1, path.length - "['@type']".length);
-              const embeddedResource = _.get(resource, parentPath);
+    return result;
+  }
 
-              if (embeddedResource) {
-                // Skip embedded Statements
-                if (!this._is(embeddedResource, "rdf:Statement")) {
-                  embeddedResources.push(embeddedResource);
-                }
-              }
-            }
+  /**
+   * Check if a class name is a blank node (starts with _:)
+   * @private
+   */
+  _isBlankNode(className) {
+    return typeof className === "string" && className.startsWith("_:");
+  }
 
-            for (const _resource of embeddedResources) {
-              const _type = this._first(_resource["@type"]);
-              if (!_type) {
-                continue;
-              }
+  /**
+   * Get all properties grouped by their rdfs:domain
+   * @private
+   */
+  async _getPropertiesByDomain() {
+    const domainMap = {};
+    const cursor = this.collections.Ontology.find({
+      "@type": {
+        $in: ["owl:ObjectProperty", "owl:DatatypeProperty", "owl:AnnotationProperty", "rdf:Property"]
+      }
+    });
+    const properties = await cursor.toArray();
 
-              ontMap[_type] = ontMap[_type] || {};
-              for (const _prop in _resource) {
-                await this._mapOneProp(_type, _resource, _prop, ontMap);
-              }
-            }
+    for (const property of properties) {
+      const domain = property["rdfs:domain"];
+      if (domain) {
+        const domains = Array.isArray(domain) ? domain : [domain];
+
+        for (const domainValue of domains) {
+          const domainClass = typeof domainValue === "object" ?
+            (domainValue["@id"] || domainValue._id) : domainValue;
+
+          if (domainClass) {
+            domainMap[domainClass] = domainMap[domainClass] || {};
+            domainMap[domainClass][property._id] = property;
           }
-        }
-
-        for (const prop in resource) {
-          await this._mapOneProp(type, resource, prop, ontMap);
         }
       }
     }
 
-    return ontMap;
+    return domainMap;
+  }
+
+  /**
+   * Get properties found on instances grouped by their @type
+   * @private
+   */
+  async _getInstancePropertiesByType(collections, opts) {
+    const instanceProperties = {};
+
+    for (const collection of collections) {
+      const collectionName = collection.collectionName || collection._name || "unknown";
+      const cursor = collection.find();
+      const documents = await cursor.toArray();
+
+      for (const resource of documents) {
+        const types = resource["@type"];
+        if (!types) continue;
+
+        const typeArray = Array.isArray(types) ? types : [types];
+
+        for (const type of typeArray) {
+          instanceProperties[type] = instanceProperties[type] || {};
+
+          // Add all properties found on this resource
+          for (const prop in resource) {
+            if (prop !== "@type" && prop !== "_id") {
+              // Get ontology info for this property if available
+              const ontResource = await this.collections.Ontology.findOne({ _id: prop });
+              instanceProperties[type][prop] = ontResource || { propertyInfo: "No ontology definition found" };
+            }
+          }
+
+          // Handle embedded resources if recursion is enabled
+          if (opts.recurse && collectionName !== "bridge" && collectionName !== "statements") {
+            const embeddedResources = this._findEmbeddedResources(resource);
+
+            for (const embeddedResource of embeddedResources) {
+              const embeddedTypes = embeddedResource["@type"];
+              if (!embeddedTypes) continue;
+
+              const embeddedTypeArray = Array.isArray(embeddedTypes) ? embeddedTypes : [embeddedTypes];
+
+              for (const embeddedType of embeddedTypeArray) {
+                instanceProperties[embeddedType] = instanceProperties[embeddedType] || {};
+
+                for (const prop in embeddedResource) {
+                  if (prop !== "@type" && prop !== "_id") {
+                    const ontResource = await this.collections.Ontology.findOne({ _id: prop });
+                    instanceProperties[embeddedType][prop] = ontResource || { propertyInfo: "No ontology definition found" };
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return instanceProperties;
+  }
+
+  /**
+   * Find embedded resources within a resource using JSON-LD patterns
+   * @private
+   */
+  _findEmbeddedResources(resource) {
+    const embeddedResources = [];
+    const paths = jsonPath(resource, "$..*['@type']", { resultType: "PATH" });
+
+    if (paths) {
+      for (const path of paths) {
+        // Skip @context paths and root @type
+        if (path.indexOf("@context") !== -1 || path === "$['@type']") {
+          continue;
+        }
+
+        // Get the parent path (remove the ['@type'] part)
+        const parentPath = path.substring(1, path.length - "['@type']".length);
+        const embeddedResource = _.get(resource, parentPath);
+
+        if (embeddedResource && !this._is(embeddedResource, "rdf:Statement")) {
+          embeddedResources.push(embeddedResource);
+        }
+      }
+    }
+
+    return embeddedResources;
+  }
+
+  /**
+   * Get all properties from the ontology grouped by their types
+   * @private
+   */
+  async _getAllPropertiesGroupedByType() {
+    const propertiesGrouped = {
+      ObjectProperties: {},
+      DatatypeProperties: {},
+      AnnotationProperties: {},
+      Properties: {}
+    };
+
+    // Get all property resources from the ontology
+    const cursor = this.collections.Ontology.find({
+      "@type": {
+        $in: ["owl:ObjectProperty", "owl:DatatypeProperty", "owl:AnnotationProperty", "rdf:Property"]
+      }
+    });
+    const properties = await cursor.toArray();
+
+    for (const property of properties) {
+      const types = Array.isArray(property["@type"]) ? property["@type"] : [property["@type"]];
+
+      // Determine which category this property belongs to
+      if (types.includes("owl:ObjectProperty")) {
+        propertiesGrouped.ObjectProperties[property._id] = property;
+      }
+      else if (types.includes("owl:DatatypeProperty")) {
+        propertiesGrouped.DatatypeProperties[property._id] = property;
+      }
+      else if (types.includes("owl:AnnotationProperty")) {
+        propertiesGrouped.AnnotationProperties[property._id] = property;
+      }
+      else if (types.includes("rdf:Property")) {
+        propertiesGrouped.Properties[property._id] = property;
+      }
+    }
+
+    return propertiesGrouped;
   }
 
   /**
@@ -852,31 +1077,6 @@ export class OntologizeServer extends Ontologize {
     return !!_.intersection(resArrayOrVal, typ).length;
   }
 
-  /**
-   * Helper function to map one property in the ontology explorer
-   * @private
-   */
-  async _mapOneProp(type, resource, prop, ontMap) {
-    if (prop === "@type") {
-      ontMap[type]["@type"] = ontMap[type]["@type"] || {};
-      const types = ontMap[type]["@type"];
-      const resourceTypes = _.isArray(resource["@type"]) ? resource["@type"] : [resource["@type"]];
-
-      for (const typ of resourceTypes) {
-        if (types[typ]) {
-          continue;
-        }
-        // Try to find ontology information from the Ontology collection
-        const ontResource = await this.collections.Ontology.findOne({ _id: typ });
-        types[typ] = ontResource || {};
-      }
-      return;
-    }
-
-    // Try to find ontology information for this property
-    const ontResource = await this.collections.Ontology.findOne({ _id: prop });
-    ontMap[type][prop] = ontResource || {};
-  }
 }
 
 // Export the extended class as default
