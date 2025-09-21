@@ -12,7 +12,7 @@
       "dc" : "http://purl.org/dc/elements/1.1/",
       "org" : "http://www.w3.org/ns/org#",
       "uo" : "http://purl.obolibrary.org/obo/uo.owl",
-      "bfo" : "http://purl.obolibrary.org/obo/bfo.owl",
+      "obo" : "http://purl.obolibrary.org/obo/",
       "wwav" : "https://ontology.2wav.com#",
       "bui" : "https://ontology.2wav.com/bold-ui#",
       "bold" : "https://ontology.2wav.com/bold#",
