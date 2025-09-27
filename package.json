@@ -12,8 +12,8 @@
       "types": "./index.d.ts"
     },
     "./server": {
-      "import": "./src/ontologize-server.js",
-      "types": "./src/ontologize-server.d.ts"
+      "import": "./src/OntologizeServer.js",
+      "types": "./src/OntologizeServer.d.ts"
     }
   },
   "files": [
