@@ -1210,13 +1210,60 @@ INSERT DATA {
       return `<${term}>`;
     }
 
-    // If it looks like a prefixed name (contains :), use as-is
-    if (term.indexOf(":") > 0) {
+    // Check if it's a valid prefixed name (QName)
+    if (this._isValidPrefixedName(term)) {
       return term;
     }
 
-    // Otherwise, treat as a literal and quote it
-    return `"${term}"`;
+    // Otherwise, treat as a literal and quote it (escape any quotes inside)
+    const escapedTerm = term.replace(/"/g, '\\"');
+    return `"${escapedTerm}"`;
+  }
+
+  /**
+   * Check if a term is a valid prefixed name (QName) for SPARQL
+   * @param {string} term - The term to check
+   * @returns {boolean} True if it's a valid prefixed name
+   * @private
+   */
+  _isValidPrefixedName(term) {
+    // Must contain exactly one colon
+    const colonIndex = term.indexOf(":");
+    if (colonIndex === -1 || term.indexOf(":", colonIndex + 1) !== -1) {
+      return false;
+    }
+
+    // Must not start with colon
+    if (colonIndex === 0) {
+      return false;
+    }
+
+    const prefix = term.substring(0, colonIndex);
+    const localName = term.substring(colonIndex + 1);
+
+    // Check if prefix looks like a valid namespace prefix (letters, numbers, underscore)
+    // Common prefixes: rdf, rdfs, owl, bfo, bold, foaf, dc, etc.
+    if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(prefix)) {
+      return false;
+    }
+
+    // Local name can be empty or contain valid characters
+    // Allow letters, numbers, hyphens, underscores, dots
+    if (localName && !/^[a-zA-Z0-9_.\-]*$/.test(localName)) {
+      return false;
+    }
+
+    // Additional check: reject if it looks like a file path, URL scheme, or other non-QName pattern
+    const knownNonPrefixes = [
+      "file", "ftp", "mailto", "tel", "urn",
+      "data", "javascript", "about"
+    ];
+
+    if (knownNonPrefixes.includes(prefix.toLowerCase())) {
+      return false;
+    }
+
+    return true;
   }
 
   /**
