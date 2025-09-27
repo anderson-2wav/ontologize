@@ -1060,6 +1060,184 @@ export class OntologizeServer extends Ontologize {
   }
 
   /**
+   * Convert BFO resources from Ontology into a triples format that can be inserted into SPARQL
+   * Similar to CTB's Ontology.getTriplesForResources but adapted for BOLD
+   *
+   * @param {object|Array<object>} resources - Resource(s) to convert to triples
+   * @param {object} [opts] - Options
+   * @param {object} [opts.context] - JSON-LD context for expansion
+   * @param {boolean} [opts.blankNodes=true] - Allow blank nodes
+   * @param {boolean} [opts.includeStatements=false] - Include embedded statements (for BOLD, skip by default)
+   * @returns {Promise<Array<{s: string, p: string, o: string}>>} Array of SPO triples
+   */
+  async getTriplesForResources(resources, opts = {}) {
+    check(resources, Match.OneOf(Object, Array));
+    resources = _.isArray(resources) ? resources : [resources];
+    const triples = [];
+    opts.blankNodes = opts.blankNodes !== false;
+    opts.includeStatements = opts.includeStatements ?? false;
+
+    // For BOLD, we generally don't want to create triples for embedded statements
+    // In BOLD, we use "bold:" namespace instead of "ctb:"
+    if (!opts.includeStatements) {
+      for (const r of resources) {
+        this._stripEmbeddedStatements(r);
+      }
+    }
+
+    // Get the context from the Context collection (which should have _id: "@id" mapping)
+    const contextForExpansion = await this.getContext(opts.context);
+
+    const ld = new LD();
+    const expanded = await ld.expand(resources, contextForExpansion, { flatten: true });
+    expanded.forEach((resource) => {
+      for (const key in resource) {
+        let p = key;
+        if (key === "@type") {
+          p = OntologizeServer.TYPE_URI;
+        }
+        else if (key[0] === "@") {
+          // ignore all others like @context
+          continue;
+        }
+        if (!opts.blankNodes && key[0] === "_") {
+          // ignore these including _id
+          continue;
+        }
+        if (!opts.includeStatements) {
+          if (key === "bold:subjectOfStatement" || key === "bold:objectOfStatement") {
+            // don't triplize embedded statements.
+            continue;
+          }
+        }
+        const values = _.isArray(resource[key]) ? resource[key] : [resource[key]];
+        values.forEach((v) => {
+          if (typeof v === "object") {
+            if (v.hasOwnProperty("@id")) {
+              v = v["@id"];
+            }
+            else if (v.hasOwnProperty("@value")) {
+              v = v["@value"];
+            }
+            else {
+              // what's this?
+              console.log(`can't convert property value ${JSON.stringify(v)} to triple.`);
+              return;
+            }
+          }
+          triples.push({
+            s: resource["@id"],
+            p: p,
+            o: v
+          });
+        });
+      }
+    });
+    return triples;
+  }
+
+  /**
+   * Create a SPARQL "INSERT DATA" query from triples
+   * Similar to CTB's Ontology.insertTriples but returns the SPARQL string instead of executing it
+   *
+   * @param {Array<{s: string, p: string, o: string}>} triples - Array of SPO triples
+   * @param {object} [opts] - Options
+   * @param {object} [opts.context] - JSON-LD context for prefixes (optional - will use basic prefixes if not provided)
+   * @returns {Promise<string>} SPARQL INSERT DATA query string
+   */
+  async createSparqlInsert(triples, opts = {}) {
+    check(triples, Array);
+    check(opts, Object);
+
+    if (triples.length === 0) {
+      return "# No triples to insert";
+    }
+
+    // Build basic SPARQL prefixes - for now, use common prefixes
+    // In a full implementation, this could be extracted from the context
+    let sparql = `PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
+PREFIX bfo: <https://ontology.2wav.com/bfo#>
+PREFIX bold: <https://ontology.2wav.com/bold#>
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+INSERT DATA {
+`;
+
+    // Format each triple for SPARQL
+    triples.forEach((triple, index) => {
+      // Format subject
+      const s = this._formatSparqlTerm(triple.s);
+
+      // Format predicate
+      const p = this._formatSparqlTerm(triple.p);
+
+      // Format object
+      const o = this._formatSparqlTerm(triple.o);
+
+      // Add the triple line
+      if (index === triples.length - 1) {
+        // Last triple - no dot
+        sparql += `  ${s} ${p} ${o}
+`;
+      } else {
+        // Not last triple - add dot
+        sparql += `  ${s} ${p} ${o} .
+`;
+      }
+    });
+
+    sparql += `}
+`;
+
+    return sparql;
+  }
+
+  /**
+   * Format a term for SPARQL (wrap URIs in <>, quote literals)
+   * @param {string} term - The term to format
+   * @returns {string} Formatted term for SPARQL
+   * @private
+   */
+  _formatSparqlTerm(term) {
+    if (typeof term !== "string") {
+      return `"${term}"`;
+    }
+
+    // If it looks like a full URI (starts with http), wrap in <>
+    if (term.indexOf("http") === 0) {
+      return `<${term}>`;
+    }
+
+    // If it looks like a prefixed name (contains :), use as-is
+    if (term.indexOf(":") > 0) {
+      return term;
+    }
+
+    // Otherwise, treat as a literal and quote it
+    return `"${term}"`;
+  }
+
+  /**
+   * Strip embedded statements from resource to avoid triplizing them
+   * BOLD version of CTB's stripEmbeddedStatements
+   * @param {object} resource - Resource to strip statements from
+   * @private
+   */
+  _stripEmbeddedStatements(resource) {
+    check(resource, Object);
+    const subjectOfPaths = jsonPath(resource, "$..['bold:subjectOfStatement']", { resultType: "PATH" });
+    const objectOfPaths = jsonPath(resource, "$..['bold:objectOfStatement']", { resultType: "PATH" });
+    const $ = resource;
+    const paths = [].concat(subjectOfPaths || [], objectOfPaths || []);
+    for (const path of paths) {
+      // eslint-disable-next-line no-eval
+      eval(`delete ${path}`);
+    }
+  }
+
+  /**
    * Helper function to check if a resource has a specific @type
    * Equivalent to CTB's is() function
    * @private
@@ -1078,6 +1256,9 @@ export class OntologizeServer extends Ontologize {
   }
 
 }
+
+// Constants
+OntologizeServer.TYPE_URI = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
 
 // Export the extended class as default
 export default OntologizeServer;
