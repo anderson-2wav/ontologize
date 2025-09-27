@@ -1,5 +1,5 @@
 import { assert } from "chai";
-import { OntologizeServer } from "../src/ontologize-server.js";
+import { OntologizeServer } from "../src/OntologizeServer.js";
 import { readFile } from "fs/promises";
 import path from "path";
 

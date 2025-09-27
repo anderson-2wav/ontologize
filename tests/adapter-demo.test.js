@@ -1,5 +1,5 @@
 import { assert } from "chai";
-import { Ontologize } from "../src/ontologize.js";
+import { Ontologize } from "../src/Ontologize.js";
 import { MeteorCollectionAdapter } from "../src/adapters/index.js";
 
 describe("Collection Adapter Demo", function () {

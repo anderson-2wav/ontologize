@@ -4,7 +4,7 @@
  */
 
 // CommonJS entry point for ontologize module
-const { Ontologize } = require("./src/ontologize.js");
+const { Ontologize } = require("./src/Ontologize.js");
 
 module.exports = { Ontologize };
 module.exports.default = Ontologize;

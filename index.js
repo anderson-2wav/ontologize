@@ -4,4 +4,4 @@
  */
 
 // Main entry point for ontologize module
-export { Ontologize, default } from "./src/ontologize.js";
+export { Ontologize, default } from "./src/Ontologize.js";

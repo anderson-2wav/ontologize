@@ -5,7 +5,7 @@
 
 import { readFile, writeFile } from "fs/promises";
 import { check, Match } from "./lib/check.js";
-import { Ontologize } from "./ontologize.js";
+import { Ontologize } from "./Ontologize.js";
 import { LD } from "bold-ld";
 import _ from "lodash";
 import jsonPath from "./lib/jsonpath.js";
