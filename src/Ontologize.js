@@ -140,8 +140,9 @@ export class Ontologize {
     try {
       const contextDoc = await this.collections.Context.findOne({ _id: "@id" });
       if (contextDoc) {
+        // TODO why do we do that? I think _id: "@id" is part of the context
         // Extract context data (excluding _id)
-        const { _id, ...contextData } = contextDoc;
+        // const { _id, ...contextData } = contextDoc;
 
         // Only use context from collection if it has meaningful data
         if (Object.keys(contextData).length > 0) {
