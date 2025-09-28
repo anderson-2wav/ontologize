@@ -1223,6 +1223,92 @@ INSERT DATA {
   }
 
   /**
+   * Transform HyLAR facts into JSON-LD resources
+   * Similar to CTB's Ontology.assembleFactsIntoResources but simplified for BOLD
+   * Groups facts by subject, creates JSON-LD objects, and compacts them
+   *
+   * @param {Array} facts - Array of HyLAR facts from reasoning derivations
+   * @param {object} [opts] - Options
+   * @param {object} [opts.context] - JSON-LD context for compaction
+   * @param {boolean} [opts.compact=true] - Whether to compact the resources
+   * @returns {Promise<object>} Dictionary of resources keyed by _id
+   */
+  async assembleFactsIntoResources(facts, opts = {}) {
+    check(facts, Array);
+    check(opts, Object);
+
+    const context = await this.getContext(opts.context);
+    const compact = opts.compact !== false;
+
+    console.log(`🔄 Assembling ${facts.length} facts into JSON-LD resources...`);
+
+    const resources = {};
+
+    // Step 1: Group facts by subject into JSON-LD objects
+    facts.forEach(fact => {
+      // Skip facts that don't have proper structure
+      if (!fact.subject || !fact.predicate) {
+        return;
+      }
+
+      // Get or create resource for this subject
+      if (!resources[fact.subject]) {
+        resources[fact.subject] = {
+          _id: fact.subject,
+          "@id": fact.subject
+        };
+      }
+
+      const resource = resources[fact.subject];
+      const predicate = fact.predicate;
+      const object = fact.object;
+
+      // Add the property value
+      if (typeof resource[predicate] === "undefined") {
+        // First value for this predicate
+        resource[predicate] = [object];
+      } else {
+        // Additional value - ensure it's an array and add if not duplicate
+        if (!Array.isArray(resource[predicate])) {
+          resource[predicate] = [resource[predicate]];
+        }
+        if (resource[predicate].indexOf(object) === -1) {
+          resource[predicate].push(object);
+        }
+      }
+    });
+
+    console.log(`📊 Grouped facts into ${Object.keys(resources).length} resources`);
+
+    // Step 2: Compact resources if requested
+    if (compact) {
+      console.log(`🗜️ Compacting ${Object.keys(resources).length} resources...`);
+      const compactedResources = {};
+
+      const ld = new LD();
+      const compactPromises = Object.values(resources).map(resource =>
+        ld.compact(resource, context, {
+          showContext: false,
+          proxy: false,
+          ensureArrayProps: true,
+          ensureSafeKeys: true
+        })
+      );
+
+      const compacted = await Promise.all(compactPromises);
+      compacted.forEach(resource => {
+        compactedResources[resource._id] = resource;
+      });
+
+      console.log(`✅ Assembled and compacted ${Object.keys(compactedResources).length} resources from facts`);
+      return compactedResources;
+    } else {
+      console.log(`✅ Assembled ${Object.keys(resources).length} resources from facts (uncompacted)`);
+      return resources;
+    }
+  }
+
+  /**
    * Check if a term is a valid prefixed name (QName) for SPARQL
    * @param {string} term - The term to check
    * @returns {boolean} True if it's a valid prefixed name
