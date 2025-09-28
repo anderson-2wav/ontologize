@@ -87,7 +87,7 @@ export class Ontologize {
     if (resource["@id"]) {
       // Try to extract a readable name from the ID
       const id = resource["@id"];
-      const parts = id.split(/[#\/:]/);
+      const parts = id.split(/[#/:]/);
       return parts[parts.length - 1];
     }
 
@@ -119,7 +119,7 @@ export class Ontologize {
     }
 
     // If lookup failed or resource not found, extract from ID as fallback
-    const parts = resourceId.split(/[#\/:]/);
+    const parts = resourceId.split(/[#/:]/);
     const extractedLabel = parts[parts.length - 1];
 
     return extractedLabel || fallback || "Unknown";
@@ -163,34 +163,53 @@ export class Ontologize {
   /**
    * Determine if a property should be treated as an array based on context and ontology information
    *
-   * @param {string} property - The property to check
+   * @param {string|object} property - The property ID (string) or resource object to check
    * @param {object} [opts] - Optional parameters
    * @param {object} [opts.context] - Current JSON-LD context to check
    * @param {boolean} [opts.cached=true] - Whether to use cached results
    * @returns {Promise<boolean>} True if property should be treated as an array
    */
   async isArrayProperty(property, opts = {}) {
-    check(property, String);
+    check(property, Match.OneOf(String, Object));
     check(opts, Match.Optional(Object));
 
     opts.cached = opts.cached !== false;
 
-    // Skip special properties
-    if (property === "__proto__" || property.match(/^\d+$/)) {
-      return false;
+    let propertyId;
+    let propertyResource = null;
+
+    // Handle both string ID and resource object
+    if (typeof property === "string") {
+      propertyId = property;
+      // Skip special properties
+      if (propertyId === "__proto__" || propertyId.match(/^\d+$/)) {
+        return false;
+      }
+    }
+    else {
+      // property is a resource object
+      propertyResource = property;
+      propertyId = property._id || property["@id"];
+      if (!propertyId) {
+        return false; // No valid ID found
+      }
+      // Skip special properties
+      if (propertyId === "__proto__" || propertyId.match(/^\d+$/)) {
+        return false;
+      }
     }
 
     // Check current context for @container
-    if (opts.context && opts.context[property] && opts.context[property]["@container"]) {
-      const container = opts.context[property]["@container"];
+    if (opts.context && opts.context[propertyId] && opts.context[propertyId]["@container"]) {
+      const container = opts.context[propertyId]["@container"];
       return container === "@list" || container === "@set";
     }
 
     // Check global context
     try {
       const globalContext = await this.getContext();
-      if (globalContext[property] && globalContext[property]["@container"]) {
-        const container = globalContext[property]["@container"];
+      if (globalContext[propertyId] && globalContext[propertyId]["@container"]) {
+        const container = globalContext[propertyId]["@container"];
         return container === "@list" || container === "@set";
       }
     }
@@ -198,16 +217,24 @@ export class Ontologize {
       console.warn(`Failed to get global context: ${error.message}`);
     }
 
-    // Check ontology collection for bold:container property
-    try {
-      const ontologyResource = await this.collections.Ontology.findOne({ _id: property });
-      if (ontologyResource && ontologyResource["bold:container"]) {
-        const container = ontologyResource["bold:container"];
-        return container === "@list" || container === "@set";
-      }
+    // If we have the resource object directly, check it for bold:container
+    if (propertyResource && propertyResource["bold:container"]) {
+      const container = propertyResource["bold:container"];
+      return container === "@list" || container === "@set";
     }
-    catch (error) {
-      console.warn(`Failed to check ontology for property ${property}: ${error.message}`);
+
+    // If we don't have the resource object, check ontology collection for bold:container property
+    if (!propertyResource) {
+      try {
+        const ontologyResource = await this.collections.Ontology.findOne({ _id: propertyId });
+        if (ontologyResource && ontologyResource["bold:container"]) {
+          const container = ontologyResource["bold:container"];
+          return container === "@list" || container === "@set";
+        }
+      }
+      catch (error) {
+        console.warn(`Failed to check ontology for property ${propertyId}: ${error.message}`);
+      }
     }
 
     return false;

@@ -554,6 +554,11 @@ export class OntologizeServer extends Ontologize {
       isTBoxResource = this._isTBoxResource(processedResource);
     }
 
+    // Step 5.5: Handle array property context updates
+    if (ensureArrayProps && this._isPropertyResource(processedResource)) {
+      await this._ensureArrayPropertyContext(processedResource, contextCollection);
+    }
+
     // Step 6: Save to appropriate collection(s)
     if (isTBoxResource) {
       // TBox resource - save to Ontology collection with merge strategy.
@@ -832,7 +837,8 @@ export class OntologizeServer extends Ontologize {
         subClassMap[className] = parents.map(parent =>
           typeof parent === "object" ? parent["@id"] || parent._id : parent
         ).filter(parent => parent && namedClasses.includes(parent));
-      } else {
+      }
+      else {
         subClassMap[className] = [];
       }
     }
@@ -1115,10 +1121,10 @@ export class OntologizeServer extends Ontologize {
         const values = _.isArray(resource[key]) ? resource[key] : [resource[key]];
         values.forEach((v) => {
           if (typeof v === "object") {
-            if (v.hasOwnProperty("@id")) {
+            if (Object.prototype.hasOwnProperty.call(v, "@id")) {
               v = v["@id"];
             }
-            else if (v.hasOwnProperty("@value")) {
+            else if (Object.prototype.hasOwnProperty.call(v, "@value")) {
               v = v["@value"];
             }
             else {
@@ -1183,7 +1189,8 @@ INSERT DATA {
         // Last triple - no dot
         sparql += `  ${s} ${p} ${o}
 `;
-      } else {
+      }
+ else {
         // Not last triple - add dot
         sparql += `  ${s} ${p} ${o} .
 `;
@@ -1266,7 +1273,8 @@ INSERT DATA {
       if (typeof resource[predicate] === "undefined") {
         // First value for this predicate
         resource[predicate] = [object];
-      } else {
+      }
+ else {
         // Additional value - ensure it's an array and add if not duplicate
         if (!Array.isArray(resource[predicate])) {
           resource[predicate] = [resource[predicate]];
@@ -1301,7 +1309,8 @@ INSERT DATA {
 
       console.log(`✅ Assembled and compacted ${Object.keys(compactedResources).length} resources from facts`);
       return compactedResources;
-    } else {
+    }
+ else {
       console.log(`✅ Assembled ${Object.keys(resources).length} resources from facts (uncompacted)`);
       return resources;
     }
@@ -1422,7 +1431,8 @@ INSERT DATA {
           if (causeTerm[0] === "?") {
             // Variable - look up in fact mapping
             return ld.compactUri(fact.mapping?.[causeTerm], context);
-          } else {
+          }
+ else {
             return ld.compactUri(causeTerm, context);
           }
         };
@@ -1523,7 +1533,7 @@ INSERT DATA {
 
     // Local name can be empty or contain valid characters
     // Allow letters, numbers, hyphens, underscores, dots
-    if (localName && !/^[a-zA-Z0-9_.\-]*$/.test(localName)) {
+    if (localName && !/^[a-zA-Z0-9_.-]*$/.test(localName)) {
       return false;
     }
 
@@ -1574,6 +1584,93 @@ INSERT DATA {
 
     resArrayOrVal = Array.isArray(resArrayOrVal) ? resArrayOrVal : [resArrayOrVal];
     return !!_.intersection(resArrayOrVal, typ).length;
+  }
+
+  /**
+   * Check if a resource is a property (RDF/OWL property)
+   * @param {Object} resource - The resource to check
+   * @returns {boolean} True if the resource is a property
+   * @private
+   */
+  _isPropertyResource(resource) {
+    if (!resource["@type"]) {
+      return false;
+    }
+
+    const types = Array.isArray(resource["@type"]) ? resource["@type"] : [resource["@type"]];
+    const propertyTypes = [
+      "rdf:Property",
+      "owl:ObjectProperty",
+      "owl:DatatypeProperty",
+      "owl:AnnotationProperty",
+      "owl:FunctionalProperty",
+      "owl:InverseFunctionalProperty",
+      "owl:TransitiveProperty",
+      "owl:SymmetricProperty",
+      "owl:AsymmetricProperty",
+      "owl:ReflexiveProperty",
+      "owl:IrreflexiveProperty"
+    ];
+
+    return types.some(type => propertyTypes.includes(type));
+  }
+
+  /**
+   * Ensure that array properties have proper @container context
+   * @param {Object} resource - The property resource to check
+   * @param {Object} contextCollection - The Context collection to update
+   * @private
+   */
+  async _ensureArrayPropertyContext(resource, contextCollection) {
+    if (!resource._id) {
+      return;
+    }
+
+    try {
+      // Check if this property should be an array using the existing isArrayProperty method
+      // Pass the resource object directly so it can check bold:container property
+      const shouldBeArray = await this.isArrayProperty(resource);
+
+      if (shouldBeArray) {
+        // Get the current context document
+        const existingContextDoc = await contextCollection.findOne({ _id: "@id" });
+
+        if (existingContextDoc) {
+          // Check if this property already has @container set
+          const currentProperty = existingContextDoc[resource._id];
+
+          if (!currentProperty || !currentProperty["@container"]) {
+            // Need to add @container: "@list" for this property
+            const contextUpdate = {
+              [resource._id]: {
+                "@type": "@id", // Default type for most properties
+                "@container": "@list"
+              }
+            };
+
+            // If the property already exists but doesn't have @container, preserve existing settings
+            if (currentProperty && typeof currentProperty === "object") {
+              contextUpdate[resource._id] = {
+                ...currentProperty,
+                "@container": "@list"
+              };
+            }
+
+            // Update the context document
+            await contextCollection.updateOne(
+              { _id: "@id" },
+              { $set: contextUpdate },
+              { upsert: true }
+            );
+
+            console.log(`Added @container: "@list" to context for property: ${resource._id}`);
+          }
+        }
+      }
+    }
+    catch (error) {
+      console.warn(`Failed to ensure array property context for ${resource._id}: ${error.message}`);
+    }
   }
 
 }
