@@ -461,19 +461,21 @@ export class OntologizeServer extends Ontologize {
   async _importContext(contextData, contextCollection) {
     check(contextData, Object);
 
-    // Get existing context from the Context collection
+    // Get existing context from the Context collection, or start with Ontologize.DEFAULT_CONTEXT
+    let existingContext = Ontologize.DEFAULT_CONTEXT;
     let existingContextDoc = await contextCollection.findOne({ _id: "@id" });
-    let existingContext = {};
 
-    // Extract existing context data (excluding _id)
+    // Extract existing context data
     if (existingContextDoc) {
       existingContext = { ...existingContextDoc };
-      delete existingContext._id;
     }
 
     // Merge the contexts using specialized merge strategy
     const mergedContext = _.assignWith(existingContext, contextData, this._contextAssignCustomizer);
 
+    // _id is meaningful in the json-ld context, but it gets put back later
+    // this is a trick to put _id at the top of the object. ?worth it?
+    delete mergedContext._id;
     // Sort context keys for consistent ordering
     const sortedContext = this._sortContextKeys(mergedContext);
 
