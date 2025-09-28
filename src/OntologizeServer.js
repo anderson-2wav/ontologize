@@ -1254,8 +1254,7 @@ INSERT DATA {
       // Get or create resource for this subject
       if (!resources[fact.subject]) {
         resources[fact.subject] = {
-          _id: fact.subject,
-          "@id": fact.subject
+          _id: fact.subject
         };
       }
 
@@ -1306,6 +1305,193 @@ INSERT DATA {
       console.log(`✅ Assembled ${Object.keys(resources).length} resources from facts (uncompacted)`);
       return resources;
     }
+  }
+
+  /**
+   * Create Statement objects from HyLAR reasoning facts
+   * @param {Object[]} facts - Array of HyLAR fact objects
+   * @param {Object} opts - Options
+   * @param {Object} opts.context - JSON-LD context for URI compaction
+   * @param {Object} opts.metaPropsByPredicate - Additional metadata properties by predicate
+   * @param {boolean} opts.onlyInferred - Only process inferred facts (default: true)
+   * @param {string[]} opts.onlySubjects - Only process facts for these subjects
+   * @param {boolean} opts.onlyNew - Filter out existing statements (default: false)
+   * @returns {Promise<Object[]>} Array of Statement objects
+   */
+  async createStatementsForFacts(facts, opts = {}) {
+    check(facts, Array);
+    check(opts, Match.Optional(Object));
+
+    opts = {
+      onlyInferred: opts.onlyInferred !== false,
+      onlyNew: opts.onlyNew || false,
+      metaPropsByPredicate: opts.metaPropsByPredicate || {},
+      ...opts
+    };
+
+    console.log(`Creating statements for ${facts.length} facts`);
+
+    const context = opts.context || await this.getContext();
+    const statements = [];
+    let processedCount = 0;
+
+    // Create an LD instance for URI compaction
+    const ld = new LD();
+
+    for (const fact of facts) {
+      if (processedCount % 1000 === 0 && processedCount > 0) {
+        console.log(`Processed fact ${processedCount + 1} of ${facts.length}`);
+      }
+      processedCount++;
+
+      // Skip explicit facts if onlyInferred is true
+      if (opts.onlyInferred && fact.explicit) {
+        continue;
+      }
+
+      // Filter by subjects if specified
+      if (opts.onlySubjects) {
+        const compactSubject = ld.compactUri(fact.subject, context);
+        if (!opts.onlySubjects.includes(compactSubject)) {
+          continue;
+        }
+      }
+
+      // Skip invalid facts
+      const tripleStr = fact.asString;
+      if (tripleStr === "IFALSE") {
+        console.error("INCONSISTENT FACT:", fact);
+        continue;
+      }
+      if (tripleStr.match(/^[IE]\("/)) {
+        // Skip weird string subjects from HyLAR
+        continue;
+      }
+
+      // Parse the fact string to extract components
+      const rr = tripleStr.match(/^(I|E)\((\S+), ?(\S+), ?([\s\S]*)\)/m);
+      if (!rr) {
+        console.log("Skip HyLAR result parse error:", tripleStr);
+        continue;
+      }
+
+      const inferred = rr[1] === "I";
+      const sUri = rr[2];
+      const pUri = rr[3];
+      let oUri = rr[4];
+
+      // Convert literals like "RA-8"^^<http://www.w3.org/2001/XMLSchema#string>
+      oUri = this._convertLiteral(oUri);
+
+      // Create statement metadata
+      const allPreds = opts.metaPropsByPredicate["*"] || {};
+      const statement = {
+        "@type": ["rdf:Statement"],
+        "rdf:subject": ld.compactUri(sUri, context),
+        "rdf:predicate": ld.compactUri(pUri, context),
+        "rdf:object": ld.compactUri(oUri, context),
+        "bold:when": allPreds["bold:when"] || new Date().toISOString(),
+        "bold:scope": allPreds["bold:scope"] || "bold:system"
+      };
+
+      // Add optional metadata
+      if (allPreds["rdfs:comment"]) {
+        statement["rdfs:comment"] = allPreds["rdfs:comment"];
+      }
+      if (allPreds["bold:createdBy"]) {
+        statement["bold:createdBy"] = allPreds["bold:createdBy"];
+      }
+
+      // Add predicate-specific metadata
+      const predProps = opts.metaPropsByPredicate[statement["rdf:predicate"]];
+      if (predProps) {
+        Object.keys(predProps).forEach((metaPred) => {
+          statement[metaPred] = predProps[metaPred];
+        });
+      }
+
+      // Generate unique ID
+      const randomKey = Math.random().toString(36).substring(2, 8);
+      const statementId = ld.kebabCase(`${statement["rdf:subject"]}-${statement["rdf:predicate"]}-${statement["rdf:object"]}-${randomKey}`);
+      statement._id = `bold:${statementId}`;
+
+      // Handle inference metadata for inferred facts
+      if (!fact.explicit && fact.rule?.causes?.length) {
+        const cause = fact.rule.causes[0]; // Use first cause as most relevant
+        const getMappedTerm = (causeTerm) => {
+          if (causeTerm[0] === "?") {
+            // Variable - look up in fact mapping
+            return ld.compactUri(fact.mapping?.[causeTerm], context);
+          } else {
+            return ld.compactUri(causeTerm, context);
+          }
+        };
+
+        const origin = getMappedTerm(cause.subject);
+        const originPredicate = getMappedTerm(cause.predicate);
+        const originObject = getMappedTerm(cause.object);
+
+        statement["bold:inferredFrom"] = [originObject, originPredicate, origin, fact.rule?.name, "bold:reasoner"];
+        statement["bold:explanation"] = `Inferred by reasoner, based on ${origin} ${originPredicate} ${originObject}`;
+      }
+
+      statements.push(statement);
+    }
+
+    console.log(`Created ${statements.length} statements from ${facts.length} facts`);
+
+    // Filter out existing statements if onlyNew is true
+    if (opts.onlyNew && this.collections.Statements) {
+      console.log("Filtering out existing statements...");
+      const newStatements = [];
+
+      for (const statement of statements) {
+        const existing = await this.collections.Statements.findOne({
+          "rdf:subject": statement["rdf:subject"],
+          "rdf:object": statement["rdf:object"],
+          "rdf:predicate": statement["rdf:predicate"],
+          "bold:inferredFrom": statement["bold:inferredFrom"]
+        });
+
+        if (!existing) {
+          newStatements.push(statement);
+        }
+      }
+
+      console.log(`Filtered ${statements.length} statements to ${newStatements.length} new statements`);
+      return newStatements;
+    }
+
+    return statements;
+  }
+
+  /**
+   * Convert HyLAR literal values to proper format
+   * @param {string} literal - The literal string from HyLAR
+   * @returns {string} Converted literal
+   * @private
+   */
+  _convertLiteral(literal) {
+    if (!literal) return literal;
+
+    // Handle typed literals like "RA-8"^^<http://www.w3.org/2001/XMLSchema#string>
+    const typedMatch = literal.match(/^"(.*)"\^\^<(.*)>$/);
+    if (typedMatch) {
+      return typedMatch[1]; // Return just the value for now
+    }
+
+    // Handle language tagged literals like "pertenece a la clasificación"@es
+    const langMatch = literal.match(/^"(.*)"@(.*)$/);
+    if (langMatch) {
+      return langMatch[1]; // Return just the value for now
+    }
+
+    // Handle quoted strings
+    if (literal.startsWith('"') && literal.endsWith('"')) {
+      return literal.slice(1, -1);
+    }
+
+    return literal;
   }
 
   /**
