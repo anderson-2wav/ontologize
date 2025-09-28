@@ -1081,11 +1081,13 @@
   },
   {
     "_id": "rdfs:subClassOf",
-    "@type": "owl:ObjectProperty"
+    "@type": "owl:ObjectProperty",
+    "bold:container": "@list"
   },
   {
     "_id": "rdfs:subPropertyOf",
-    "@type": "owl:ObjectProperty"
+    "@type": "owl:ObjectProperty",
+    "bold:container": "@list"
   },
   {
     "_id": "schema:eligibleRegion",
