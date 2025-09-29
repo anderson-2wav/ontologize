@@ -1425,26 +1425,31 @@ INSERT DATA {
       statement._id = `bold:${statementId}`;
 
       // Handle inference metadata for inferred facts
-      if (!fact.explicit && fact.rule?.causes?.length) {
-        const cause = fact.rule.causes[0]; // Use first cause as most relevant
-        const getMappedTerm = (causeTerm) => {
-          if (causeTerm[0] === "?") {
-            // Variable - look up in fact mapping
-            return ld.compactUri(fact.mapping?.[causeTerm], context);
-          }
- else {
-            return ld.compactUri(causeTerm, context);
-          }
-        };
-
-        const origin = getMappedTerm(cause.subject);
-        const originPredicate = getMappedTerm(cause.predicate);
-        const originObject = getMappedTerm(cause.object);
-
-        statement["bold:inferredFrom"] = [originObject, originPredicate, origin, fact.rule?.name, "bold:reasoner"];
-        statement["bold:explanation"] = `Inferred by reasoner, based on ${origin} ${originPredicate} ${originObject}`;
+      // this old ctb code applied to direct Fact objects, instead of serialized API
+      // if (!fact.explicit && fact.rule?.causes?.length) {
+      //   const cause = fact.rule.causes[0]; // Use first cause as most relevant
+      //   const getMappedTerm = (causeTerm) => {
+      //     if (causeTerm[0] === "?") {
+      //       // Variable - look up in fact mapping
+      //       return ld.compactUri(fact.mapping?.[causeTerm], context);
+      //     }
+      //     else {
+      //       return ld.compactUri(causeTerm, context);
+      //     }
+      //   };
+      //
+      //   const origin = getMappedTerm(cause.subject);
+      //   const originPredicate = getMappedTerm(cause.predicate);
+      //   const originObject = getMappedTerm(cause.object);
+      //
+      //   statement["bold:inferredFrom"] = [originObject, originPredicate, origin, fact.rule?.name, "bold:reasoner"];
+      //   statement["bold:explanation"] = `Inferred by reasoner, based on ${origin} ${originPredicate} ${originObject}`;
+      // }
+      // new version based on API
+      if (!fact.explicit && fact.rule) {
+        statement["bold:inferredFrom"] = [fact.rule.object, fact.rule.predicate, fact.rule.subject, fact.rule.axiom, "bold:reasoner"];
+        statement["bold:explanation"] = `Inferred by reasoner, based on ${fact.rule.subject} ${fact.rule.predicate} ${fact.rule.object}`;
       }
-
       statements.push(statement);
     }
 
