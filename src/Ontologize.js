@@ -241,6 +241,134 @@ export class Ontologize {
   }
 
   /**
+   * Merge multiple resources with the same ID into a single resource
+   * Handles property merging where single values become arrays when multiple values exist
+   *
+   * @param {Object[]} resources - Array of resources to merge (must have same _id)
+   * @param {Object} [opts] - Options
+   * @param {Object} [opts.context] - JSON-LD context for compaction
+   * @param {boolean} [opts.compact=true] - Whether to compact the merged resource
+   * @param {boolean} [opts.ensureArrayProps=true] - Whether to ensure array properties are arrays
+   * @returns {Promise<Object>} The merged resource
+   */
+  async mergeResources(resources, opts = {}) {
+    check(resources, Array);
+    check(opts, Match.Optional(Object));
+
+    if (resources.length === 0) {
+      throw new Error("Cannot merge empty array of resources");
+    }
+
+    if (resources.length === 1) {
+      // Only one resource, return it (optionally compacted)
+      const resource = resources[0];
+      if (opts.compact !== false) {
+        const LD = await import("bold-ld").then(m => m.LD);
+        const ld = new LD();
+        const context = opts.context || await this.getContext();
+        return await ld.compact(resource, context, {
+          ensureArrayProps: opts.ensureArrayProps !== false,
+          proxy: false
+        });
+      }
+      return resource;
+    }
+
+    // Verify all resources have the same ID
+    const firstId = resources[0]._id || resources[0]["@id"];
+    if (!firstId) {
+      throw new Error("Resources must have _id or @id for merging");
+    }
+
+    for (const resource of resources) {
+      const resourceId = resource._id || resource["@id"];
+      if (resourceId !== firstId) {
+        throw new Error(`All resources must have the same ID for merging. Expected ${firstId}, got ${resourceId}`);
+      }
+    }
+
+    // Start with the first resource as base
+    const merged = { ...resources[0] };
+
+    // Merge properties from subsequent resources
+    for (let i = 1; i < resources.length; i++) {
+      const resource = resources[i];
+
+      for (const [property, value] of Object.entries(resource)) {
+        // Skip ID properties since they should be the same
+        if (property === "_id" || property === "@id") {
+          continue;
+        }
+
+        if (merged[property] === undefined) {
+          // Property doesn't exist in merged resource, add it
+          merged[property] = value;
+        } else {
+          // Property exists, need to merge values
+          const existingValue = merged[property];
+          const newValue = value;
+
+          // Convert both to arrays for merging
+          const existingArray = Array.isArray(existingValue) ? existingValue : [existingValue];
+          const newArray = Array.isArray(newValue) ? newValue : [newValue];
+
+          // Merge arrays, avoiding duplicates
+          const mergedArray = [...existingArray];
+          for (const item of newArray) {
+            // Check for duplicates using deep comparison for objects
+            const isDuplicate = mergedArray.some(existing => {
+              if (typeof existing === "object" && typeof item === "object") {
+                // For objects, compare @id, @value, or entire object
+                if (existing["@id"] && item["@id"]) {
+                  return existing["@id"] === item["@id"];
+                }
+                if (existing["@value"] && item["@value"]) {
+                  return existing["@value"] === item["@value"];
+                }
+                return JSON.stringify(existing) === JSON.stringify(item);
+              }
+              return existing === item;
+            });
+
+            if (!isDuplicate) {
+              mergedArray.push(item);
+            }
+          }
+
+          // Store as array if multiple values, single value if only one
+          merged[property] = mergedArray.length === 1 ? mergedArray[0] : mergedArray;
+        }
+      }
+    }
+
+    // Compact the merged resource if requested
+    if (opts.compact !== false) {
+      const LD = await import("bold-ld").then(m => m.LD);
+      const ld = new LD();
+      const context = opts.context || await this.getContext();
+
+      // Use isArrayProperty to determine which properties should be arrays
+      if (opts.ensureArrayProps !== false) {
+        for (const [property, value] of Object.entries(merged)) {
+          if (property !== "_id" && property !== "@id" && property !== "@type") {
+            const shouldBeArray = await this.isArrayProperty(property, { context });
+            if (shouldBeArray && !Array.isArray(value)) {
+              merged[property] = [value];
+            }
+          }
+        }
+      }
+
+      return await ld.compact(merged, context, {
+        ensureArrayProps: opts.ensureArrayProps !== false,
+        proxy: false
+      });
+    }
+
+    return merged;
+  }
+
+  /**
    * Get module version
    *
    * @returns {string} The module version
