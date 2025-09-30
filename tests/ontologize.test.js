@@ -349,6 +349,143 @@ describe("Ontologize", function () {
     });
   });
 
+  describe("sortTypesFn", function () {
+    it("should sort types by specificity with named classes before blank nodes", async function () {
+      // Test data from bfo:has-member-part rdfs:domain
+      const inputTypes = [
+        "bfo:material-entity",
+        "bfo:independent-continuant",
+        "_:b29",
+        "_:b30",
+        "_:168",
+        "_:170",
+        "owl:Thing",
+        "bfo:continuant",
+        "_:b108",
+        "_:128",
+        "bfo:entity",
+        "_:b3",
+        "_:37",
+        "_:b107",
+        "_:124"
+      ];
+
+      // Create mock ontology collection with BFO class hierarchy
+      const mockOntologyCollection = {
+        find: (query) => ({
+          toArray: () => Promise.resolve([
+            {
+              "_id": "bfo:material-entity",
+              "rdfs:subClassOf": ["bfo:independent-continuant"]
+            },
+            {
+              "_id": "bfo:independent-continuant",
+              "rdfs:subClassOf": ["bfo:continuant"]
+            },
+            {
+              "_id": "bfo:continuant",
+              "rdfs:subClassOf": ["bfo:entity"]
+            },
+            {
+              "_id": "bfo:entity",
+              "rdfs:subClassOf": ["owl:Thing"]
+            },
+            {
+              "_id": "owl:Thing"
+              // No subClassOf - top level
+            }
+          ])
+        })
+      };
+
+      // Create mock context collection
+      const mockContextCollection = {
+        findOne: () => Promise.resolve(null)
+      };
+
+      const testOntologize = new Ontologize(mockOntologyCollection, mockContextCollection);
+      const sortedTypes = await testOntologize.sortTypesFn(inputTypes);
+
+      assert.isArray(sortedTypes);
+      assert.equal(sortedTypes.length, inputTypes.length);
+
+      // Check that named classes come before blank nodes
+      const namedClassesEnd = sortedTypes.findIndex(type => type.startsWith("_:"));
+      if (namedClassesEnd !== -1) {
+        // There are blank nodes, so check all named classes come before them
+        for (let i = 0; i < namedClassesEnd; i++) {
+          assert.isFalse(sortedTypes[i].startsWith("_:"), `Named class should come before blank nodes: ${sortedTypes[i]}`);
+        }
+        for (let i = namedClassesEnd; i < sortedTypes.length; i++) {
+          assert.isTrue(sortedTypes[i].startsWith("_:"), `Blank node should come after named classes: ${sortedTypes[i]}`);
+        }
+      }
+
+      // Check BFO specificity order (most specific to least specific)
+      const namedClasses = sortedTypes.filter(type => !type.startsWith("_:"));
+      const materialEntityIndex = namedClasses.indexOf("bfo:material-entity");
+      const independentContinuantIndex = namedClasses.indexOf("bfo:independent-continuant");
+      const continuantIndex = namedClasses.indexOf("bfo:continuant");
+      const entityIndex = namedClasses.indexOf("bfo:entity");
+      const thingIndex = namedClasses.indexOf("owl:Thing");
+
+      // More specific classes should come before less specific classes
+      if (materialEntityIndex !== -1 && independentContinuantIndex !== -1) {
+        assert.isBelow(materialEntityIndex, independentContinuantIndex,
+          "bfo:material-entity should come before bfo:independent-continuant");
+      }
+      if (independentContinuantIndex !== -1 && continuantIndex !== -1) {
+        assert.isBelow(independentContinuantIndex, continuantIndex,
+          "bfo:independent-continuant should come before bfo:continuant");
+      }
+      if (continuantIndex !== -1 && entityIndex !== -1) {
+        assert.isBelow(continuantIndex, entityIndex,
+          "bfo:continuant should come before bfo:entity");
+      }
+      if (entityIndex !== -1 && thingIndex !== -1) {
+        assert.isBelow(entityIndex, thingIndex,
+          "bfo:entity should come before owl:Thing");
+      }
+
+      console.log("Input types:", inputTypes);
+      console.log("Sorted types:", sortedTypes);
+    });
+
+    it("should handle empty array", async function () {
+      const sorted = await ontologize.sortTypesFn([]);
+      assert.isArray(sorted);
+      assert.equal(sorted.length, 0);
+    });
+
+    it("should handle single type", async function () {
+      const sorted = await ontologize.sortTypesFn(["bfo:entity"]);
+      assert.isArray(sorted);
+      assert.equal(sorted.length, 1);
+      assert.equal(sorted[0], "bfo:entity");
+    });
+
+    it("should separate named classes from blank nodes", async function () {
+      const types = ["bfo:entity", "_:blank1", "owl:Thing", "_:blank2"];
+      const sorted = await ontologize.sortTypesFn(types);
+
+      assert.isArray(sorted);
+      assert.equal(sorted.length, 4);
+
+      // Find where blank nodes start
+      const firstBlankIndex = sorted.findIndex(type => type.startsWith("_:"));
+
+      // All named classes should come before blank nodes
+      for (let i = 0; i < firstBlankIndex; i++) {
+        assert.isFalse(sorted[i].startsWith("_:"));
+      }
+
+      // All items after first blank should be blank nodes
+      for (let i = firstBlankIndex; i < sorted.length; i++) {
+        assert.isTrue(sorted[i].startsWith("_:"));
+      }
+    });
+  });
+
   describe("getVersion", function () {
     it("should return version string", function () {
       const version = ontologize.getVersion();

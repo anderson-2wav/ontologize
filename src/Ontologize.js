@@ -369,6 +369,114 @@ export class Ontologize {
   }
 
   /**
+   * Sort a list of class types/URIs by specificity (most specific to least specific)
+   * Named classes are sorted above blank nodes. Blank nodes are sorted separately by specificity.
+   *
+   * @param {string[]} types - Array of class URIs/IDs to sort
+   * @param {Object} [opts] - Options
+   * @param {boolean} [opts.cached=true] - Whether to use cached results
+   * @returns {Promise<string[]>} Sorted array of types (most specific to least specific)
+   */
+  async sortTypesFn(types, opts = {}) {
+    check(types, Array);
+    check(opts, Match.Optional(Object));
+
+    if (types.length <= 1) {
+      return [...types]; // Return copy of array
+    }
+
+    // Separate named classes from blank nodes
+    const namedClasses = types.filter(type => !type.startsWith("_:"));
+    const blankNodes = types.filter(type => type.startsWith("_:"));
+
+    // Sort named classes by specificity
+    const sortedNamedClasses = await this._sortClassesBySpecificity(namedClasses, opts);
+
+    // Sort blank nodes by specificity
+    const sortedBlankNodes = await this._sortClassesBySpecificity(blankNodes, opts);
+
+    // Return named classes first, then blank nodes
+    return [...sortedNamedClasses, ...sortedBlankNodes];
+  }
+
+  /**
+   * Sort classes by specificity using rdfs:subClassOf relationships
+   * More specific classes (subclasses) come before less specific classes (superclasses)
+   *
+   * @param {string[]} classes - Array of class URIs/IDs to sort
+   * @param {Object} [opts] - Options
+   * @returns {Promise<string[]>} Sorted array of classes
+   * @private
+   */
+  async _sortClassesBySpecificity(classes, opts = {}) {
+    if (classes.length <= 1) {
+      return [...classes];
+    }
+
+    try {
+      // Get all class resources from the ontology collection
+      const classResources = await this.collections.Ontology.find({
+        _id: { $in: classes }
+      }).toArray();
+
+      // Build subclass map
+      const subClassMap = {};
+      for (const className of classes) {
+        const classResource = classResources.find(r => r._id === className);
+        if (classResource && classResource["rdfs:subClassOf"]) {
+          const subClassOf = classResource["rdfs:subClassOf"];
+          const parents = Array.isArray(subClassOf) ? subClassOf : [subClassOf];
+          subClassMap[className] = parents
+            .map(parent => typeof parent === "object" ? parent["@id"] || parent._id : parent)
+            .filter(parent => parent && classes.includes(parent));
+        } else {
+          subClassMap[className] = [];
+        }
+      }
+
+      // Topological sort to order by specificity (most specific to least specific)
+      const visited = new Set();
+      const result = [];
+      const visiting = new Set();
+
+      const visit = (className) => {
+        if (visiting.has(className)) {
+          // Circular dependency - skip to avoid infinite loop
+          return;
+        }
+        if (visited.has(className)) {
+          return;
+        }
+
+        visiting.add(className);
+
+        // Visit all children (subclasses) first
+        for (const otherClass of classes) {
+          if (subClassMap[otherClass] && subClassMap[otherClass].includes(className)) {
+            visit(otherClass);
+          }
+        }
+
+        visiting.delete(className);
+        visited.add(className);
+        result.push(className);
+      };
+
+      // Visit all classes
+      for (const className of classes) {
+        visit(className);
+      }
+
+      return result;
+    }
+    catch (error) {
+      console.warn(`Failed to sort classes by specificity: ${error.message}`);
+      // Fallback to original order
+      return [...classes];
+    }
+  }
+
+  /**
    * Get module version
    *
    * @returns {string} The module version
