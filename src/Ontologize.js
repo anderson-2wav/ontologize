@@ -414,58 +414,164 @@ export class Ontologize {
     }
 
     try {
-      // Get all class resources from the ontology collection
-      const classResources = await this.collections.Ontology.find({
-        _id: { $in: classes }
-      }).toArray();
+      // Build a resource cache by fetching all related classes from ontology
+      // We'll gather the full inheritance tree by iteratively fetching classes
+      const resourceCache = new Map();
+      const classesToFetch = new Set(classes);
+      const fetched = new Set();
 
-      // Build subclass map
-      const subClassMap = {};
-      for (const className of classes) {
-        const classResource = classResources.find(r => r._id === className);
-        if (classResource && classResource["rdfs:subClassOf"]) {
-          const subClassOf = classResource["rdfs:subClassOf"];
-          const parents = Array.isArray(subClassOf) ? subClassOf : [subClassOf];
-          subClassMap[className] = parents
-            .map(parent => typeof parent === "object" ? parent["@id"] || parent._id : parent)
-            .filter(parent => parent && classes.includes(parent));
-        } else {
-          subClassMap[className] = [];
+      // Iteratively fetch classes and their parents until we have the full tree
+      while (classesToFetch.size > 0) {
+        const batch = Array.from(classesToFetch);
+        classesToFetch.clear();
+
+        // Fetch this batch of classes
+        const results = await this.collections.Ontology.find({
+          _id: { $in: batch }
+        }).toArray();
+
+        // Cache the results and queue up parent classes
+        for (const resource of results) {
+          resourceCache.set(resource._id, resource);
+          fetched.add(resource._id);
+
+          // If this class has parents, queue them for fetching
+          if (resource["rdfs:subClassOf"]) {
+            const subClassOf = resource["rdfs:subClassOf"];
+            const parents = Array.isArray(subClassOf) ? subClassOf : [subClassOf];
+            const parentIds = parents
+              .map(parent => typeof parent === "object" ? parent["@id"] || parent._id : parent)
+              .filter(parent => parent && !fetched.has(parent));
+
+            parentIds.forEach(parentId => classesToFetch.add(parentId));
+          }
         }
       }
 
-      // Topological sort to order by specificity (most specific to least specific)
-      const visited = new Set();
-      const result = [];
-      const visiting = new Set();
+      // Now calculate depth for each class in the input list
+      const depthMap = new Map();
+      const depthCache = new Map();
+      const subclassDepthMap = new Map();
+      const subclassDepthCache = new Map();
 
-      const visit = (className) => {
-        if (visiting.has(className)) {
-          // Circular dependency - skip to avoid infinite loop
-          return;
+      /**
+       * Recursively calculate the depth of a class in the inheritance hierarchy
+       * @param {string} className - The class to calculate depth for
+       * @param {Set} visiting - Set of classes currently being visited (for cycle detection)
+       * @returns {number} The depth (0 = no superclasses, higher = more specific)
+       */
+      const calculateDepth = (className, visiting = new Set()) => {
+        // Check cache first
+        if (depthCache.has(className)) {
+          return depthCache.get(className);
         }
-        if (visited.has(className)) {
-          return;
+
+        // Cycle detection
+        if (visiting.has(className)) {
+          return 0;
+        }
+
+        // Get the class resource from cache
+        const classResource = resourceCache.get(className);
+        if (!classResource || !classResource["rdfs:subClassOf"]) {
+          depthCache.set(className, 0);
+          return 0;
         }
 
         visiting.add(className);
 
-        // Visit all children (subclasses) first
-        for (const otherClass of classes) {
-          if (subClassMap[otherClass] && subClassMap[otherClass].includes(className)) {
-            visit(otherClass);
+        // Get all parent classes
+        const subClassOf = classResource["rdfs:subClassOf"];
+        const parents = Array.isArray(subClassOf) ? subClassOf : [subClassOf];
+        const parentIds = parents
+          .map(parent => typeof parent === "object" ? parent["@id"] || parent._id : parent)
+          .filter(parent => parent);
+
+        // Calculate depth as 1 + max depth of all parents
+        let maxParentDepth = 0;
+        for (const parentId of parentIds) {
+          const parentDepth = calculateDepth(parentId, new Set(visiting));
+          maxParentDepth = Math.max(maxParentDepth, parentDepth);
+        }
+
+        const depth = 1 + maxParentDepth;
+        visiting.delete(className);
+        depthCache.set(className, depth);
+        return depth;
+      };
+
+      /**
+       * Calculate the maximum depth of the subclass hierarchy below this class
+       * @param {string} className - The class to calculate subclass depth for
+       * @param {Set} visiting - Set of classes currently being visited (for cycle detection)
+       * @returns {number} The maximum depth of subclasses (0 = no subclasses)
+       */
+      const calculateSubclassDepth = (className, visiting = new Set()) => {
+        // Check cache first
+        if (subclassDepthCache.has(className)) {
+          return subclassDepthCache.get(className);
+        }
+
+        // Cycle detection
+        if (visiting.has(className)) {
+          return 0;
+        }
+
+        visiting.add(className);
+
+        // Find all classes that have this class as a parent
+        const subclasses = [];
+        for (const [resourceId, resource] of resourceCache.entries()) {
+          if (resource["rdfs:subClassOf"]) {
+            const subClassOf = resource["rdfs:subClassOf"];
+            const parents = Array.isArray(subClassOf) ? subClassOf : [subClassOf];
+            const parentIds = parents
+              .map(parent => typeof parent === "object" ? parent["@id"] || parent._id : parent)
+              .filter(parent => parent);
+
+            if (parentIds.includes(className)) {
+              subclasses.push(resourceId);
+            }
           }
         }
 
+        // Calculate depth as 1 + max depth of all subclasses
+        let maxSubclassDepth = 0;
+        for (const subclassId of subclasses) {
+          const subclassDepth = calculateSubclassDepth(subclassId, new Set(visiting));
+          maxSubclassDepth = Math.max(maxSubclassDepth, subclassDepth);
+        }
+
+        const depth = subclasses.length > 0 ? 1 + maxSubclassDepth : 0;
         visiting.delete(className);
-        visited.add(className);
-        result.push(className);
+        subclassDepthCache.set(className, depth);
+        return depth;
       };
 
-      // Visit all classes
+      // Calculate depths for all classes in the input list
       for (const className of classes) {
-        visit(className);
+        const depth = calculateDepth(className);
+        depthMap.set(className, depth);
+        const subclassDepth = calculateSubclassDepth(className);
+        subclassDepthMap.set(className, subclassDepth);
       }
+
+      // Sort by depth (descending - most specific first)
+      // If depths are equal, use subclass depth as tiebreaker (higher subclass depth = more general, comes later)
+      const result = [...classes].sort((a, b) => {
+        const depthA = depthMap.get(a) || 0;
+        const depthB = depthMap.get(b) || 0;
+
+        // Primary sort: by superclass depth (higher = more specific = comes first)
+        if (depthA !== depthB) {
+          return depthB - depthA;
+        }
+
+        // Tiebreaker: by subclass depth (higher = more general = comes earlier)
+        const subDepthA = subclassDepthMap.get(a) || 0;
+        const subDepthB = subclassDepthMap.get(b) || 0;
+        return  subDepthB - subDepthA;
+      });
 
       return result;
     }
