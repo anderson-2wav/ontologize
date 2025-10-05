@@ -112,7 +112,8 @@ describe("OntologizeServer", function () {
           if (index >= 0) {
             this._documents[index] = doc;
             return { modifiedCount: 1, matchedCount: 1 };
-          } else if (opts?.upsert) {
+          }
+          else if (opts?.upsert) {
             this._documents.push(doc);
             return { modifiedCount: 0, matchedCount: 0, upsertedCount: 1, upsertedId: doc._id };
           }
@@ -123,7 +124,8 @@ describe("OntologizeServer", function () {
           const initialLength = this._documents.length;
           if (Object.keys(query).length === 0) {
             this._documents = [];
-          } else if (query._id) {
+          }
+          else if (query._id) {
             this._documents = this._documents.filter(doc => doc._id !== query._id);
           }
           return { deletedCount: initialLength - this._documents.length };
@@ -144,7 +146,8 @@ describe("OntologizeServer", function () {
           const index = this._documents.findIndex(d => d._id === query._id);
           if (index >= 0) {
             this._documents[index] = doc;
-          } else if (opts?.upsert) {
+          }
+          else if (opts?.upsert) {
             this._documents.push(doc);
           }
           return { modifiedCount: 1 };
@@ -342,7 +345,8 @@ describe("OntologizeServer", function () {
           const index = this._documents.findIndex(d => d._id === query._id);
           if (index >= 0) {
             this._documents[index] = doc;
-          } else if (opts?.upsert) {
+          }
+          else if (opts?.upsert) {
             this._documents.push(doc);
           }
           return { modifiedCount: 1 };
@@ -364,7 +368,8 @@ describe("OntologizeServer", function () {
           const index = this._documents.findIndex(d => d._id === query._id);
           if (index >= 0) {
             this._documents[index] = doc;
-          } else if (opts?.upsert) {
+          }
+          else if (opts?.upsert) {
             this._documents.push(doc);
           }
           return { modifiedCount: 1 };
