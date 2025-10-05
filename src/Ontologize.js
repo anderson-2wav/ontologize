@@ -426,9 +426,10 @@ export class Ontologize {
         classesToFetch.clear();
 
         // Fetch this batch of classes
-        const results = await this.collections.Ontology.find({
+        const cursor = this.collections.Ontology.find({
           _id: { $in: batch }
-        }).toArray();
+        });
+        const results = await cursor.toArray();
 
         // Cache the results and queue up parent classes
         for (const resource of results) {

@@ -38,16 +38,29 @@ export class MeteorCollectionAdapter extends CollectionAdapter {
 
   /**
    * Find multiple documents matching the query
+   * Returns a cursor-like object compatible with MongoDB driver API
    * @param {object} query - MongoDB-style query object
    * @param {object} [options] - Query options
-   * @returns {Promise<Array>} Array of found documents
+   * @returns {object} Cursor-like object with toArray() method
    */
-  async find(query, options = {}) {
+  find(query, options = {}) {
     try {
-      // Meteor find returns a cursor, call fetch() to get array
-      const cursor = this.collection.find(query, options);
-      const result = cursor.fetch();
-      return Promise.resolve(result || []);
+      // Meteor find returns a cursor with fetch()
+      // Wrap it to also provide toArray() for MongoDB driver compatibility
+      const meteorCursor = this.collection.find(query, options);
+
+      return {
+        // MongoDB driver API
+        toArray: async () => {
+          return Promise.resolve(meteorCursor.fetch() || []);
+        },
+        // Meteor API (passthrough)
+        fetch: () => meteorCursor.fetch(),
+        count: () => meteorCursor.count(),
+        // Add other cursor methods as needed
+        forEach: (fn) => meteorCursor.forEach(fn),
+        map: (fn) => meteorCursor.map(fn)
+      };
     } catch (error) {
       throw new Error(`Error in ${this.name}.find: ${error.message}`);
     }

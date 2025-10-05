@@ -39,8 +39,12 @@ describe("Collection Adapters", function () {
       assert.isNull(result);
     });
 
-    it("should wrap find and return Promise with array", async function () {
-      const result = await adapter.find({});
+    it("should wrap find and return cursor with toArray method", async function () {
+      const cursor = adapter.find({});
+      assert.isObject(cursor);
+      assert.isFunction(cursor.toArray);
+
+      const result = await cursor.toArray();
       assert.isArray(result);
       assert.equal(result.length, 2);
       assert.equal(result[0]._id, "test:1");
@@ -84,7 +88,11 @@ describe("Collection Adapters", function () {
       assert.isObject(result);
       assert.equal(result._id, "test:1");
 
-      const array = await meteorAdapter.find({});
+      const cursor = meteorAdapter.find({});
+      assert.isObject(cursor);
+      assert.isFunction(cursor.toArray);
+
+      const array = await cursor.toArray();
       assert.isArray(array);
       assert.equal(array.length, 1);
 
