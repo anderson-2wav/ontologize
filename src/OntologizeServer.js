@@ -399,10 +399,19 @@ export class OntologizeServer extends Ontologize {
     }
 
     const types = Array.isArray(resource["@type"]) ? resource["@type"] : [resource["@type"]];
+
+    // Support both compacted (e.g., "owl:Class") and expanded (e.g., "http://www.w3.org/2002/07/owl#Class") forms
     const ontologyTypes = [
-      "owl:Class", "rdfs:Class",
-      "owl:ObjectProperty", "owl:DatatypeProperty", "owl:AnnotationProperty", "rdf:Property",
-      "owl:Ontology", "owl:Restriction"
+      "owl:Class", "http://www.w3.org/2002/07/owl#Class",
+      "rdfs:Class", "http://www.w3.org/2000/01/rdf-schema#Class",
+      "owl:ObjectProperty", "http://www.w3.org/2002/07/owl#ObjectProperty",
+      "owl:DatatypeProperty", "http://www.w3.org/2002/07/owl#DatatypeProperty",
+      "owl:AnnotationProperty", "http://www.w3.org/2002/07/owl#AnnotationProperty",
+      "rdf:Property", "http://www.w3.org/1999/02/22-rdf-syntax-ns#Property",
+      "owl:Ontology", "http://www.w3.org/2002/07/owl#Ontology",
+      "owl:Restriction", "http://www.w3.org/2002/07/owl#Restriction",
+      "owl:FunctionalProperty", "http://www.w3.org/2002/07/owl#FunctionalProperty",
+      "owl:InverseFunctionalProperty", "http://www.w3.org/2002/07/owl#InverseFunctionalProperty"
     ];
 
     return types.some(type => ontologyTypes.includes(type));
@@ -1449,6 +1458,7 @@ INSERT DATA {
       if (!fact.explicit && fact.rule) {
         statement["bold:inferredFrom"] = [fact.rule.object, fact.rule.predicate, fact.rule.subject, fact.rule.axiom, "bold:reasoner"];
         statement["bold:explanation"] = `Inferred by reasoner, based on ${fact.rule.subject} ${fact.rule.predicate} ${fact.rule.object}`;
+        statement._details = fact.rule.details;
       }
       statements.push(statement);
     }
