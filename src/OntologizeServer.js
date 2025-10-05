@@ -117,7 +117,7 @@ export class OntologizeServer extends Ontologize {
 
     try {
       // Step 1: Extract context and resources
-      const { extractedContext, resources } = this._extractContextAndResources(data);
+      const { extractedContext: incomingContext, resources } = this._extractContextAndResources(data);
 
       // Step 2: Clear collections if requested
       if (clearCollection) {
@@ -130,10 +130,15 @@ export class OntologizeServer extends Ontologize {
 
       // Step 3: Import context
       let contextImported = false;
-      let contextToUse = context || extractedContext;
+      let contextToUse = context || incomingContext;
 
-      if (extractedContext) {
-        await this._importContext(extractedContext, this.collections.Context);
+      if (contextToUse) {
+        // ignore @vocab on imported context.
+        // It can easily conflict with the application's @vocab,
+        // and it will be washed out when imported resources are expanded
+        const _incomingContext = _.cloneDeep(contextToUse);
+        delete _incomingContext["@vocab"];
+        await this._importContext(_incomingContext, this.collections.Context);
         contextImported = true;
       }
 
@@ -147,6 +152,10 @@ export class OntologizeServer extends Ontologize {
       };
 
       for (const resource of resources) {
+        // thinking through current problem.
+        // Incoming resources may have properties in a @vocab that conflicts with ours.
+        // this would be fixed if we first expand resources with their own context,
+        // then compact with ours.
         try {
           const processed = await this._normalizeAndSaveResource(
             resource,
@@ -458,7 +467,7 @@ export class OntologizeServer extends Ontologize {
       resources = [jsonldData];
     }
 
-    return { extractedContext, resources };
+    return { extractedContext: extractedContext, resources };
   }
 
   /**
@@ -501,7 +510,7 @@ export class OntologizeServer extends Ontologize {
    * Process a single resource with BOLD normalization using LD.compact
    * @private
    */
-  async _normalizeAndSaveResource(resource, context, collection, contextCollection, opts) {
+  async _normalizeAndSaveResource(resource, incomingContext, collection, contextCollection, opts) {
     const {
       normalize = true,
       ontologize = true,
@@ -515,10 +524,15 @@ export class OntologizeServer extends Ontologize {
 
     // Step 1: Normalize resource using LD.compact if requested
     if (normalize) {
+      const ld = new LD();
+      // step 1-b: expand resource with its own context
+      if (incomingContext) {
+        processedResource = await ld.expand(processedResource,incomingContext);
+      }
+
       // Get context for compaction (provided, from Context collection, or default)
-      const contextForCompaction = await this.getContext(context);
+      const contextForCompaction = await this.getContext();
       try {
-        const ld = new LD();
         const compacted = await ld.compact(processedResource, contextForCompaction, {
           ensureArrayProps: ensureArrayProps,
           ensureSafeKeys: true,
