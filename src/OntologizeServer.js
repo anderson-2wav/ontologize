@@ -388,6 +388,12 @@ export class OntologizeServer extends Ontologize {
           else {
             processed = compacted;
           }
+          // final patchup... compact probably turned @id back into _id
+          if (processed._id) {
+            processed["@id"] = processed._id;
+            delete processed._id;
+          }
+
         }
       }
       catch (error) {

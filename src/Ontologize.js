@@ -146,11 +146,11 @@ export class Ontologize {
         // const { _id, ...contextData } = contextDoc;
 
         // Only use context from collection if it has meaningful data
-        // if (Object.keys(contextData).length > 0) {
-        //   return contextData;
-        // }
+        if (Object.keys(contextDoc).length > 0) {
+          return contextDoc;
+        }
       }
-      return contextDoc;
+      return Ontologize.DEFAULT_CONTEXT;
     }
     catch (error) {
       console.warn(`Failed to load context from Context collection: ${error.message}`);
