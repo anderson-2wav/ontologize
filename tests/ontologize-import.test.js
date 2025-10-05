@@ -867,7 +867,8 @@ describe("OntologizeServer Import", function () {
 
       // Verify specific FOAF classes are in the ontology collection
       // Note: Using expanded URIs because compaction may fail on FOAF data with null values
-      const foafPerson = ontologyData.find(r => r._id === "http://xmlns.com/foaf/0.1/Person");
+      // const foafPerson = ontologyData.find(r => r._id === "http://xmlns.com/foaf/0.1/Person");
+      const foafPerson = ontologyData.find(r => r._id === "foaf:Person");
       assert.isObject(foafPerson, "foaf:Person should be in ontology collection");
       assert.isArray(foafPerson["@type"], "foaf:Person should have @type as array");
       assert.isTrue(
@@ -876,11 +877,11 @@ describe("OntologizeServer Import", function () {
       );
 
       // Verify specific FOAF properties are in the ontology collection
-      const foafKnows = ontologyData.find(r => r._id === "http://xmlns.com/foaf/0.1/knows");
+      const foafKnows = ontologyData.find(r => r._id === "foaf:knows");
       assert.isObject(foafKnows, "foaf:knows should be in ontology collection");
       assert.isArray(foafKnows["@type"], "foaf:knows should have @type as array");
       assert.isTrue(
-        foafKnows["@type"].includes("owl:ObjectProperty") || foafKnows["@type"].includes("http://www.w3.org/2002/07/owl#ObjectProperty"),
+        foafKnows["@type"].includes("owl:ObjectProperty") || foafKnows["@type"].includes("owl:ObjectProperty"),
         "foaf:knows should be owl:ObjectProperty"
       );
 
@@ -889,7 +890,7 @@ describe("OntologizeServer Import", function () {
       assert.isObject(foafOntology, "FOAF ontology definition should be in ontology collection");
       assert.isArray(foafOntology["@type"], "FOAF ontology should have @type as array");
       assert.isTrue(
-        foafOntology["@type"].includes("owl:Ontology") || foafOntology["@type"].includes("http://www.w3.org/2002/07/owl#Ontology"),
+        foafOntology["@type"].includes("owl:Ontology") || foafOntology["@type"].includes("owl:Ontology"),
         "Should be owl:Ontology"
       );
     });

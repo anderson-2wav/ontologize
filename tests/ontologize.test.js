@@ -67,6 +67,90 @@ describe("Ontologize", function () {
       assert.equal(customOntologize.opts.debug, true);
       assert.equal(customOntologize.opts.defaultContext["@vocab"], "http://example.org/");
     });
+
+    it("should accept Statements collection in options", function () {
+      const mockOntologyCollection = {
+        findOne: () => null,
+        find: () => ({
+          fetch: () => [],
+          toArray: () => Promise.resolve([])
+        }),
+        count: () => 0
+      };
+      const mockContextCollection = {
+        findOne: () => null,
+        find: () => ({
+          fetch: () => [],
+          toArray: () => Promise.resolve([])
+        }),
+        count: () => 0
+      };
+      const mockStatementsCollection = {
+        findOne: () => null,
+        find: () => ({
+          fetch: () => [],
+          toArray: () => Promise.resolve([])
+        }),
+        insert: () => Promise.resolve({ insertedId: "test-id" }),
+        insertMany: () => Promise.resolve({ insertedIds: ["test-id-1", "test-id-2"] }),
+        count: () => 0
+      };
+
+      const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "Ontology");
+      const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "Context");
+      const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "Statements");
+
+      const opts = {
+        statementsCollection: statementsAdapter
+      };
+
+      const ontologizeWithStatements = new Ontologize(ontologyAdapter, contextAdapter, opts);
+
+      assert.isObject(ontologizeWithStatements.collections.Statements);
+      assert.equal(ontologizeWithStatements.collections.Statements, statementsAdapter);
+    });
+
+    it("should accept multiple collections through opts.collections", function () {
+      const mockOntologyCollection = {
+        findOne: () => null,
+        find: () => ({
+          fetch: () => [],
+          toArray: () => Promise.resolve([])
+        }),
+        count: () => 0
+      };
+      const mockContextCollection = {
+        findOne: () => null,
+        find: () => ({
+          fetch: () => [],
+          toArray: () => Promise.resolve([])
+        }),
+        count: () => 0
+      };
+      const mockNiceCollection = {
+        findOne: () => null,
+        find: () => ({
+          fetch: () => [],
+          toArray: () => Promise.resolve([])
+        }),
+        count: () => 0
+      };
+
+      const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "Ontology");
+      const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "Context");
+      const niceAdapter = new MeteorCollectionAdapter(mockNiceCollection, "Nice");
+
+      const opts = {
+        collections: {
+          Nice: niceAdapter
+        }
+      };
+
+      const ontologizeWithCollections = new Ontologize(ontologyAdapter, contextAdapter, opts);
+
+      assert.isObject(ontologizeWithCollections.collections.Nice);
+      assert.equal(ontologizeWithCollections.collections.Nice, niceAdapter);
+    });
   });
 
   describe("isValidOntologyResource", function () {

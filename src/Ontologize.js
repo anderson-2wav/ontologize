@@ -22,6 +22,7 @@ export class Ontologize {
    * @param {object} contextCollection - Collection adapter or raw MongoDB collection
    * @param {object} [opts] - Configuration options
    * @param {object} [opts.collections] - named collections in addition to ontology and context
+   * @param {object} [opts.statementsCollection] - Statements collection for reasoning metadata
    * @param {object} [opts.context] - Default JSON-LD context
    * @param {boolean} [opts.debug=false] - Enable debug logging
    */
@@ -33,6 +34,11 @@ export class Ontologize {
       Ontology: ontologyCollection,
       Context: contextCollection
     };
+
+    // Add Statements collection if provided
+    if (opts.statementsCollection) {
+      this.collections.Statements = opts.statementsCollection;
+    }
 
     this.opts = opts;
     this.opts.defaultContext = this.opts.defaultContext || Ontologize.DEFAULT_CONTEXT;
