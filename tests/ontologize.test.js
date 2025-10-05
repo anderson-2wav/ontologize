@@ -9,19 +9,25 @@ describe("Ontologize", function () {
     // Mock collections for testing
     const mockOntologyCollection = {
       findOne: () => null,
-      find: () => ({ fetch: () => [] }),
+      find: () => ({
+        fetch: () => [],
+        toArray: () => Promise.resolve([])
+      }),
       count: () => 0
     };
     const mockContextCollection = {
       findOne: () => null,
-      find: () => ({ fetch: () => [] }),
+      find: () => ({
+        fetch: () => [],
+        toArray: () => Promise.resolve([])
+      }),
       count: () => 0
     };
 
     // Create adapters from mock collections
     const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "Ontology");
     const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "Context");
-    
+
     ontologize = new Ontologize(ontologyAdapter, contextAdapter);
   });
 
@@ -37,12 +43,18 @@ describe("Ontologize", function () {
     it("should accept custom options", function () {
       const mockOntologyCollection = {
         findOne: () => null,
-        find: () => ({ fetch: () => [] }),
+        find: () => ({
+        fetch: () => [],
+        toArray: () => Promise.resolve([])
+      }),
         count: () => 0
       };
       const mockContextCollection = {
         findOne: () => null,
-        find: () => ({ fetch: () => [] }),
+        find: () => ({
+        fetch: () => [],
+        toArray: () => Promise.resolve([])
+      }),
         count: () => 0
       };
       const customOpts = {
@@ -146,13 +158,19 @@ describe("Ontologize", function () {
           }
           return Promise.resolve(null);
         },
-        find: () => ({ fetch: () => [] }),
+        find: () => ({
+        fetch: () => [],
+        toArray: () => Promise.resolve([])
+      }),
         count: () => 0
       };
       
       const mockContextCollection = {
         findOne: () => Promise.resolve(null),
-        find: () => ({ fetch: () => [] }),
+        find: () => ({
+        fetch: () => [],
+        toArray: () => Promise.resolve([])
+      }),
         count: () => 0
       };
 
@@ -227,13 +245,19 @@ describe("Ontologize", function () {
           }
           return Promise.resolve(null);
         },
-        find: () => ({ fetch: () => [] }),
+        find: () => ({
+        fetch: () => [],
+        toArray: () => Promise.resolve([])
+      }),
         count: () => 0
       };
 
       const mockOntologyCollection = {
         findOne: () => Promise.resolve(null),
-        find: () => ({ fetch: () => [] }),
+        find: () => ({
+        fetch: () => [],
+        toArray: () => Promise.resolve([])
+      }),
         count: () => 0
       };
 
@@ -257,13 +281,19 @@ describe("Ontologize", function () {
           }
           return Promise.resolve(null);
         },
-        find: () => ({ fetch: () => [] }),
+        find: () => ({
+        fetch: () => [],
+        toArray: () => Promise.resolve([])
+      }),
         count: () => 0
       };
 
       const mockContextCollection = {
         findOne: () => Promise.resolve(null),
-        find: () => ({ fetch: () => [] }),
+        find: () => ({
+        fetch: () => [],
+        toArray: () => Promise.resolve([])
+      }),
         count: () => 0
       };
 
@@ -287,13 +317,19 @@ describe("Ontologize", function () {
           }
           return Promise.resolve(null);
         },
-        find: () => ({ fetch: () => [] }),
+        find: () => ({
+        fetch: () => [],
+        toArray: () => Promise.resolve([])
+      }),
         count: () => 0
       };
 
       const mockContextCollection = {
         findOne: () => Promise.resolve(null),
-        find: () => ({ fetch: () => [] }),
+        find: () => ({
+        fetch: () => [],
+        toArray: () => Promise.resolve([])
+      }),
         count: () => 0
       };
 
@@ -323,13 +359,19 @@ describe("Ontologize", function () {
           }
           return Promise.resolve(null);
         },
-        find: () => ({ fetch: () => [] }),
+        find: () => ({
+        fetch: () => [],
+        toArray: () => Promise.resolve([])
+      }),
         count: () => 0
       };
 
       const mockOntologyCollection = {
         findOne: () => Promise.resolve(null),
-        find: () => ({ fetch: () => [] }),
+        find: () => ({
+        fetch: () => [],
+        toArray: () => Promise.resolve([])
+      }),
         count: () => 0
       };
 
@@ -371,30 +413,39 @@ describe("Ontologize", function () {
       ];
 
       // Create mock ontology collection with BFO class hierarchy
+      const allClasses = [
+        {
+          "_id": "bfo:material-entity",
+          "rdfs:subClassOf": ["bfo:independent-continuant"]
+        },
+        {
+          "_id": "bfo:independent-continuant",
+          "rdfs:subClassOf": ["bfo:continuant"]
+        },
+        {
+          "_id": "bfo:continuant",
+          "rdfs:subClassOf": ["bfo:entity"]
+        },
+        {
+          "_id": "bfo:entity",
+          "rdfs:subClassOf": ["owl:Thing"]
+        },
+        {
+          "_id": "owl:Thing"
+          // No subClassOf - top level
+        }
+      ];
+
       const mockOntologyCollection = {
         find: (query) => ({
-          toArray: () => Promise.resolve([
-            {
-              "_id": "bfo:material-entity",
-              "rdfs:subClassOf": ["bfo:independent-continuant"]
-            },
-            {
-              "_id": "bfo:independent-continuant",
-              "rdfs:subClassOf": ["bfo:continuant"]
-            },
-            {
-              "_id": "bfo:continuant",
-              "rdfs:subClassOf": ["bfo:entity"]
-            },
-            {
-              "_id": "bfo:entity",
-              "rdfs:subClassOf": ["owl:Thing"]
-            },
-            {
-              "_id": "owl:Thing"
-              // No subClassOf - top level
+          toArray: () => {
+            // Filter based on query._id.$in if present
+            if (query && query._id && query._id.$in) {
+              const ids = query._id.$in;
+              return Promise.resolve(allClasses.filter(c => ids.includes(c._id)));
             }
-          ])
+            return Promise.resolve(allClasses);
+          }
         })
       };
 
@@ -449,6 +500,70 @@ describe("Ontologize", function () {
 
       console.log("Input types:", inputTypes);
       console.log("Sorted types:", sortedTypes);
+    });
+
+    it("should handle bfo:bearer-of rdfs:range case correctly", async function () {
+      // Test case from BFO reasoning where owl:Thing was appearing before bfo:entity
+      const inputTypes = [
+        "bfo:specifically-dependent-continuant",
+        "bfo:continuant",
+        "owl:Thing",
+        "bfo:entity",
+        "_:b3",
+        "_:b37",
+        "_:b107",
+        "_:b124"
+      ];
+
+      // Create mock with full hierarchy including owl:Thing as parent of bfo:entity
+      const allClasses = [
+        {
+          "_id": "bfo:specifically-dependent-continuant",
+          "rdfs:subClassOf": ["bfo:continuant"]
+        },
+        {
+          "_id": "bfo:continuant",
+          "rdfs:subClassOf": ["bfo:entity"]
+        },
+        {
+          "_id": "bfo:entity",
+          "rdfs:subClassOf": ["owl:Thing"]
+        },
+        {
+          "_id": "owl:Thing"
+          // No subClassOf - top level
+        }
+      ];
+
+      const mockOntologyCollection = {
+        find: (query) => ({
+          toArray: () => {
+            // Filter based on query._id.$in if present
+            if (query && query._id && query._id.$in) {
+              const ids = query._id.$in;
+              return Promise.resolve(allClasses.filter(c => ids.includes(c._id)));
+            }
+            return Promise.resolve(allClasses);
+          }
+        })
+      };
+
+      const mockContextCollection = {
+        findOne: () => Promise.resolve(null)
+      };
+
+      const testOntologize = new Ontologize(mockOntologyCollection, mockContextCollection);
+      const sortedTypes = await testOntologize.sortTypesFn(inputTypes);
+
+      console.log("bfo:bearer-of input:", inputTypes);
+      console.log("bfo:bearer-of sorted:", sortedTypes);
+
+      const namedClasses = sortedTypes.filter(type => !type.startsWith("_:"));
+      const entityIndex = namedClasses.indexOf("bfo:entity");
+      const thingIndex = namedClasses.indexOf("owl:Thing");
+
+      // bfo:entity should come before owl:Thing
+      assert.isBelow(entityIndex, thingIndex, "bfo:entity should come before owl:Thing");
     });
 
     it("should handle empty array", async function () {
