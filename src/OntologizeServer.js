@@ -9,6 +9,8 @@ import { Ontologize } from "./Ontologize.js";
 import { LD } from "bold-ld";
 import _ from "lodash";
 import jsonPath from "./lib/jsonpath.js";
+import { spawn } from "child_process";
+import path from "path";
 
 /**
  * Server-only extension of the Ontologize class
@@ -1706,6 +1708,446 @@ INSERT DATA {
     catch (error) {
       console.warn(`Failed to ensure array property context for ${resource._id}: ${error.message}`);
     }
+  }
+
+  /**
+   * Bootstrap the reasoner with ontology data and capture inferences
+   *
+   * @param {object} [opts] - Configuration options
+   * @param {string} [opts.hylarUrl="http://localhost:4000"] - HyLAR server URL
+   * @param {number} [opts.hylarPort=4000] - Port for HyLAR server if starting
+   * @param {boolean} [opts.startHylar=false] - Start HyLAR child process
+   * @param {boolean} [opts.classify=true] - Run classification after loading
+   * @param {boolean} [opts.updateResources=true] - Update resources with inferences
+   * @param {boolean} [opts.persistStatements=true] - Persist statements to collection
+   * @returns {Promise<object>} Result summary with counts
+   */
+  async bootstrapReasoner(opts = {}) {
+    // Default options
+    opts.hylarUrl = opts.hylarUrl || "http://localhost:4000";
+    opts.classify = opts.classify !== false;
+    opts.updateResources = opts.updateResources !== false;
+    opts.persistStatements = opts.persistStatements !== false;
+
+    console.log("🚀 Starting bootstrapReasoner...");
+    const startTime = Date.now();
+
+    // 1. Start HyLAR child process if requested
+    if (opts.startHylar) {
+      console.log("Starting HyLAR child process...");
+      this.hylarProcess = await this._startHylarProcess(opts.hylarPort || 4000);
+    }
+
+    // Check if we should skip HyLAR operations
+    let hylarAvailable = false;
+    if (opts.classify) {
+      try {
+        const healthCheck = await fetch(`${opts.hylarUrl}/`, { method: "GET" });
+        hylarAvailable = healthCheck.ok;
+      }
+      catch (error) {
+        throw new Error("HyLAR server not available. Reasoning not available.");
+      }
+    }
+
+    // 2. Turn off classification for bulk loading (only if HyLAR available)
+    if (hylarAvailable) {
+      console.log("Turning off HyLAR classification...");
+      try {
+        const classifyOffResponse = await fetch(`${opts.hylarUrl}/classify/off`, {
+          method: "GET",
+          headers: { "Content-Type": "application/json" }
+        });
+
+        if (!classifyOffResponse.ok) {
+          throw new Error(`Failed to turn off classification: ${classifyOffResponse.statusText}`);
+        }
+      }
+      catch (error) {
+        throw new Error(`Failed to connect to HyLAR: ${error.message}`);
+      }
+    }
+
+    // 3. Load all ontology resources
+    console.log("Loading ontology resources...");
+    const ontologyResources = await this.collections.Ontology.find({}).toArray();
+    console.log(`Found ${ontologyResources.length} ontology resources`);
+
+    // 4. Convert to triples and insert into HyLAR (only if available)
+    console.log("Converting resources to triples...");
+    const triples = await this.getTriplesForResources(ontologyResources, {
+      blankNodes: true,
+      includeStatements: false
+    });
+    console.log(`Generated ${triples.length} triples`);
+
+    if (hylarAvailable) {
+      const sparqlInsert = await this.createSparqlInsert(triples);
+      console.log("Inserting triples into HyLAR...");
+
+      const insertResponse = await fetch(`${opts.hylarUrl}/query`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: sparqlInsert })
+      });
+
+      if (!insertResponse.ok) {
+        throw new Error(`Failed to insert triples: ${insertResponse.statusText}`);
+      }
+    }
+
+    let facts = [];
+    let statements = [];
+    let assembledResources = {};
+
+    // 5. Turn on classification and get derivations (only if HyLAR available)
+    if (opts.classify && hylarAvailable) {
+      console.log("Turning on classification and reasoning...");
+      const classifyOnResponse = await fetch(`${opts.hylarUrl}/classify/on`, {
+        method: "GET",
+        headers: { "Content-Type": "application/json" }
+      });
+
+      if (!classifyOnResponse.ok) {
+        throw new Error(`Failed to turn on classification: ${classifyOnResponse.statusText}`);
+      }
+
+      const classifyData = await classifyOnResponse.json();
+      const derivations = classifyData.derivations;
+
+      console.log(`Classification complete: ${derivations.additions.length} new derivations`);
+
+      // 6. Convert derivations to Facts format
+      facts = this._derivationsToFacts(derivations.additions);
+      console.log(`Converted ${facts.length} facts from derivations`);
+
+      // 7. Assemble facts into resources
+      const context = await this.getContext();
+      assembledResources = await this.assembleFactsIntoResources(facts, { context });
+      console.log(`Assembled ${Object.keys(assembledResources).length} resources from facts`);
+
+      // 8. Create statements for inferred facts
+      statements = await this.createStatementsForFacts(facts, {
+        onlyInferred: true,
+        metaPropsByPredicate: {
+          "*": {
+            "bold:when": new Date().toISOString(),
+            "bold:createdBy": "bold:bootstrapReasoner",
+            "bold:scope": "bold:system"
+          }
+        }
+      });
+      console.log(`Created ${statements.length} statements from facts`);
+
+      // 9. Persist statements if collection available
+      if (this.collections.Statements && opts.persistStatements && statements.length > 0) {
+        await this._persistStatements(statements);
+        console.log(`Persisted ${statements.length} statements to collection`);
+      }
+
+      // 10. Merge assembled resources with existing ones
+      if (opts.updateResources && Object.keys(assembledResources).length > 0) {
+        const updateCount = await this._mergeAndUpdateResources(assembledResources);
+        console.log(`Updated ${updateCount} resources with inferred properties`);
+      }
+    }
+
+    const duration = Date.now() - startTime;
+    console.log(`✅ bootstrapReasoner completed in ${Math.round(duration / 1000)} seconds`);
+
+    return {
+      duration,
+      resourcesLoaded: ontologyResources.length,
+      triplesGenerated: triples.length,
+      factsInferred: facts.length,
+      statementsCreated: statements.length,
+      resourcesUpdated: Object.keys(assembledResources).length
+    };
+  }
+
+  /**
+   * Update a single resource with reasoning
+   *
+   * @param {string} resourceId - The _id of the resource to update
+   * @param {object} update - Fields to update
+   * @param {object} [opts] - Configuration options
+   * @param {boolean} [opts.reasoning=true] - Enable reasoning for this update
+   * @param {string} [opts.hylarUrl="http://localhost:4000"] - HyLAR server URL
+   * @param {boolean} [opts.persistToHylar=false] - Persist to HyLAR triplestore
+   * @param {string} [opts.userId] - User ID for provenance
+   * @param {boolean} [opts.includeStatements=false] - Include statements in response
+   * @returns {Promise<object>} Update result with resource and metadata
+   */
+  async updateOne(resourceId, update, opts = {}) {
+    check(resourceId, String);
+    check(update, Object);
+    check(opts, Match.Optional(Object));
+
+    // Default options
+    opts.reasoning = opts.reasoning !== false;
+    opts.hylarUrl = opts.hylarUrl || "http://localhost:4000";
+    opts.persistToHylar = opts.persistToHylar === true;
+
+    console.log(`Updating resource ${resourceId}...`);
+
+    // 1. Load existing resource
+    const resource = await this.collections.Ontology.findOne({ _id: resourceId });
+    if (!resource) {
+      throw new Error(`Resource not found: ${resourceId}`);
+    }
+
+    // 2. Merge update with existing resource
+    const updatedResource = await this.mergeResources([resource, update], {
+      mergeArrays: true
+    });
+    updatedResource._id = resourceId; // Ensure ID is preserved
+
+    // 3. If reasoning enabled, send to HyLAR
+    let inferredProperties = {};
+    let statements = [];
+
+    if (opts.reasoning) {
+      try {
+        // Check if HyLAR is available
+        const healthCheck = await fetch(`${opts.hylarUrl}/`, { method: "GET" });
+        if (!healthCheck.ok) {
+          console.warn("HyLAR server not available, skipping reasoning");
+          opts.reasoning = false;
+        }
+      }
+      catch (error) {
+        console.warn("HyLAR server not reachable, skipping reasoning:", error.message);
+        opts.reasoning = false;
+      }
+    }
+
+    if (opts.reasoning) {
+      console.log("Applying reasoning to update...");
+
+      // Convert updated resource to triples
+      const triples = await this.getTriplesForResources([updatedResource], {
+        blankNodes: true,
+        includeStatements: false
+      });
+      const sparqlInsert = await this.createSparqlInsert(triples);
+
+      // Use the /update endpoint if available, otherwise use /query
+      const updateUrl = `${opts.hylarUrl}/update`;
+      const queryUrl = `${opts.hylarUrl}/query`;
+
+      let response;
+      try {
+        // Try the /update endpoint first
+        response = await fetch(updateUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: sparqlInsert,
+            save: opts.persistToHylar
+          })
+        });
+      }
+      catch (error) {
+        // Fall back to /query endpoint
+        console.log("Falling back to /query endpoint");
+        response = await fetch(queryUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: sparqlInsert })
+        });
+      }
+
+      if (response.ok) {
+        const responseData = await response.json();
+
+        // Get derivations if available
+        if (responseData.derivations && responseData.derivations.additions) {
+          const facts = this._derivationsToFacts(responseData.derivations.additions);
+
+          // Filter facts for this resource only
+          const resourceFacts = facts.filter(f =>
+            f.subject === resourceId ||
+            f.subject === `https://ontology.2wav.com/bold#${resourceId}` ||
+            (f.subject && f.subject.includes(resourceId))
+          );
+
+          if (resourceFacts.length > 0) {
+            // Assemble facts into properties
+            const context = await this.getContext();
+            const assembled = await this.assembleFactsIntoResources(resourceFacts, { context });
+            inferredProperties = assembled[resourceId] || {};
+
+            // Create statements for inferred facts
+            statements = await this.createStatementsForFacts(resourceFacts, {
+              onlyInferred: true,
+              metaPropsByPredicate: {
+                "*": {
+                  "bold:when": new Date().toISOString(),
+                  "bold:updatedBy": opts.userId || "bold:system",
+                  "bold:scope": "bold:resource"
+                }
+              }
+            });
+
+            // Persist statements if collection available
+            if (this.collections.Statements && statements.length > 0) {
+              await this._persistStatements(statements);
+              console.log(`Persisted ${statements.length} inferred statements`);
+            }
+          }
+        }
+      }
+    }
+
+    // 4. Merge inferred properties with update
+    const finalResource = Object.keys(inferredProperties).length > 0
+      ? await this.mergeResources([updatedResource, inferredProperties], { mergeArrays: true })
+      : updatedResource;
+
+    // 5. Update the resource in collection
+    const updateResult = await this.collections.Ontology.replaceOne(
+      { _id: resourceId },
+      finalResource,
+      { upsert: false }
+    );
+
+    console.log(`✅ Resource ${resourceId} updated successfully`);
+
+    return {
+      resource: finalResource,
+      updateResult,
+      inferredCount: statements.length,
+      statements: opts.includeStatements ? statements : undefined
+    };
+  }
+
+  /**
+   * Start HyLAR child process
+   * @private
+   */
+  async _startHylarProcess(port = 4000) {
+    const hylarPath = path.join(process.cwd(), "modules/hylar-reasoner");
+
+    console.log(`Starting HyLAR server on port ${port}...`);
+    const hylarProcess = spawn("npm", ["run", `start-${port}`], {
+      cwd: hylarPath,
+      stdio: ["ignore", "pipe", "pipe"],
+      detached: false
+    });
+
+    // Wait for server to be ready
+    await new Promise((resolve, reject) => {
+      const checkServer = async () => {
+        try {
+          const response = await fetch(`http://localhost:${port}/`);
+          if (response.ok) {
+            console.log("HyLAR server is ready");
+            resolve();
+          }
+          else {
+            setTimeout(checkServer, 1000);
+          }
+        }
+        catch (error) {
+          setTimeout(checkServer, 1000);
+        }
+      };
+
+      setTimeout(checkServer, 2000);
+      setTimeout(() => {
+        reject(new Error("HyLAR server failed to start within 30 seconds"));
+      }, 30000);
+    });
+
+    return hylarProcess;
+  }
+
+  /**
+   * Convert HyLAR derivations to Facts format
+   * @private
+   */
+  _derivationsToFacts(derivations) {
+    if (!derivations || !Array.isArray(derivations)) {
+      return [];
+    }
+
+    return derivations.map(d => ({
+      subject: d.subject,
+      predicate: d.predicate,
+      object: d.object,
+      explicit: d.explicit === true,
+      rule: d.rule,
+      causes: d.causes
+    }));
+  }
+
+  /**
+   * Persist statements to Statements collection
+   * @private
+   */
+  async _persistStatements(statements) {
+    if (!this.collections.Statements || !statements || statements.length === 0) {
+      return 0;
+    }
+
+    // Ensure each statement has an _id
+    const statementsWithIds = statements.map(stmt => ({
+      ...stmt,
+      _id: stmt._id || `bold:statement-${Date.now()}-${Math.random().toString(36).substring(7)}`
+    }));
+
+    // Insert in batches
+    const batchSize = 100;
+    let insertedCount = 0;
+
+    for (let i = 0; i < statementsWithIds.length; i += batchSize) {
+      const batch = statementsWithIds.slice(i, Math.min(i + batchSize, statementsWithIds.length));
+      const result = await this.collections.Statements.insertMany(batch);
+      insertedCount += result.insertedCount;
+    }
+
+    return insertedCount;
+  }
+
+  /**
+   * Merge and update resources with inferred properties
+   * @private
+   */
+  async _mergeAndUpdateResources(assembledResources) {
+    let updateCount = 0;
+
+    for (const [resourceId, assembledResource] of Object.entries(assembledResources)) {
+      // Skip blank nodes
+      if (resourceId.startsWith("_:")) {
+        continue;
+      }
+
+      // Get existing resource
+      const existing = await this.collections.Ontology.findOne({ _id: resourceId });
+
+      if (existing) {
+        // Merge with existing
+        const merged = await this.mergeResources([existing, assembledResource], {
+          mergeArrays: true
+        });
+
+        // Update in collection
+        await this.collections.Ontology.replaceOne(
+          { _id: resourceId },
+          merged,
+          { upsert: false }
+        );
+        updateCount++;
+      }
+      else {
+        // Insert new resource
+        const newResource = { ...assembledResource, _id: resourceId };
+        await this.collections.Ontology.insertOne(newResource);
+        updateCount++;
+      }
+    }
+
+    return updateCount;
   }
 
 }

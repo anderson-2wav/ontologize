@@ -250,7 +250,7 @@ export class Ontologize {
    * Merge multiple resources with the same ID into a single resource
    * Handles property merging where single values become arrays when multiple values exist
    *
-   * @param {Object[]} resources - Array of resources to merge (must have same _id)
+   * @param {Object[]} resources - Array of resources to merge (must have same _id or no _id)
    * @param {Object} [opts] - Options
    * @param {Object} [opts.context] - JSON-LD context for compaction
    * @param {boolean} [opts.compact=true] - Whether to compact the merged resource
@@ -288,7 +288,7 @@ export class Ontologize {
 
     for (const resource of resources) {
       const resourceId = resource._id || resource["@id"];
-      if (resourceId !== firstId) {
+      if (resourceId && resourceId !== firstId) {
         throw new Error(`All resources must have the same ID for merging. Expected ${firstId}, got ${resourceId}`);
       }
     }
@@ -309,7 +309,8 @@ export class Ontologize {
         if (merged[property] === undefined) {
           // Property doesn't exist in merged resource, add it
           merged[property] = value;
-        } else {
+        }
+        else {
           // Property exists, need to merge values
           const existingValue = merged[property];
           const newValue = value;

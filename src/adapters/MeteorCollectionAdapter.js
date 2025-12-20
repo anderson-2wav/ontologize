@@ -31,7 +31,8 @@ export class MeteorCollectionAdapter extends CollectionAdapter {
       // Meteor collections have sync methods, wrap in Promise for consistency
       const result = this.collection.findOne(query, options);
       return Promise.resolve(result || null);
-    } catch (error) {
+    }
+    catch (error) {
       throw new Error(`Error in ${this.name}.findOne: ${error.message}`);
     }
   }
@@ -61,7 +62,8 @@ export class MeteorCollectionAdapter extends CollectionAdapter {
         forEach: (fn) => meteorCursor.forEach(fn),
         map: (fn) => meteorCursor.map(fn)
       };
-    } catch (error) {
+    }
+    catch (error) {
       throw new Error(`Error in ${this.name}.find: ${error.message}`);
     }
   }
@@ -77,8 +79,75 @@ export class MeteorCollectionAdapter extends CollectionAdapter {
       const cursor = this.collection.find(query, options);
       const result = cursor.count();
       return Promise.resolve(result || 0);
-    } catch (error) {
+    }
+    catch (error) {
       throw new Error(`Error in ${this.name}.count: ${error.message}`);
+    }
+  }
+
+  /**
+   * Insert multiple documents
+   * @param {Array<object>} docs - Documents to insert
+   * @param {object} [options] - Insert options
+   * @returns {Promise<object>} Result with insertedCount and insertedIds
+   */
+  async insertMany(docs, options = {}) {
+    try {
+      const result = await this.collection.insertMany(docs, options);
+      return result;
+    }
+    catch (error) {
+      throw new Error(`Error in ${this.name}.insertMany: ${error.message}`);
+    }
+  }
+
+  /**
+   * Insert one document
+   * @param {object} doc - Document to insert
+   * @param {object} [options] - Insert options
+   * @returns {Promise<object>} Result with insertedId
+   */
+  async insertOne(doc, options = {}) {
+    try {
+      const result = await this.collection.insertOne(doc, options);
+      return result;
+    }
+    catch (error) {
+      throw new Error(`Error in ${this.name}.insertOne: ${error.message}`);
+    }
+  }
+
+  /**
+   * Replace one document matching the query
+   * @param {object} query - MongoDB-style query object
+   * @param {object} replacement - Replacement document
+   * @param {object} [options] - Replace options (e.g., { upsert: true })
+   * @returns {Promise<object>} Result with modifiedCount
+   */
+  async replaceOne(query, replacement, options = {}) {
+    try {
+      const result = await this.collection.replaceOne(query, replacement, options);
+      return result;
+    }
+    catch (error) {
+      throw new Error(`Error in ${this.name}.replaceOne: ${error.message}`);
+    }
+  }
+
+  /**
+   * Update one document matching the query
+   * @param {object} query - MongoDB-style query object
+   * @param {object} update - Update operations (e.g., { $set: { field: value } })
+   * @param {object} [options] - Update options (e.g., { upsert: true })
+   * @returns {Promise<object>} Result with modifiedCount
+   */
+  async updateOne(query, update, options = {}) {
+    try {
+      const result = await this.collection.updateOne(query, update, options);
+      return result;
+    }
+    catch (error) {
+      throw new Error(`Error in ${this.name}.updateOne: ${error.message}`);
     }
   }
 }
