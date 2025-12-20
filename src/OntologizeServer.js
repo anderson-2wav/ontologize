@@ -497,7 +497,7 @@ export class OntologizeServer extends Ontologize {
     }
 
     // Merge the contexts using specialized merge strategy
-    const mergedContext = _.assignWith(existingContext, contextData, this._contextAssignCustomizer);
+    const mergedContext = _.assignWith(existingContext, contextData, this._contextAssignCustomizer.bind(this));
 
     // _id is meaningful in the json-ld context, but it gets put back later
     // this is a trick to put _id at the top of the object. ?worth it?

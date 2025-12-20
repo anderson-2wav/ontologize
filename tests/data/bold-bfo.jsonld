@@ -1,0 +1,1849 @@
+{
+  "@context": {
+    "bfo": "https://ontology.2wav.com/bfo#",
+    "owl": "http://www.w3.org/2002/07/owl#",
+    "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+    "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+    "dc": "http://purl.org/dc/elements/1.1/",
+    "skos": "http://www.w3.org/2004/02/skos/core#",
+    "obo": "http://purl.obolibrary.org/obo/"
+  },
+  "@graph": [
+    {
+      "@id": "_:genid1",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:unionOf": [
+        "bfo:specifically-dependent-continuant",
+        "bfo:generically-dependent-continuant",
+        "_:genid3"
+      ]
+    },
+    {
+      "@id": "_:genid101",
+      "@type": [
+        "owl:Restriction"
+      ],
+      "owl:allValuesFrom": "bfo:spatiotemporal-region",
+      "owl:onProperty": "bfo:occurrent-part-of"
+    },
+    {
+      "@id": "_:genid102",
+      "@type": [
+        "owl:Restriction"
+      ],
+      "owl:allValuesFrom": "bfo:spatiotemporal-region",
+      "owl:onProperty": "bfo:temporal-part-of"
+    },
+    {
+      "@id": "_:genid103",
+      "@type": [
+        "owl:Restriction"
+      ],
+      "owl:allValuesFrom": "_:genid104",
+      "owl:onProperty": "bfo:has-occurrent-part"
+    },
+    {
+      "@id": "_:genid104",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:unionOf": [
+        "bfo:process",
+        "bfo:process-boundary"
+      ]
+    },
+    {
+      "@id": "_:genid107",
+      "@type": [
+        "owl:Restriction"
+      ],
+      "owl:allValuesFrom": "bfo:process",
+      "owl:onProperty": "bfo:occurrent-part-of"
+    },
+    {
+      "@id": "_:genid108",
+      "@type": [
+        "owl:Restriction"
+      ],
+      "owl:allValuesFrom": "bfo:process",
+      "owl:onProperty": "bfo:temporal-part-of"
+    },
+    {
+      "@id": "_:genid109",
+      "@type": [
+        "owl:Restriction"
+      ],
+      "owl:allValuesFrom": "bfo:zero-dimensional-spatial-region",
+      "owl:onProperty": "bfo:has-continuant-part"
+    },
+    {
+      "@id": "_:genid11",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:intersectionOf": [
+        "bfo:independent-continuant",
+        "_:genid13"
+      ]
+    },
+    {
+      "@id": "_:genid110",
+      "@type": [
+        "owl:Restriction"
+      ],
+      "owl:allValuesFrom": "_:genid111",
+      "owl:onProperty": "bfo:has-continuant-part"
+    },
+    {
+      "@id": "_:genid111",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:unionOf": [
+        "bfo:zero-dimensional-spatial-region",
+        "bfo:one-dimensional-spatial-region"
+      ]
+    },
+    {
+      "@id": "_:genid114",
+      "@type": [
+        "owl:Restriction"
+      ],
+      "owl:allValuesFrom": "bfo:spatial-region",
+      "owl:onProperty": "bfo:has-continuant-part"
+    },
+    {
+      "@id": "_:genid115",
+      "@type": [
+        "owl:Restriction"
+      ],
+      "owl:allValuesFrom": "_:genid116",
+      "owl:onProperty": "bfo:continuant-part-of"
+    },
+    {
+      "@id": "_:genid116",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:unionOf": [
+        "bfo:site",
+        "bfo:material-entity"
+      ]
+    },
+    {
+      "@id": "_:genid119",
+      "@type": [
+        "owl:Restriction"
+      ],
+      "owl:allValuesFrom": "_:genid120",
+      "owl:onProperty": "bfo:has-continuant-part"
+    },
+    {
+      "@id": "_:genid120",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:unionOf": [
+        "bfo:site",
+        "bfo:continuant-fiat-boundary"
+      ]
+    },
+    {
+      "@id": "_:genid123",
+      "@type": [
+        "owl:Restriction"
+      ],
+      "owl:allValuesFrom": "bfo:three-dimensional-spatial-region",
+      "owl:onProperty": "bfo:occupies-spatial-region"
+    },
+    {
+      "@id": "_:genid124",
+      "@type": [
+        "owl:Restriction"
+      ],
+      "owl:allValuesFrom": "bfo:process-boundary",
+      "owl:onProperty": "bfo:has-occurrent-part"
+    },
+    {
+      "@id": "_:genid125",
+      "@type": [
+        "owl:Restriction"
+      ],
+      "owl:allValuesFrom": "bfo:process-boundary",
+      "owl:onProperty": "bfo:has-temporal-part"
+    },
+    {
+      "@id": "_:genid126",
+      "@type": [
+        "owl:Restriction"
+      ],
+      "owl:allValuesFrom": "_:genid127",
+      "owl:onProperty": "bfo:occurrent-part-of"
+    },
+    {
+      "@id": "_:genid127",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:unionOf": [
+        "bfo:process",
+        "bfo:process-boundary"
+      ]
+    },
+    {
+      "@id": "_:genid13",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:complementOf": {}
+    },
+    {
+      "@id": "_:genid130",
+      "@type": [
+        "owl:Restriction"
+      ],
+      "owl:allValuesFrom": "_:genid131",
+      "owl:onProperty": "bfo:temporal-part-of"
+    },
+    {
+      "@id": "_:genid131",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:unionOf": [
+        "bfo:process",
+        "bfo:process-boundary"
+      ]
+    },
+    {
+      "@id": "_:genid134",
+      "@type": [
+        "owl:Restriction"
+      ],
+      "owl:allValuesFrom": "_:genid135",
+      "owl:onProperty": "bfo:has-temporal-part"
+    },
+    {
+      "@id": "_:genid135",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:unionOf": [
+        "bfo:one-dimensional-temporal-region",
+        "bfo:zero-dimensional-temporal-region"
+      ]
+    },
+    {
+      "@id": "_:genid138",
+      "@type": [
+        "owl:Restriction"
+      ],
+      "owl:allValuesFrom": "bfo:one-dimensional-temporal-region",
+      "owl:onProperty": "bfo:temporal-part-of"
+    },
+    {
+      "@id": "_:genid139",
+      "@type": [
+        "owl:Restriction"
+      ],
+      "owl:allValuesFrom": "bfo:material-entity",
+      "owl:onProperty": "bfo:continuant-part-of"
+    },
+    {
+      "@id": "_:genid140",
+      "@type": [
+        "owl:Restriction"
+      ],
+      "owl:allValuesFrom": "_:genid141",
+      "owl:onProperty": "bfo:has-continuant-part"
+    },
+    {
+      "@id": "_:genid141",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:unionOf": [
+        "bfo:site",
+        "bfo:material-entity",
+        "bfo:continuant-fiat-boundary"
+      ]
+    },
+    {
+      "@id": "_:genid145",
+      "@type": [
+        "owl:Restriction"
+      ],
+      "owl:allValuesFrom": "bfo:continuant-fiat-boundary",
+      "owl:onProperty": "bfo:location-of"
+    },
+    {
+      "@id": "_:genid146",
+      "@type": [
+        "owl:Restriction"
+      ],
+      "owl:allValuesFrom": "bfo:continuant-fiat-boundary",
+      "owl:onProperty": "bfo:has-continuant-part"
+    },
+    {
+      "@id": "_:genid147",
+      "@type": [
+        "owl:Restriction"
+      ],
+      "owl:allValuesFrom": "_:genid148",
+      "owl:onProperty": "bfo:has-continuant-part"
+    },
+    {
+      "@id": "_:genid148",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:unionOf": [
+        "bfo:fiat-line",
+        "bfo:fiat-point"
+      ]
+    },
+    {
+      "@id": "_:genid151",
+      "@type": [
+        "owl:Restriction"
+      ],
+      "owl:allValuesFrom": "bfo:continuant-fiat-boundary",
+      "owl:onProperty": "bfo:has-continuant-part"
+    },
+    {
+      "@id": "_:genid152",
+      "@type": [
+        "owl:Restriction"
+      ],
+      "owl:allValuesFrom": "bfo:fiat-point",
+      "owl:onProperty": "bfo:has-continuant-part"
+    },
+    {
+      "@id": "_:genid153",
+      "@type": [
+        "owl:Restriction"
+      ],
+      "owl:allValuesFrom": "bfo:zero-dimensional-temporal-region",
+      "owl:onProperty": "bfo:has-temporal-part"
+    },
+    {
+      "@id": "_:genid154",
+      "@type": [
+        "owl:AllDisjointClasses"
+      ],
+      "owl:members": [
+        {},
+        {},
+        {}
+      ]
+    },
+    {
+      "@id": "_:genid158",
+      "@type": [
+        "owl:AllDisjointClasses"
+      ],
+      "owl:members": [
+        {},
+        {},
+        {}
+      ]
+    },
+    {
+      "@id": "_:genid162",
+      "@type": [
+        "owl:AllDisjointClasses"
+      ],
+      "owl:members": [
+        {},
+        {},
+        {},
+        {}
+      ]
+    },
+    {
+      "@id": "_:genid167",
+      "@type": [
+        "owl:AllDisjointClasses"
+      ],
+      "owl:members": [
+        {},
+        {},
+        {},
+        {}
+      ]
+    },
+    {
+      "@id": "_:genid17",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:unionOf": [
+        "bfo:process",
+        "bfo:specifically-dependent-continuant"
+      ]
+    },
+    {
+      "@id": "_:genid172",
+      "@type": [
+        "owl:AllDisjointClasses"
+      ],
+      "owl:members": [
+        {},
+        {},
+        {}
+      ]
+    },
+    {
+      "@id": "_:genid20",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:unionOf": [
+        "bfo:process",
+        "bfo:specifically-dependent-continuant"
+      ]
+    },
+    {
+      "@id": "_:genid23",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:unionOf": [
+        "bfo:process",
+        "bfo:process-boundary"
+      ]
+    },
+    {
+      "@id": "_:genid26",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:unionOf": [
+        "bfo:site",
+        "bfo:material-entity"
+      ]
+    },
+    {
+      "@id": "_:genid29",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:intersectionOf": [
+        "bfo:independent-continuant",
+        "_:genid31"
+      ]
+    },
+    {
+      "@id": "_:genid3",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:intersectionOf": [
+        "bfo:independent-continuant",
+        "_:genid5"
+      ]
+    },
+    {
+      "@id": "_:genid31",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:complementOf": {}
+    },
+    {
+      "@id": "_:genid33",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:intersectionOf": [
+        "bfo:independent-continuant",
+        "_:genid35"
+      ]
+    },
+    {
+      "@id": "_:genid35",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:complementOf": {}
+    },
+    {
+      "@id": "_:genid37",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:intersectionOf": [
+        "bfo:independent-continuant",
+        "_:genid39"
+      ]
+    },
+    {
+      "@id": "_:genid39",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:complementOf": {}
+    },
+    {
+      "@id": "_:genid41",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:intersectionOf": [
+        "bfo:independent-continuant",
+        "_:genid43"
+      ]
+    },
+    {
+      "@id": "_:genid43",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:complementOf": {}
+    },
+    {
+      "@id": "_:genid45",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:intersectionOf": [
+        "bfo:independent-continuant",
+        "_:genid47"
+      ]
+    },
+    {
+      "@id": "_:genid47",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:complementOf": {}
+    },
+    {
+      "@id": "_:genid49",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:intersectionOf": [
+        "bfo:independent-continuant",
+        "_:genid51"
+      ]
+    },
+    {
+      "@id": "_:genid5",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:complementOf": {}
+    },
+    {
+      "@id": "_:genid51",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:complementOf": {}
+    },
+    {
+      "@id": "_:genid53",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:unionOf": [
+        "bfo:site",
+        "bfo:material-entity"
+      ]
+    },
+    {
+      "@id": "_:genid56",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:unionOf": [
+        "bfo:process",
+        "bfo:process-boundary"
+      ]
+    },
+    {
+      "@id": "_:genid59",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:unionOf": [
+        "bfo:specifically-dependent-continuant",
+        "_:genid61"
+      ]
+    },
+    {
+      "@id": "_:genid61",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:intersectionOf": [
+        "bfo:independent-continuant",
+        "_:genid63"
+      ]
+    },
+    {
+      "@id": "_:genid63",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:complementOf": {}
+    },
+    {
+      "@id": "_:genid66",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:unionOf": [
+        "bfo:specifically-dependent-continuant",
+        "_:genid68"
+      ]
+    },
+    {
+      "@id": "_:genid68",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:intersectionOf": [
+        "bfo:independent-continuant",
+        "_:genid70"
+      ]
+    },
+    {
+      "@id": "_:genid70",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:complementOf": {}
+    },
+    {
+      "@id": "_:genid73",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:intersectionOf": [
+        "bfo:independent-continuant",
+        "_:genid75"
+      ]
+    },
+    {
+      "@id": "_:genid75",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:complementOf": {}
+    },
+    {
+      "@id": "_:genid77",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:intersectionOf": [
+        "bfo:independent-continuant",
+        "_:genid79"
+      ]
+    },
+    {
+      "@id": "_:genid79",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:complementOf": {}
+    },
+    {
+      "@id": "_:genid81",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:unionOf": [
+        "bfo:process",
+        "bfo:process-boundary"
+      ]
+    },
+    {
+      "@id": "_:genid84",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:unionOf": [
+        "bfo:process",
+        "bfo:process-boundary"
+      ]
+    },
+    {
+      "@id": "_:genid87",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:intersectionOf": [
+        "bfo:independent-continuant",
+        "_:genid89"
+      ]
+    },
+    {
+      "@id": "_:genid89",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:complementOf": {}
+    },
+    {
+      "@id": "_:genid9",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:unionOf": [
+        "bfo:specifically-dependent-continuant",
+        "bfo:generically-dependent-continuant",
+        "_:genid11"
+      ]
+    },
+    {
+      "@id": "_:genid91",
+      "@type": [
+        "owl:Restriction"
+      ],
+      "owl:allValuesFrom": "bfo:continuant",
+      "owl:onProperty": "bfo:continuant-part-of"
+    },
+    {
+      "@id": "_:genid92",
+      "@type": [
+        "owl:Restriction"
+      ],
+      "owl:allValuesFrom": "bfo:independent-continuant",
+      "owl:onProperty": "bfo:continuant-part-of"
+    },
+    {
+      "@id": "_:genid93",
+      "@type": [
+        "owl:Restriction"
+      ],
+      "owl:allValuesFrom": "bfo:spatial-region",
+      "owl:onProperty": "bfo:continuant-part-of"
+    },
+    {
+      "@id": "_:genid94",
+      "@type": [
+        "owl:Restriction"
+      ],
+      "owl:allValuesFrom": "bfo:temporal-region",
+      "owl:onProperty": "bfo:occurrent-part-of"
+    },
+    {
+      "@id": "_:genid95",
+      "@type": [
+        "owl:Restriction"
+      ],
+      "owl:allValuesFrom": "bfo:temporal-region",
+      "owl:onProperty": "bfo:temporal-part-of"
+    },
+    {
+      "@id": "_:genid96",
+      "@type": [
+        "owl:Restriction"
+      ],
+      "owl:allValuesFrom": "_:genid97",
+      "owl:onProperty": "bfo:has-continuant-part"
+    },
+    {
+      "@id": "_:genid97",
+      "@type": [
+        "owl:Class"
+      ],
+      "owl:unionOf": [
+        "bfo:two-dimensional-spatial-region",
+        "bfo:zero-dimensional-spatial-region",
+        "bfo:one-dimensional-spatial-region"
+      ]
+    },
+    {
+      "@id": "bfo:entity",
+      "@type": [
+        "owl:Class"
+      ],
+      "dc:identifier": "001-BFO",
+      "rdfs:label": "entity",
+      "owl:sameAs": "obo:BFO_0000001",
+      "skos:definition": "(Elucidation) An entity is anything that exists or has existed or will exist",
+      "skos:example": "Julius Caesar; the Second World War; your body mass index; Verdi's Requiem"
+    },
+    {
+      "@id": "bfo:continuant",
+      "@type": [
+        "owl:Class"
+      ],
+      "dc:identifier": "008-BFO",
+      "rdfs:label": "continuant",
+      "rdfs:subClassOf": [
+        "bfo:entity",
+        "_:genid91"
+      ],
+      "owl:disjointWith": "bfo:occurrent",
+      "owl:sameAs": "obo:BFO_0000002",
+      "skos:definition": "(Elucidation) A continuant is an entity that persists, endures, or continues to exist through time while maintaining its identity",
+      "skos:example": "A human being; a tennis ball; a cave; a region of space; someone's temperature"
+    },
+    {
+      "@id": "bfo:occurrent",
+      "@type": [
+        "owl:Class"
+      ],
+      "dc:identifier": "077-BFO",
+      "rdfs:label": "occurrent",
+      "rdfs:subClassOf": "bfo:entity",
+      "owl:sameAs": "obo:BFO_0000003",
+      "skos:definition": "(Elucidation) An occurrent is an entity that unfolds itself in time or it is the start or end of such an entity or it is a temporal or spatiotemporal region",
+      "skos:example": "As for process, history, process boundary, spatiotemporal region, zero-dimensional temporal region, one-dimensional temporal region, temporal interval, temporal instant."
+    },
+    {
+      "@id": "bfo:independent-continuant",
+      "@type": [
+        "owl:Class"
+      ],
+      "dc:identifier": "017-BFO",
+      "rdfs:label": "independent continuant",
+      "rdfs:subClassOf": [
+        "bfo:continuant",
+        "_:genid92"
+      ],
+      "owl:sameAs": "obo:BFO_0000004",
+      "skos:definition": "b is an independent continuant =Def b is a continuant & there is no c such that b specifically depends on c or b generically depends on c",
+      "skos:example": "An atom; a molecule; an organism; a heart; a chair; the bottom right portion of a human torso; a leg; the interior of your mouth; a spatial region; an orchestra"
+    },
+    {
+      "@id": "bfo:spatial-region",
+      "@type": [
+        "owl:Class"
+      ],
+      "dc:identifier": "035-BFO",
+      "rdfs:label": "spatial region",
+      "rdfs:subClassOf": [
+        "bfo:immaterial-entity",
+        "_:genid93"
+      ],
+      "owl:sameAs": "obo:BFO_0000006",
+      "skos:definition": "(Elucidation) A spatial region is a continuant entity that is a continuant part of the spatial projection of a portion of spacetime at a given time",
+      "skos:example": "As for zero-dimensional spatial region, one-dimensional spatial region, two-dimensional spatial region, three-dimensional spatial region"
+    },
+    {
+      "@id": "bfo:temporal-region",
+      "@type": [
+        "owl:Class"
+      ],
+      "dc:identifier": "100-BFO",
+      "rdfs:label": "temporal region",
+      "rdfs:subClassOf": [
+        "bfo:occurrent",
+        "_:genid94",
+        "_:genid95"
+      ],
+      "owl:sameAs": "obo:BFO_0000008",
+      "skos:definition": "(Elucidation) A temporal region is an occurrent over which processes can unfold",
+      "skos:example": "As for zero-dimensional temporal region and one-dimensional temporal region"
+    },
+    {
+      "@id": "bfo:two-dimensional-spatial-region",
+      "@type": [
+        "owl:Class"
+      ],
+      "dc:identifier": "039-BFO",
+      "rdfs:label": "two-dimensional spatial region",
+      "rdfs:subClassOf": [
+        "bfo:spatial-region",
+        "_:genid96"
+      ],
+      "owl:sameAs": "obo:BFO_0000009",
+      "skos:definition": "(Elucidation) A two-dimensional spatial region is a spatial region that is a whole consisting of a surface together with zero or more surfaces which may have spatial regions of lower dimension as parts",
+      "skos:example": "The surface of a sphere-shaped part of space; an infinitely thin plane in space"
+    },
+    {
+      "@id": "bfo:spatiotemporal-region",
+      "@type": [
+        "owl:Class"
+      ],
+      "dc:identifier": "095-BFO",
+      "rdfs:label": "spatiotemporal region",
+      "rdfs:subClassOf": [
+        "bfo:occurrent",
+        "_:genid101",
+        "_:genid102"
+      ],
+      "owl:sameAs": "obo:BFO_0000011",
+      "skos:definition": "(Elucidation) A spatiotemporal region is an occurrent that is an occurrent part of spacetime",
+      "skos:example": "The spatiotemporal region occupied by the development of a cancer tumour; the spatiotemporal region occupied by an orbiting satellite",
+      "skos:scopeNote": "'Spacetime' here refers to the maximal instance of the universal spatiotemporal region."
+    },
+    {
+      "@id": "bfo:process",
+      "@type": [
+        "owl:Class"
+      ],
+      "dc:identifier": "083-BFO",
+      "rdfs:label": "process",
+      "rdfs:subClassOf": [
+        "bfo:occurrent",
+        "_:genid103",
+        "_:genid107",
+        "_:genid108"
+      ],
+      "owl:sameAs": "obo:BFO_0000015",
+      "skos:altLabel": "event",
+      "skos:definition": "(Elucidation) p is a process means p is an occurrent that has some temporal proper part and for some time t, p has some material entity as participant",
+      "skos:example": "An act of selling; the life of an organism; a process of sleeping; a process of cell-division; a beating of the heart; a process of meiosis; the taxiing of an aircraft; the programming of a computer"
+    },
+    {
+      "@id": "bfo:disposition",
+      "@type": [
+        "owl:Class"
+      ],
+      "dc:identifier": "062-BFO",
+      "rdfs:label": "disposition",
+      "rdfs:subClassOf": "bfo:realizable-entity",
+      "owl:disjointWith": "bfo:role",
+      "owl:sameAs": "obo:BFO_0000016",
+      "skos:altLabel": "internally-grounded realizable entity",
+      "skos:definition": "(Elucidation) A disposition b is a realizable entity such that if b ceases to exist then its bearer is physically changed & b's realization occurs when and because this bearer is in some special physical circumstances & this realization occurs in virtue of the bearer's physical make-up",
+      "skos:example": "An atom of element X has the disposition to decay to an atom of element Y; the cell wall is disposed to transport cellular material through endocytosis and exocytosis; certain people have a predisposition to colon cancer; children are innately disposed to categorize objects in certain ways"
+    },
+    {
+      "@id": "bfo:realizable-entity",
+      "@type": [
+        "owl:Class"
+      ],
+      "dc:identifier": "058-BFO",
+      "rdfs:label": "realizable entity",
+      "rdfs:subClassOf": "bfo:specifically-dependent-continuant",
+      "owl:disjointWith": "bfo:quality",
+      "owl:sameAs": "obo:BFO_0000017",
+      "skos:definition": "(Elucidation) A realizable entity is a specifically dependent continuant that inheres in some independent continuant which is not a spatial region & which is of a type some instances of which are realized in processes of a correlated type",
+      "skos:example": "The role of being a doctor; the role of this boundary to delineate where Utah and Colorado meet; the function of your reproductive organs; the disposition of your blood to coagulate; the disposition of this piece of metal to conduct electricity"
+    },
+    {
+      "@id": "bfo:zero-dimensional-spatial-region",
+      "@type": [
+        "owl:Class"
+      ],
+      "dc:identifier": "037-BFO",
+      "rdfs:label": "zero-dimensional spatial region",
+      "rdfs:subClassOf": [
+        "bfo:spatial-region",
+        "_:genid109"
+      ],
+      "owl:sameAs": "obo:BFO_0000018",
+      "skos:definition": "(Elucidation) A zero-dimensional spatial region is one or a collection of more than one spatially disjoint points in space",
+      "skos:example": "The spatial region occupied at some time instant by the North Pole"
+    },
+    {
+      "@id": "bfo:quality",
+      "@type": [
+        "owl:Class"
+      ],
+      "dc:identifier": "055-BFO",
+      "rdfs:label": "quality",
+      "rdfs:subClassOf": "bfo:specifically-dependent-continuant",
+      "owl:sameAs": "obo:BFO_0000019",
+      "skos:definition": "(Elucidation) A quality is a specifically dependent continuant that, in contrast to roles and dispositions, does not require any further process in order to be realized",
+      "skos:example": "The colour of a tomato; the ambient temperature of this portion of air; the length of the circumference of your waist; the shape of your nose; the shape of your nostril; the mass of this piece of gold"
+    },
+    {
+      "@id": "bfo:specifically-dependent-continuant",
+      "@type": [
+        "owl:Class"
+      ],
+      "dc:identifier": "050-BFO",
+      "rdfs:label": "specifically dependent continuant",
+      "rdfs:subClassOf": "bfo:continuant",
+      "owl:sameAs": "obo:BFO_0000020",
+      "skos:definition": "b is a specifically dependent continuant =Def b is a continuant & there is some independent continuant c which is not a spatial region & which is such that b specifically depends on c",
+      "skos:example": [
+        "(with multiple bearers) John's love for Mary; the ownership relation between John and this statue; the relation of authority between John and his subordinates",
+        "(with one bearer) The mass of this tomato; the pink colour of a medium rare piece of grilled filet mignon at its centre; the smell of this portion of mozzarella; the disposition of this fish to decay; the role of being a doctor; the function of this heart to pump blood; the shape of this hole"
+      ]
+    },
+    {
+      "@id": "bfo:role",
+      "@type": [
+        "owl:Class"
+      ],
+      "dc:identifier": "061-BFO",
+      "rdfs:label": "role",
+      "rdfs:subClassOf": "bfo:realizable-entity",
+      "owl:sameAs": "obo:BFO_0000023",
+      "skos:altLabel": "externally-grounded realizable entity",
+      "skos:definition": "(Elucidation) A role b is a realizable entity such that b exists because there is some single bearer that is in some special physical, social, or institutional set of circumstances in which this bearer does not have to be & b is not such that, if it ceases to exist, then the physical make-up of the bearer is thereby changed",
+      "skos:example": "The priest role; the student role; the role of subject in a clinical trial; the role of a stone in marking a property boundary; the role of a boundary to demarcate two neighbouring administrative territories; the role of a building in serving as a military target"
+    },
+    {
+      "@id": "bfo:fiat-object-part",
+      "@type": [
+        "owl:Class"
+      ],
+      "dc:identifier": "027-BFO",
+      "rdfs:label": "fiat object part",
+      "rdfs:subClassOf": "bfo:material-entity",
+      "owl:sameAs": "obo:BFO_0000024",
+      "skos:definition": "(Elucidation) A fiat object part b is a material entity & such that if b exists then it is continuant part of some object c & demarcated from the remainder of c by one or more fiat surfaces",
+      "skos:example": "The upper and lower lobes of the left lung; the dorsal and ventral surfaces of the body; the Western hemisphere of the Earth; the FMA:regional parts of an intact human body"
+    },
+    {
+      "@id": "bfo:one-dimensional-spatial-region",
+      "@type": [
+        "owl:Class"
+      ],
+      "dc:identifier": "038-BFO",
+      "rdfs:label": "one-dimensional spatial region",
+      "rdfs:subClassOf": [
+        "bfo:spatial-region",
+        "_:genid110"
+      ],
+      "owl:sameAs": "obo:BFO_0000026",
+      "skos:definition": "(Elucidation) A one-dimensional spatial region is a whole consisting of a line together with zero or more lines which may have points as parts",
+      "skos:example": "An edge of a cube-shaped portion of space; a line connecting two points; two parallel lines extended in space"
+    },
+    {
+      "@id": "bfo:object-aggregate",
+      "@type": [
+        "owl:Class"
+      ],
+      "dc:identifier": "025-BFO",
+      "rdfs:label": "object aggregate",
+      "rdfs:subClassOf": "bfo:material-entity",
+      "owl:sameAs": "obo:BFO_0000027",
+      "skos:definition": "(Elucidation) An object aggregate is a material entity consisting exactly of a plurality (≥1) of objects as member parts which together form a unit",
+      "skos:example": "The aggregate of the musicians in a symphony orchestra and their instruments; the aggregate of bearings in a constant velocity axle joint; the nitrogen atoms in the atmosphere; a collection of cells in a blood biobank",
+      "skos:scopeNote": [
+        "'Exactly' means that there are no parts of the object aggregate other than its member parts.",
+        "The unit can, at certain times, consist of exactly one object, for example, when a wolf litter loses all but one of its pups, but it must at some time have a plurality of member parts."
+      ]
+    },
+    {
+      "@id": "bfo:three-dimensional-spatial-region",
+      "@type": [
+        "owl:Class"
+      ],
+      "dc:identifier": "040-BFO",
+      "rdfs:label": "three-dimensional spatial region",
+      "rdfs:subClassOf": [
+        "bfo:spatial-region",
+        "_:genid114"
+      ],
+      "owl:sameAs": "obo:BFO_0000028",
+      "skos:definition": "(Elucidation) A three-dimensional spatial region is a whole consisting of a spatial volume together with zero or more spatial volumes which may have spatial regions of lower dimension as parts",
+      "skos:example": "A cube-shaped region of space; a sphere-shaped region of space; the region of space occupied by all and only the planets in the solar system at some point in time"
+    },
+    {
+      "@id": "bfo:site",
+      "@type": [
+        "owl:Class"
+      ],
+      "dc:identifier": "034-BFO",
+      "rdfs:label": "site",
+      "rdfs:subClassOf": [
+        "bfo:immaterial-entity",
+        "_:genid115",
+        "_:genid119",
+        "_:genid123"
+      ],
+      "owl:sameAs": "obo:BFO_0000029",
+      "skos:definition": "(Elucidation) A site is a three-dimensional immaterial entity whose boundaries either (partially or wholly) coincide with the boundaries of one or more material entities or have locations determined in relation to some material entity",
+      "skos:example": "A hole in a portion of cheese; a rabbit hole; the Grand Canyon; the Piazza San Marco; the kangaroo-joey-containing hole of a kangaroo pouch; your left nostril (a fiat part - the opening - of your left nasal cavity); the lumen of your gut; the hold of a ship; the interior of the trunk of your car; hole in an engineered floor joist"
+    },
+    {
+      "@id": "bfo:object",
+      "@type": [
+        "owl:Class"
+      ],
+      "dc:identifier": "024-BFO",
+      "rdfs:label": "object",
+      "rdfs:subClassOf": "bfo:material-entity",
+      "owl:sameAs": "obo:BFO_0000030",
+      "skos:definition": "(Elucidation) An object is a material entity which manifests causal unity & is of a type instances of which are maximal relative to the sort of causal unity manifested",
+      "skos:example": "An organism; a fish tank; a planet; a laptop; a valve; a block of marble; an ice cube",
+      "skos:scopeNote": "A description of three primary sorts of causal unity is provided in Basic Formal Ontology 2.0. Specification and User Guide"
+    },
+    {
+      "@id": "bfo:generically-dependent-continuant",
+      "@type": [
+        "owl:Class"
+      ],
+      "dc:identifier": "074-BFO",
+      "rdfs:label": "generically dependent continuant",
+      "rdfs:subClassOf": "bfo:continuant",
+      "owl:sameAs": "obo:BFO_0000031",
+      "skos:altLabel": "g-dependent continuant",
+      "skos:definition": "(Elucidation) A generically dependent continuant is an entity that exists in virtue of the fact that there is at least one of what may be multiple copies which is the content or the pattern that multiple copies would share",
+      "skos:example": "The pdf file on your laptop; the pdf file that is a copy thereof on my laptop; the sequence of this protein molecule; the sequence that is a copy thereof in that protein molecule; the content that is shared by a string of dots and dashes written on a page and the transmitted Morse code signal; the content of a sentence; an engineering blueprint"
+    },
+    {
+      "@id": "bfo:function",
+      "@type": [
+        "owl:Class"
+      ],
+      "dc:identifier": "064-BFO",
+      "rdfs:label": "function",
+      "rdfs:subClassOf": "bfo:disposition",
+      "owl:sameAs": "obo:BFO_0000034",
+      "skos:definition": "(Elucidation) A function is a disposition that exists in virtue of its bearer's physical make-up & this physical make-up is something the bearer possesses because it came into being either through evolution (in the case of natural biological entities) or through intentional design (in the case of artefacts) in order to realize processes of a certain sort",
+      "skos:example": "The function of a hammer to drive in nails; the function of a heart pacemaker to regulate the beating of a heart through electricity"
+    },
+    {
+      "@id": "bfo:process-boundary",
+      "@type": [
+        "owl:Class"
+      ],
+      "dc:identifier": "084-BFO",
+      "rdfs:label": "process boundary",
+      "rdfs:subClassOf": [
+        "bfo:occurrent",
+        "_:genid124",
+        "_:genid125",
+        "_:genid126",
+        "_:genid130"
+      ],
+      "owl:sameAs": "obo:BFO_0000035",
+      "skos:definition": "p is a process boundary =Def p is a temporal part of a process & p has no proper temporal parts",
+      "skos:example": "The boundary between the 2nd and 3rd year of your life"
+    },
+    {
+      "@id": "bfo:one-dimensional-temporal-region",
+      "@type": [
+        "owl:Class"
+      ],
+      "dc:identifier": "103-BFO",
+      "rdfs:label": "one-dimensional temporal region",
+      "rdfs:subClassOf": [
+        "bfo:temporal-region",
+        "_:genid134",
+        "_:genid138"
+      ],
+      "owl:disjointWith": "bfo:zero-dimensional-temporal-region",
+      "owl:sameAs": "obo:BFO_0000038",
+      "skos:definition": "(Elucidation) A one-dimensional temporal region is a temporal region that is a whole that has a temporal interval and zero or more temporal intervals and temporal instants as parts",
+      "skos:example": "The temporal region during which a process occurs"
+    },
+    {
+      "@id": "bfo:material-entity",
+      "@type": [
+        "owl:Class"
+      ],
+      "dc:identifier": "019-BFO",
+      "rdfs:label": "material entity",
+      "rdfs:subClassOf": [
+        "bfo:independent-continuant",
+        "_:genid139",
+        "_:genid140"
+      ],
+      "owl:disjointWith": "bfo:immaterial-entity",
+      "owl:sameAs": "obo:BFO_0000040",
+      "skos:definition": "(Elucidation) A material entity is an independent continuant that at all times at which it exists has some portion of matter as continuant part",
+      "skos:example": "A human being; the undetached arm of a human being; an aggregate of human beings"
+    },
+    {
+      "@id": "bfo:has-realization",
+      "@type": [
+        "owl:ObjectProperty"
+      ],
+      "dc:identifier": "206-BFO",
+      "rdfs:domain": "bfo:realizable-entity",
+      "rdfs:label": "has realization",
+      "rdfs:range": "bfo:process",
+      "owl:inverseOf": {},
+      "owl:sameAs": "obo:BFO_0000054",
+      "skos:altLabel": "realized in",
+      "skos:definition": "b has realization c =Def c realizes b",
+      "skos:example": "As for realizes"
+    },
+    {
+      "@id": "bfo:realizes",
+      "@type": [
+        "owl:ObjectProperty"
+      ],
+      "dc:identifier": "059-BFO",
+      "rdfs:domain": "bfo:process",
+      "rdfs:label": "realizes",
+      "rdfs:range": "bfo:realizable-entity",
+      "owl:sameAs": "obo:BFO_0000055",
+      "skos:definition": "(Elucidation) realizes is a relation between a process b and realizable entity c such that c inheres in some d & for all t, if b has participant d then c exists & the type instantiated by b is correlated with the type instantiated by c",
+      "skos:example": "A balding process realizes a disposition to go bald; a studying process realizes a student role; a process of pumping blood realizes the pumping function of a heart"
+    },
+    {
+      "@id": "bfo:participates-in",
+      "@type": [
+        "owl:ObjectProperty"
+      ],
+      "dc:identifier": "250-BFO",
+      "rdfs:domain": "_:genid1",
+      "rdfs:label": "participates in",
+      "rdfs:range": "bfo:process",
+      "owl:inverseOf": {},
+      "owl:sameAs": "obo:BFO_0000056",
+      "skos:definition": "(Elucidation) participates in holds between some b that is either a specifically dependent continuant or generically dependent continuant or independent continuant that is not a spatial region & some process p such that b participates in p some way",
+      "skos:scopeNote": "Users that require more sophisticated representations of time are encouraged to import a temporal extension of BFO-Core provided by the BFO development team. See documentation for guidance: <https://github.com/BFO-ontology/BFO-2020/tree/master/src/owl/profiles/temporal%20extensions>"
+    },
+    {
+      "@id": "bfo:has-participant",
+      "@type": [
+        "owl:ObjectProperty"
+      ],
+      "dc:identifier": "248-BFO",
+      "rdfs:domain": "bfo:process",
+      "rdfs:label": "has participant",
+      "rdfs:range": "_:genid9",
+      "owl:sameAs": "obo:BFO_0000057",
+      "skos:definition": "p has participant c =Def c participates in p",
+      "skos:scopeNote": "Users that require more sophisticated representations of time are encouraged to import a temporal extension of BFO-Core provided by the BFO development team. See documentation for guidance: <https://github.com/BFO-ontology/BFO-2020/tree/master/src/owl/profiles/temporal%20extensions>"
+    },
+    {
+      "@id": "bfo:is-concretized-by",
+      "@type": [
+        "owl:ObjectProperty"
+      ],
+      "dc:identifier": "258-BFO",
+      "rdfs:domain": "bfo:generically-dependent-continuant",
+      "rdfs:label": "is concretized by",
+      "rdfs:range": "_:genid17",
+      "owl:inverseOf": {},
+      "owl:sameAs": "obo:BFO_0000058",
+      "skos:definition": "c is concretized by b =Def b concretizes c",
+      "skos:scopeNote": "Users that require more sophisticated representations of time are encouraged to import a temporal extension of BFO-Core provided by the BFO development team. See documentation for guidance: <https://github.com/BFO-ontology/BFO-2020/tree/master/src/owl/profiles/temporal%20extensions>"
+    },
+    {
+      "@id": "bfo:concretizes",
+      "@type": [
+        "owl:ObjectProperty"
+      ],
+      "dc:identifier": "256-BFO",
+      "rdfs:domain": "_:genid20",
+      "rdfs:label": "concretizes",
+      "rdfs:range": "bfo:generically-dependent-continuant",
+      "owl:sameAs": "obo:BFO_0000059",
+      "skos:definition": "b concretizes c =Def b is a process or a specifically dependent continuant & c is a generically dependent continuant & there is some time t such that c is the pattern or content which b shares at t with actual or potential copies",
+      "skos:scopeNote": "Users that require more sophisticated representations of time are encouraged to import a temporal extension of BFO-Core provided by the BFO development team. See documentation for guidance: <https://github.com/BFO-ontology/BFO-2020/tree/master/src/owl/profiles/temporal%20extensions>"
+    },
+    {
+      "@id": "bfo:preceded-by",
+      "@type": [
+        "owl:ObjectProperty",
+        "owl:TransitiveProperty"
+      ],
+      "dc:identifier": "213-BFO",
+      "rdfs:domain": "bfo:occurrent",
+      "rdfs:label": "preceded by",
+      "rdfs:range": "bfo:occurrent",
+      "owl:inverseOf": {},
+      "owl:sameAs": "obo:BFO_0000062",
+      "skos:definition": "b preceded by c =Def b precedes c",
+      "skos:example": "The temporal region occupied by the second half of the match is preceded by the temporal region occupied by the first half of the match"
+    },
+    {
+      "@id": "bfo:precedes",
+      "@type": [
+        "owl:ObjectProperty",
+        "owl:TransitiveProperty"
+      ],
+      "dc:identifier": "270-BFO",
+      "rdfs:domain": "bfo:occurrent",
+      "rdfs:label": "precedes",
+      "rdfs:range": "bfo:occurrent",
+      "owl:sameAs": "obo:BFO_0000063",
+      "skos:definition": "(Elucidation) precedes is a relation between occurrents o, o' such that if t is the temporal extent of o & t' is the temporal extent of o' then either the last instant of o is before the first instant of o' or the last instant of o is the first instant of o' & neither o nor o' are temporal instants",
+      "skos:example": "The temporal region occupied by Mary's birth precedes the temporal region occupied by Mary's death.",
+      "skos:scopeNote": [
+        "Each temporal region is its own temporal extent. The temporal extent of a spatiotemporal region is the temporal region it temporally projects onto. The temporal extent of a process or process boundary that occupies temporal region t is t.",
+        "Precedes defines a strict partial order on occurrents."
+      ]
+    },
+    {
+      "@id": "bfo:occurs-in",
+      "@type": [
+        "owl:ObjectProperty"
+      ],
+      "dc:identifier": "143-BFO",
+      "rdfs:domain": "_:genid23",
+      "rdfs:label": "occurs in",
+      "rdfs:range": "_:genid26",
+      "owl:inverseOf": {},
+      "owl:sameAs": "obo:BFO_0000066",
+      "skos:definition": "b occurs in c =Def b is a process or a process boundary & c is a material entity or site & there exists a spatiotemporal region r & b occupies spatiotemporal region r & for all time t, if b exists at t then c exists at t & there exist spatial regions s and s' where b spatially projects onto s at t & c occupies spatial region s' at t & s is a continuant part of s' at t",
+      "skos:example": "A process of digestion occurs in the interior of an organism; a process of loading artillery rounds into a tank cannon occurs in the interior of the tank"
+    },
+    {
+      "@id": "bfo:generically-depends-on",
+      "@type": [
+        "owl:ObjectProperty"
+      ],
+      "dc:identifier": "252-BFO",
+      "rdfs:domain": "bfo:generically-dependent-continuant",
+      "rdfs:label": "generically depends on",
+      "rdfs:range": "_:genid29",
+      "owl:inverseOf": {},
+      "owl:sameAs": "obo:BFO_0000084",
+      "skos:altLabel": "g-depends on",
+      "skos:definition": "b generically depends on c =Def b is a generically dependent continuant & c is an independent continuant that is not a spatial region & at some time t there inheres in c a specifically dependent continuant which concretizes b at t",
+      "skos:scopeNote": "Users that require more sophisticated representations of time are encouraged to import a temporal extension of BFO-Core provided by the BFO development team. See documentation for guidance: <https://github.com/BFO-ontology/BFO-2020/tree/master/src/owl/profiles/temporal%20extensions>"
+    },
+    {
+      "@id": "bfo:is-carrier-of",
+      "@type": [
+        "owl:ObjectProperty"
+      ],
+      "dc:identifier": "254-BFO",
+      "rdfs:domain": "_:genid33",
+      "rdfs:label": "is carrier of",
+      "rdfs:range": "bfo:generically-dependent-continuant",
+      "owl:sameAs": "obo:BFO_0000101",
+      "skos:definition": "b is carrier of c =Def there is some time t such that c generically depends on b at t",
+      "skos:scopeNote": "Users that require more sophisticated representations of time are encouraged to import a temporal extension of BFO-Core provided by the BFO development team. See documentation for guidance: <https://github.com/BFO-ontology/BFO-2020/tree/master/src/owl/profiles/temporal%20extensions>"
+    },
+    {
+      "@id": "bfo:exists-at",
+      "@type": [
+        "owl:ObjectProperty"
+      ],
+      "dc:identifier": "118-BFO",
+      "rdfs:domain": "bfo:entity",
+      "rdfs:label": "exists at",
+      "rdfs:range": "bfo:temporal-region",
+      "owl:sameAs": "obo:BFO_0000108",
+      "skos:definition": "(Elucidation) exists at is a relation between a particular and some temporal region at which the particular exists",
+      "skos:example": "First World War exists at 1914-1916; Mexico exists at January 1, 2000"
+    },
+    {
+      "@id": "bfo:has-member-part",
+      "@type": [
+        "owl:ObjectProperty"
+      ],
+      "dc:identifier": "230-BFO",
+      "rdfs:domain": "bfo:material-entity",
+      "rdfs:label": "has member part",
+      "rdfs:range": "bfo:material-entity",
+      "rdfs:subPropertyOf": "obo:BFO_0000178",
+      "owl:inverseOf": {},
+      "owl:sameAs": "obo:BFO_0000115",
+      "skos:definition": "b has member part c =Def c member part of b",
+      "skos:scopeNote": "Users that require more sophisticated representations of time are encouraged to import a temporal extension of BFO-Core provided by the BFO development team. See documentation for guidance: <https://github.com/BFO-ontology/BFO-2020/tree/master/src/owl/profiles/temporal%20extensions>"
+    },
+    {
+      "@id": "bfo:has-occurrent-part",
+      "@type": [
+        "owl:ObjectProperty",
+        "owl:TransitiveProperty"
+      ],
+      "dc:identifier": "202-BFO",
+      "rdfs:domain": "bfo:occurrent",
+      "rdfs:label": "has occurrent part",
+      "rdfs:range": "bfo:occurrent",
+      "owl:inverseOf": {},
+      "owl:sameAs": "obo:BFO_0000117",
+      "skos:definition": "b has occurrent part c =Def c occurrent part of b",
+      "skos:example": "Mary's life has occurrent part Mary's 5th birthday"
+    },
+    {
+      "@id": "bfo:has-temporal-part",
+      "@type": [
+        "owl:ObjectProperty",
+        "owl:TransitiveProperty"
+      ],
+      "dc:identifier": "211-BFO",
+      "rdfs:domain": "bfo:occurrent",
+      "rdfs:label": "has temporal part",
+      "rdfs:range": "bfo:occurrent",
+      "rdfs:subPropertyOf": "obo:BFO_0000117",
+      "owl:inverseOf": {},
+      "owl:sameAs": "obo:BFO_0000121",
+      "skos:definition": "b has temporal part c =Def c temporal part of b",
+      "skos:example": "Your life has temporal part the first year of your life"
+    },
+    {
+      "@id": "bfo:location-of",
+      "@type": [
+        "owl:ObjectProperty"
+      ],
+      "dc:identifier": "236-BFO",
+      "rdfs:domain": "_:genid37",
+      "rdfs:label": "location of",
+      "rdfs:range": "_:genid41",
+      "owl:inverseOf": {},
+      "owl:sameAs": "obo:BFO_0000124",
+      "skos:definition": "b location of c =Def c located in b",
+      "skos:scopeNote": "Users that require more sophisticated representations of time are encouraged to import a temporal extension of BFO-Core provided by the BFO development team. See documentation for guidance: <https://github.com/BFO-ontology/BFO-2020/tree/master/src/owl/profiles/temporal%20extensions>"
+    },
+    {
+      "@id": "bfo:material-basis-of",
+      "@type": [
+        "owl:ObjectProperty"
+      ],
+      "dc:identifier": "244-BFO",
+      "rdfs:domain": "bfo:material-entity",
+      "rdfs:label": "material basis of",
+      "rdfs:range": "bfo:disposition",
+      "owl:inverseOf": {},
+      "owl:sameAs": "obo:BFO_0000127",
+      "skos:definition": "b material basis of c =Def c has material basis b",
+      "skos:scopeNote": "Users that require more sophisticated representations of time are encouraged to import a temporal extension of BFO-Core provided by the BFO development team. See documentation for guidance: <https://github.com/BFO-ontology/BFO-2020/tree/master/src/owl/profiles/temporal%20extensions>"
+    },
+    {
+      "@id": "bfo:member-part-of",
+      "@type": [
+        "owl:ObjectProperty"
+      ],
+      "dc:identifier": "228-BFO",
+      "rdfs:domain": "bfo:material-entity",
+      "rdfs:label": "member part of",
+      "rdfs:range": "bfo:material-entity",
+      "rdfs:subPropertyOf": "obo:BFO_0000176",
+      "owl:sameAs": "obo:BFO_0000129",
+      "skos:definition": "b member part of c =Def b is an object & c is a material entity & there is some time t such that b continuant part of c at t & there is a mutually exhaustive and pairwise disjoint partition of c into objects x1, ..., xn (for some n ≠ 1) with b = xi (for some 1 <= i <= n)",
+      "skos:scopeNote": "Users that require more sophisticated representations of time are encouraged to import a temporal extension of BFO-Core provided by the BFO development team. See documentation for guidance: <https://github.com/BFO-ontology/BFO-2020/tree/master/src/owl/profiles/temporal%20extensions>"
+    },
+    {
+      "@id": "bfo:occurrent-part-of",
+      "@type": [
+        "owl:ObjectProperty",
+        "owl:TransitiveProperty"
+      ],
+      "dc:identifier": "003-BFO",
+      "rdfs:domain": "bfo:occurrent",
+      "rdfs:label": "occurrent part of",
+      "rdfs:range": "bfo:occurrent",
+      "owl:sameAs": "obo:BFO_0000132",
+      "skos:definition": "(Elucidation) occurrent part of is a relation between occurrents b and c when b is part of c",
+      "skos:example": "Mary's 5th birthday is an occurrent part of Mary's life; the first set of the tennis match is an occurrent part of the tennis match"
+    },
+    {
+      "@id": "bfo:temporal-part-of",
+      "@type": [
+        "owl:ObjectProperty",
+        "owl:TransitiveProperty"
+      ],
+      "dc:identifier": "078-BFO",
+      "rdfs:domain": "bfo:occurrent",
+      "rdfs:label": "temporal part of",
+      "rdfs:range": "bfo:occurrent",
+      "rdfs:subPropertyOf": "obo:BFO_0000132",
+      "owl:sameAs": "obo:BFO_0000139",
+      "skos:definition": "b temporal part of c =Def b occurrent part of c & (b and c are temporal regions) or (b and c are spatiotemporal regions & b temporally projects onto an occurrent part of the temporal region that c temporally projects onto) or (b and c are processes or process boundaries & b occupies a temporal region that is an occurrent part of the temporal region that c occupies)",
+      "skos:example": "Your heart beating from 4pm to 5pm today is a temporal part of the process of your heart beating; the 4th year of your life is a temporal part of your life, as is the process boundary which separates the 3rd and 4th years of your life; the first quarter of a game of football is a temporal part of the whole game"
+    },
+    {
+      "@id": "bfo:continuant-fiat-boundary",
+      "@type": [
+        "owl:Class"
+      ],
+      "dc:identifier": "029-BFO",
+      "rdfs:label": "continuant fiat boundary",
+      "rdfs:subClassOf": [
+        "bfo:immaterial-entity",
+        "_:genid145",
+        "_:genid146"
+      ],
+      "owl:sameAs": "obo:BFO_0000140",
+      "skos:definition": "(Elucidation) A continuant fiat boundary b is an immaterial entity that is of zero, one or two dimensions & such that there is no time t when b has a spatial region as continuant part & whose location is determined in relation to some material entity",
+      "skos:example": "As for fiat point, fiat line, fiat surface"
+    },
+    {
+      "@id": "bfo:immaterial-entity",
+      "@type": [
+        "owl:Class"
+      ],
+      "dc:identifier": "028-BFO",
+      "rdfs:label": "immaterial entity",
+      "rdfs:subClassOf": "bfo:independent-continuant",
+      "owl:sameAs": "obo:BFO_0000141",
+      "skos:definition": "b is an immaterial entity =Def b is an independent continuant which is such that there is no time t when it has a material entity as continuant part",
+      "skos:example": "As for fiat point, fiat line, fiat surface, site"
+    },
+    {
+      "@id": "bfo:fiat-line",
+      "@type": [
+        "owl:Class"
+      ],
+      "dc:identifier": "032-BFO",
+      "rdfs:label": "fiat line",
+      "rdfs:subClassOf": [
+        "bfo:continuant-fiat-boundary",
+        "_:genid147"
+      ],
+      "owl:sameAs": "obo:BFO_0000142",
+      "skos:definition": "(Elucidation) A fiat line is a one-dimensional continuant fiat boundary that is continuous",
+      "skos:example": "The Equator; all geopolitical boundaries; all lines of latitude and longitude; the median sulcus of your tongue; the line separating the outer surface of the mucosa of the lower lip from the outer surface of the skin of the chin"
+    },
+    {
+      "@id": "bfo:relational-quality",
+      "@type": [
+        "owl:Class"
+      ],
+      "dc:identifier": "057-BFO",
+      "rdfs:label": "relational quality",
+      "rdfs:subClassOf": "bfo:quality",
+      "owl:sameAs": "obo:BFO_0000145",
+      "skos:definition": "b is a relational quality =Def b is a quality & there exists c and d such that c and d are not identical & b specifically depends on c & b specifically depends on d",
+      "skos:example": "A marriage bond; an instance of love; an obligation between one person and another"
+    },
+    {
+      "@id": "bfo:fiat-surface",
+      "@type": [
+        "owl:Class"
+      ],
+      "dc:identifier": "033-BFO",
+      "rdfs:label": "fiat surface",
+      "rdfs:subClassOf": [
+        "bfo:continuant-fiat-boundary",
+        "_:genid151"
+      ],
+      "owl:sameAs": "obo:BFO_0000146",
+      "skos:definition": "(Elucidation) A fiat surface is a two-dimensional continuant fiat boundary that is self-connected",
+      "skos:example": "The surface of the Earth; the plane separating the smoking from the non-smoking zone in a restaurant"
+    },
+    {
+      "@id": "bfo:fiat-point",
+      "@type": [
+        "owl:Class"
+      ],
+      "dc:identifier": "031-BFO",
+      "rdfs:label": "fiat point",
+      "rdfs:subClassOf": [
+        "bfo:continuant-fiat-boundary",
+        "_:genid152"
+      ],
+      "owl:sameAs": "obo:BFO_0000147",
+      "skos:definition": "(Elucidation) A fiat point is a zero-dimensional continuant fiat boundary that consists of a single point",
+      "skos:example": "The geographic North Pole; the quadripoint where the boundaries of Colorado, Utah, New Mexico and Arizona meet; the point of origin of some spatial coordinate system"
+    },
+    {
+      "@id": "bfo:zero-dimensional-temporal-region",
+      "@type": [
+        "owl:Class"
+      ],
+      "dc:identifier": "102-BFO",
+      "rdfs:label": "zero-dimensional temporal region",
+      "rdfs:subClassOf": [
+        "bfo:temporal-region",
+        "_:genid153"
+      ],
+      "owl:sameAs": "obo:BFO_0000148",
+      "skos:definition": "(Elucidation) A zero-dimensional temporal region is a temporal region that is a whole consisting of one or more separated temporal instants as parts",
+      "skos:example": "A temporal region that is occupied by a process boundary; the moment at which a finger is detached in an industrial accident"
+    },
+    {
+      "@id": "bfo:temporally-projects-onto",
+      "@type": [
+        "owl:FunctionalProperty",
+        "owl:ObjectProperty"
+      ],
+      "dc:identifier": "080-BFO",
+      "rdfs:domain": "bfo:spatiotemporal-region",
+      "rdfs:label": "temporally projects onto",
+      "rdfs:range": "bfo:temporal-region",
+      "owl:sameAs": "obo:BFO_0000153",
+      "skos:definition": "(Elucidation) temporally projects onto is a relation between a spatiotemporal region s and some temporal region which is the temporal extent of s",
+      "skos:example": "The world line of a particle temporally projects onto the temporal region extending from the beginning to the end of the existence of the particle"
+    },
+    {
+      "@id": "bfo:located-in",
+      "@type": [
+        "owl:ObjectProperty"
+      ],
+      "dc:identifier": "234-BFO",
+      "rdfs:domain": "_:genid45",
+      "rdfs:label": "located in",
+      "rdfs:range": "_:genid49",
+      "owl:sameAs": "obo:BFO_0000171",
+      "skos:definition": "b located in c =Def b is an independent continuant & c is an independent & neither is a spatial region & there is some time t such that the spatial region which b occupies at t is continuant part of the spatial region which c occupies at t",
+      "skos:scopeNote": "Users that require more sophisticated representations of time are encouraged to import a temporal extension of BFO-Core provided by the BFO development team. See documentation for guidance: <https://github.com/BFO-ontology/BFO-2020/tree/master/src/owl/profiles/temporal%20extensions>"
+    },
+    {
+      "@id": "bfo:continuant-part-of",
+      "@type": [
+        "owl:ObjectProperty"
+      ],
+      "dc:identifier": "221-BFO",
+      "rdfs:domain": "bfo:continuant",
+      "rdfs:label": "continuant part of",
+      "rdfs:range": "bfo:continuant",
+      "owl:inverseOf": {},
+      "owl:sameAs": "obo:BFO_0000176",
+      "skos:definition": "b continuant part of c =Def b and c are continuants & there is some time t such that b and c exist at t & b part of c at t",
+      "skos:example": "Milk teeth continuant part of human; surgically removed tumour continuant part of organism",
+      "skos:scopeNote": "Users that require more sophisticated representations of time are encouraged to import a temporal extension of BFO-Core provided by the BFO development team. See documentation for guidance: <https://github.com/BFO-ontology/BFO-2020/tree/master/src/owl/profiles/temporal%20extensions>"
+    },
+    {
+      "@id": "bfo:has-continuant-part",
+      "@type": [
+        "owl:ObjectProperty"
+      ],
+      "dc:identifier": "271-BFO",
+      "rdfs:domain": "bfo:continuant",
+      "rdfs:label": "has continuant part",
+      "rdfs:range": "bfo:continuant",
+      "owl:sameAs": "obo:BFO_0000178",
+      "skos:definition": "b has continuant part c =Def c continuant part of b",
+      "skos:scopeNote": "Users that require more sophisticated representations of time are encouraged to import a temporal extension of BFO-Core provided by the BFO development team. See documentation for guidance: <https://github.com/BFO-ontology/BFO-2020/tree/master/src/owl/profiles/temporal%20extensions>"
+    },
+    {
+      "@id": "bfo:history",
+      "@type": [
+        "owl:Class"
+      ],
+      "dc:identifier": "138-BFO",
+      "rdfs:label": "history",
+      "rdfs:subClassOf": "bfo:process",
+      "owl:sameAs": "obo:BFO_0000182",
+      "skos:definition": "(Elucidation) A history is a process that is the sum of the totality of processes taking place in the spatiotemporal region occupied by the material part of a material entity",
+      "skos:example": "The life of an organism from the beginning to the end of its existence"
+    },
+    {
+      "@id": "bfo:environs",
+      "@type": [
+        "owl:ObjectProperty"
+      ],
+      "dc:identifier": "267-BFO",
+      "rdfs:domain": "_:genid53",
+      "rdfs:label": "environs",
+      "rdfs:range": "_:genid56",
+      "owl:sameAs": "obo:BFO_0000183",
+      "skos:altLabel": "contains process",
+      "skos:definition": "b environs c =Def c occurs in b",
+      "skos:example": "Mouth environs process of mastication; city environs traffic"
+    },
+    {
+      "@id": "bfo:history-of",
+      "@type": [
+        "owl:FunctionalProperty",
+        "owl:InverseFunctionalProperty",
+        "owl:ObjectProperty"
+      ],
+      "dc:identifier": "144-BFO",
+      "rdfs:domain": "bfo:history",
+      "rdfs:label": "history of",
+      "rdfs:range": "bfo:material-entity",
+      "owl:inverseOf": {},
+      "owl:sameAs": "obo:BFO_0000184",
+      "skos:definition": "(Elucidation) history of is a relation between history b and material entity c such that b is the unique history of c",
+      "skos:example": "This life is the history of this organism"
+    },
+    {
+      "@id": "bfo:has-history",
+      "@type": [
+        "owl:ObjectProperty"
+      ],
+      "dc:identifier": "145-BFO",
+      "rdfs:domain": "bfo:material-entity",
+      "rdfs:label": "has history",
+      "rdfs:range": "bfo:history",
+      "owl:sameAs": "obo:BFO_0000185",
+      "skos:definition": "b has history c =Def c history of b",
+      "skos:example": "This organism has history this life"
+    },
+    {
+      "@id": "bfo:specifically-depended-on-by",
+      "@type": [
+        "owl:ObjectProperty"
+      ],
+      "dc:identifier": "260-BFO",
+      "rdfs:domain": "_:genid59",
+      "rdfs:label": "specifically depended on by",
+      "rdfs:range": "bfo:specifically-dependent-continuant",
+      "owl:inverseOf": {},
+      "owl:sameAs": "obo:BFO_0000194",
+      "skos:altLabel": "s-depended on by",
+      "skos:definition": "b specifically depended on by c =Def c specifically depends on b",
+      "skos:example": "Coloured object specifically depended on by colour"
+    },
+    {
+      "@id": "bfo:specifically-depends-on",
+      "@type": [
+        "owl:ObjectProperty"
+      ],
+      "dc:identifier": "012-BFO",
+      "rdfs:domain": "bfo:specifically-dependent-continuant",
+      "rdfs:label": "specifically depends on",
+      "rdfs:range": "_:genid66",
+      "owl:sameAs": "obo:BFO_0000195",
+      "skos:altLabel": "s-depends on",
+      "skos:definition": "(Elucidation) specifically depends on is a relation between a specifically dependent continuant b and specifically dependent continuant or independent continuant that is not a spatial region c such that b and c share no parts in common & b is of a nature such that at all times t it cannot exist unless c exists & b is not a boundary of c",
+      "skos:example": "A shape specifically depends on the shaped object; hue, saturation and brightness of a colour sample specifically depends on each other",
+      "skos:scopeNote": "The analogue of specifically depends on for occurrents is has participant."
+    },
+    {
+      "@id": "bfo:bearer-of",
+      "@type": [
+        "owl:ObjectProperty"
+      ],
+      "dc:identifier": "053-BFO",
+      "rdfs:domain": "_:genid73",
+      "rdfs:label": "bearer of",
+      "rdfs:range": "bfo:specifically-dependent-continuant",
+      "rdfs:subPropertyOf": "obo:BFO_0000194",
+      "owl:inverseOf": {},
+      "owl:sameAs": "obo:BFO_0000196",
+      "skos:definition": "b bearer of c =Def c inheres in b",
+      "skos:example": "A patch of ink is the bearer of a colour quality; an organism is the bearer of a temperature quality"
+    },
+    {
+      "@id": "bfo:inheres-in",
+      "@type": [
+        "owl:ObjectProperty"
+      ],
+      "dc:identifier": "051-BFO",
+      "rdfs:domain": "bfo:specifically-dependent-continuant",
+      "rdfs:label": "inheres in",
+      "rdfs:range": "_:genid77",
+      "rdfs:subPropertyOf": "obo:BFO_0000195",
+      "owl:sameAs": "obo:BFO_0000197",
+      "skos:definition": "b inheres in c =Def b is a specifically dependent continuant & c is an independent continuant that is not a spatial region & b specifically depends on c",
+      "skos:example": "A shape inheres in a shaped object; a mass inheres in a material entity"
+    },
+    {
+      "@id": "bfo:occupies-temporal-region",
+      "@type": [
+        "owl:FunctionalProperty",
+        "owl:ObjectProperty"
+      ],
+      "dc:identifier": "132-BFO",
+      "rdfs:domain": "_:genid81",
+      "rdfs:label": "occupies temporal region",
+      "rdfs:range": "bfo:temporal-region",
+      "owl:sameAs": "obo:BFO_0000199",
+      "skos:definition": "p occupies temporal region t =Def p is a process or process boundary & the spatiotemporal region occupied by p temporally projects onto t",
+      "skos:example": "The Second World War occupies the temporal region September 1, 1939 - September 2, 1945"
+    },
+    {
+      "@id": "bfo:occupies-spatiotemporal-region",
+      "@type": [
+        "owl:FunctionalProperty",
+        "owl:ObjectProperty"
+      ],
+      "dc:identifier": "082-BFO",
+      "rdfs:domain": "_:genid84",
+      "rdfs:label": "occupies spatiotemporal region",
+      "rdfs:range": "bfo:spatiotemporal-region",
+      "owl:sameAs": "obo:BFO_0000200",
+      "skos:definition": "(Elucidation) occupies spatiotemporal region is a relation between a process or process boundary p and the spatiotemporal region s which is its spatiotemporal extent",
+      "skos:example": "A particle emitted by a nuclear reactor occupies the spatiotemporal region which is its trajectory"
+    },
+    {
+      "@id": "bfo:temporal-interval",
+      "@type": [
+        "owl:Class"
+      ],
+      "dc:identifier": "155-BFO",
+      "rdfs:label": "temporal interval",
+      "rdfs:subClassOf": "bfo:one-dimensional-temporal-region",
+      "owl:sameAs": "obo:BFO_0000202",
+      "skos:definition": "(Elucidation) A temporal interval is a one-dimensional temporal region that is continuous, thus without gaps or breaks",
+      "skos:example": "The year 2018.",
+      "skos:scopeNote": "A one-dimensional temporal region can include as parts not only temporal intervals but also temporal instants separated from other parts by gaps."
+    },
+    {
+      "@id": "bfo:temporal-instant",
+      "@type": [
+        "owl:Class"
+      ],
+      "dc:identifier": "209-BFO",
+      "rdfs:label": "temporal instant",
+      "rdfs:subClassOf": "bfo:zero-dimensional-temporal-region",
+      "owl:sameAs": "obo:BFO_0000203",
+      "skos:definition": "(Elucidation) A temporal instant is a zero-dimensional temporal region that has no proper temporal part",
+      "skos:example": "The millennium"
+    },
+    {
+      "@id": "bfo:occupies-spatial-region",
+      "@type": [
+        "owl:ObjectProperty"
+      ],
+      "dc:identifier": "232-BFO",
+      "rdfs:domain": "_:genid87",
+      "rdfs:label": "occupies spatial region",
+      "rdfs:range": "bfo:spatial-region",
+      "owl:sameAs": "obo:BFO_0000210",
+      "skos:definition": "b occupies spatial region r =Def b is an independent continuant that is not a spatial region & r is a spatial region & there is some time t such that every continuant part of b occupies some continuant part of r at t and no continuant part of b occupies any spatial region that is not a continuant part of r at t",
+      "skos:scopeNote": "Users that require more sophisticated representations of time are encouraged to import a temporal extension of BFO-Core provided by the BFO development team. See documentation for guidance: <https://github.com/BFO-ontology/BFO-2020/tree/master/src/owl/profiles/temporal%20extensions>"
+    },
+    {
+      "@id": "bfo:spatially-projects-onto",
+      "@type": [
+        "owl:ObjectProperty"
+      ],
+      "dc:identifier": "246-BFO",
+      "rdfs:domain": "bfo:spatiotemporal-region",
+      "rdfs:label": "spatially projects onto",
+      "rdfs:range": "bfo:spatial-region",
+      "owl:sameAs": "obo:BFO_0000216",
+      "skos:definition": "(Elucidation) spatially projects onto is a relation between some spatiotemporal region b and spatial region c such that at some time t, c is the spatial extent of b at t",
+      "skos:scopeNote": "Users that require more sophisticated representations of time are encouraged to import a temporal extension of BFO-Core provided by the BFO development team. See documentation for guidance: <https://github.com/BFO-ontology/BFO-2020/tree/master/src/owl/profiles/temporal%20extensions>"
+    },
+    {
+      "@id": "bfo:has-material-basis",
+      "@type": [
+        "owl:ObjectProperty"
+      ],
+      "dc:identifier": "242-BFO",
+      "rdfs:domain": "bfo:disposition",
+      "rdfs:label": "has material basis",
+      "rdfs:range": "bfo:material-entity",
+      "owl:sameAs": "obo:BFO_0000218",
+      "skos:definition": "b has material basis c =Def b is a disposition & c is a material entity & there is some d bearer of b & there is some time t such that c is a continuant part of d at t & d has disposition b because c is a continuant part of d at t",
+      "skos:scopeNote": "Users that require more sophisticated representations of time are encouraged to import a temporal extension of BFO-Core provided by the BFO development team. See documentation for guidance: <https://github.com/BFO-ontology/BFO-2020/tree/master/src/owl/profiles/temporal%20extensions>"
+    },
+    {
+      "@id": "bfo:first-instant-of",
+      "@type": [
+        "owl:ObjectProperty"
+      ],
+      "dc:identifier": "268-BFO",
+      "rdfs:domain": "bfo:temporal-instant",
+      "rdfs:label": "first instant of",
+      "rdfs:range": "bfo:temporal-region",
+      "owl:inverseOf": {},
+      "owl:sameAs": "obo:BFO_0000221",
+      "skos:definition": "t first instant of t' =Def t is a temporal instant & t' is a temporal region t' & t precedes all temporal parts of t' other than t",
+      "skos:example": "An hour starting at midnight yesterday has first instant midnight yesterday"
+    },
+    {
+      "@id": "bfo:has-first-instant",
+      "@type": [
+        "owl:FunctionalProperty",
+        "owl:ObjectProperty"
+      ],
+      "dc:identifier": "261-BFO",
+      "rdfs:domain": "bfo:temporal-region",
+      "rdfs:label": "has first instant",
+      "rdfs:range": "bfo:temporal-instant",
+      "owl:sameAs": "obo:BFO_0000222",
+      "skos:definition": "t has first instant t' =Def t' first instant of t",
+      "skos:example": "The first hour of a year has first instant midnight on December 31"
+    },
+    {
+      "@id": "bfo:last-instant-of",
+      "@type": [
+        "owl:ObjectProperty"
+      ],
+      "dc:identifier": "269-BFO",
+      "rdfs:domain": "bfo:temporal-instant",
+      "rdfs:label": "last instant of",
+      "rdfs:range": "bfo:temporal-region",
+      "owl:inverseOf": {},
+      "owl:sameAs": "obo:BFO_0000223",
+      "skos:definition": "t last instant of t' =Def t is a temporal instant & t' is a temporal region & all temporal parts of t' other than t precede t",
+      "skos:example": "Last midnight is the last instant of yesterday"
+    },
+    {
+      "@id": "bfo:has-last-instant",
+      "@type": [
+        "owl:FunctionalProperty",
+        "owl:ObjectProperty"
+      ],
+      "dc:identifier": "215-BFO",
+      "rdfs:domain": "bfo:temporal-region",
+      "rdfs:label": "has last instant",
+      "rdfs:range": "bfo:temporal-instant",
+      "owl:sameAs": "obo:BFO_0000224",
+      "skos:definition": "t has last instant t' =Def t' last instant of t",
+      "skos:example": "The last hour of a year has last instant midnight December 31"
+    }
+  ]
+}
