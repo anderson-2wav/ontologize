@@ -585,9 +585,9 @@ export class OntologizeServer extends Ontologize {
       isTBoxResource = this._isTBoxResource(processedResource);
     }
 
-    // Step 5.5: Handle array property context updates
+    // Step 5.5: Handle property context updates (@type and @container)
     if (ensureArrayProps && this._isPropertyResource(processedResource)) {
-      await this._ensureArrayPropertyContext(processedResource, contextCollection);
+      await this.ensurePropertyContext(processedResource, contextCollection);
     }
 
     // Step 6: Save to appropriate collection(s)
@@ -1653,60 +1653,116 @@ INSERT DATA {
   }
 
   /**
-   * Ensure that array properties have proper @container context
-   * @param {Object} resource - The property resource to check
-   * @param {Object} contextCollection - The Context collection to update
+   * Determine the appropriate @type value for a property's context entry
+   * based on its OWL type and rdfs:range.
+   *
+   * @param {Object} resource - The property resource
+   * @returns {string|null} The @type value for context, or null if undetermined
    * @private
    */
-  async _ensureArrayPropertyContext(resource, contextCollection) {
+  _getPropertyContextType(resource) {
+    const XSD_PREFIX = "http://www.w3.org/2001/XMLSchema#";
+    const types = Array.isArray(resource["@type"]) ? resource["@type"] : [resource["@type"]];
+
+    // ObjectProperty → "@id"
+    if (types.includes("owl:ObjectProperty")) {
+      return "@id";
+    }
+
+    // DatatypeProperty → check rdfs:range for XSD type
+    if (types.includes("owl:DatatypeProperty") && resource["rdfs:range"]) {
+      const range = resource["rdfs:range"];
+      // Expand xsd: prefix
+      if (range.startsWith("xsd:")) {
+        return XSD_PREFIX + range.substring(4);
+      }
+      // Already full XSD URI
+      if (range.startsWith(XSD_PREFIX)) {
+        return range;
+      }
+    }
+
+    // Default for ObjectProperty-like behavior (range points to a class)
+    if (resource["rdfs:range"] && !resource["rdfs:range"].startsWith("xsd:")) {
+      return "@id";
+    }
+
+    return null; // No type determination possible
+  }
+
+  /**
+   * Ensure that properties have proper @type and @container context entries
+   * based on their ontology definitions.
+   *
+   * For ObjectProperty: adds @type: "@id"
+   * For DatatypeProperty: adds @type with the XSD URI from rdfs:range
+   * For array properties: adds @container: "@list" or "@set"
+   *
+   * @param {Object} resource - The property resource to check
+   * @param {Object} contextCollection - The Context collection to update
+   */
+  async ensurePropertyContext(resource, contextCollection) {
     if (!resource._id) {
       return;
     }
 
     try {
-      // Check if this property should be an array using the existing isArrayProperty method
-      // Pass the resource object directly so it can check bold:container property
-      const shouldBeArray = await this.isArrayProperty(resource);
-
-      if (shouldBeArray) {
-        // Get the current context document
-        const existingContextDoc = await contextCollection.findOne({ _id: "@id" });
-
-        if (existingContextDoc) {
-          // Check if this property already has @container set
-          const currentProperty = existingContextDoc[resource._id];
-
-          if (!currentProperty || !currentProperty["@container"]) {
-            // Need to add @container: "@list" for this property
-            const contextUpdate = {
-              [resource._id]: {
-                "@type": "@id", // Default type for most properties
-                "@container": "@list"
-              }
-            };
-
-            // If the property already exists but doesn't have @container, preserve existing settings
-            if (currentProperty && typeof currentProperty === "object") {
-              contextUpdate[resource._id] = {
-                ...currentProperty,
-                "@container": "@list"
-              };
-            }
-
-            // Update the context document
-            await contextCollection.updateOne(
-              { _id: "@id" },
-              { $set: contextUpdate },
-              { upsert: true }
-            );
-
-            console.log(`Added @container: "@list" to context for property: ${resource._id}`);
-          }
+      // Lookup from Ontology if resource lacks rdfs:range or bold:container
+      let propertyDef = resource;
+      if (!resource["rdfs:range"] && !resource["bold:container"]) {
+        const ontologyDef = await this.collections.Ontology.findOne({ _id: resource._id });
+        if (ontologyDef) {
+          propertyDef = { ...resource, ...ontologyDef };
         }
       }
+
+      // Determine @type from property definition
+      const contextType = this._getPropertyContextType(propertyDef);
+
+      // Determine @container from existing isArrayProperty logic
+      const shouldBeArray = await this.isArrayProperty(propertyDef);
+      const containerType = shouldBeArray ? (propertyDef["bold:container"] || "@list") : null;
+
+      // Skip if nothing to add
+      if (!contextType && !containerType) {
+        return;
+      }
+
+      // Get current context document
+      const existingContextDoc = await contextCollection.findOne({ _id: "@id" });
+      if (!existingContextDoc) {
+        return;
+      }
+
+      const currentProperty = existingContextDoc[resource._id];
+
+      // Check if update needed
+      const needsTypeUpdate = contextType && (!currentProperty || currentProperty["@type"] !== contextType);
+      const needsContainerUpdate = containerType && (!currentProperty || !currentProperty["@container"]);
+
+      if (!needsTypeUpdate && !needsContainerUpdate) {
+        return;
+      }
+
+      // Build context update, preserving existing settings
+      const contextUpdate = {
+        [resource._id]: {
+          ...(currentProperty && typeof currentProperty === "object" ? currentProperty : {}),
+          ...(contextType ? { "@type": contextType } : {}),
+          ...(containerType ? { "@container": containerType } : {})
+        }
+      };
+
+      await contextCollection.updateOne(
+        { _id: "@id" },
+        { $set: contextUpdate },
+        { upsert: true }
+      );
+
+      console.log(`Updated context for property ${resource._id}: @type=${contextType}, @container=${containerType}`);
     }
     catch (error) {
-      console.warn(`Failed to ensure array property context for ${resource._id}: ${error.message}`);
+      console.warn(`Failed to ensure property context for ${resource._id}: ${error.message}`);
     }
   }
 

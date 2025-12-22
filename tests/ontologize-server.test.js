@@ -679,4 +679,243 @@ describe("OntologizeServer", function () {
       assert.property(rdfsClass.instanceProperties, "rdfs:label");
     });
   });
+
+  describe("ensurePropertyContext", function () {
+    let ontologyCollection;
+    let contextCollection;
+
+    beforeEach(function () {
+      // Create mock collections with updateOne support
+      ontologyCollection = {
+        _documents: [],
+
+        findOne: async function(query) {
+          if (query._id) {
+            return this._documents.find(doc => doc._id === query._id) || null;
+          }
+          return this._documents[0] || null;
+        },
+
+        insertOne: async function(doc) {
+          this._documents.push({ ...doc });
+          return { insertedId: doc._id };
+        }
+      };
+
+      contextCollection = {
+        _documents: [
+          { _id: "@id", "@vocab": "https://ontology.2wav.com#" }
+        ],
+
+        findOne: async function(query) {
+          if (query._id === "@id") {
+            return this._documents.find(doc => doc._id === "@id") || null;
+          }
+          return null;
+        },
+
+        updateOne: async function(query, update, opts) {
+          const doc = this._documents.find(d => d._id === query._id);
+          if (doc && update.$set) {
+            Object.assign(doc, update.$set);
+            return { modifiedCount: 1, matchedCount: 1 };
+          }
+          else if (opts?.upsert && update.$set) {
+            this._documents.push({ _id: query._id, ...update.$set });
+            return { modifiedCount: 0, matchedCount: 0, upsertedCount: 1 };
+          }
+          return { modifiedCount: 0, matchedCount: 0 };
+        }
+      };
+
+      ontologizeServer = new OntologizeServer(ontologyCollection, contextCollection);
+    });
+
+    it("should add @type: '@id' for ObjectProperty", async function () {
+      const objectProperty = {
+        _id: "ex:hasParent",
+        "@type": ["owl:ObjectProperty"],
+        "rdfs:range": "ex:Person"
+      };
+
+      await ontologizeServer.ensurePropertyContext(objectProperty, contextCollection);
+
+      const context = await contextCollection.findOne({ _id: "@id" });
+      assert.isObject(context["ex:hasParent"]);
+      assert.equal(context["ex:hasParent"]["@type"], "@id");
+    });
+
+    it("should add @type with XSD URI for DatatypeProperty with xsd:string range", async function () {
+      const datatypeProperty = {
+        _id: "ex:name",
+        "@type": ["owl:DatatypeProperty"],
+        "rdfs:range": "xsd:string"
+      };
+
+      await ontologizeServer.ensurePropertyContext(datatypeProperty, contextCollection);
+
+      const context = await contextCollection.findOne({ _id: "@id" });
+      assert.isObject(context["ex:name"]);
+      assert.equal(context["ex:name"]["@type"], "http://www.w3.org/2001/XMLSchema#string");
+    });
+
+    it("should add @type with XSD URI for DatatypeProperty with xsd:integer range", async function () {
+      const datatypeProperty = {
+        _id: "ex:age",
+        "@type": ["owl:DatatypeProperty"],
+        "rdfs:range": "xsd:integer"
+      };
+
+      await ontologizeServer.ensurePropertyContext(datatypeProperty, contextCollection);
+
+      const context = await contextCollection.findOne({ _id: "@id" });
+      assert.isObject(context["ex:age"]);
+      assert.equal(context["ex:age"]["@type"], "http://www.w3.org/2001/XMLSchema#integer");
+    });
+
+    it("should add @type with XSD URI for DatatypeProperty with xsd:dateTime range", async function () {
+      const datatypeProperty = {
+        _id: "ex:birthDate",
+        "@type": ["owl:DatatypeProperty"],
+        "rdfs:range": "xsd:dateTime"
+      };
+
+      await ontologizeServer.ensurePropertyContext(datatypeProperty, contextCollection);
+
+      const context = await contextCollection.findOne({ _id: "@id" });
+      assert.isObject(context["ex:birthDate"]);
+      assert.equal(context["ex:birthDate"]["@type"], "http://www.w3.org/2001/XMLSchema#dateTime");
+    });
+
+    it("should add @container: '@list' for array property with bold:container", async function () {
+      const arrayProperty = {
+        _id: "ex:hasChildren",
+        "@type": ["owl:ObjectProperty"],
+        "rdfs:range": "ex:Person",
+        "bold:container": "@list"
+      };
+
+      await ontologizeServer.ensurePropertyContext(arrayProperty, contextCollection);
+
+      const context = await contextCollection.findOne({ _id: "@id" });
+      assert.isObject(context["ex:hasChildren"]);
+      assert.equal(context["ex:hasChildren"]["@container"], "@list");
+    });
+
+    it("should add @container: '@set' for array property with bold:container @set", async function () {
+      const arrayProperty = {
+        _id: "ex:hasTags",
+        "@type": ["owl:DatatypeProperty"],
+        "rdfs:range": "xsd:string",
+        "bold:container": "@set"
+      };
+
+      await ontologizeServer.ensurePropertyContext(arrayProperty, contextCollection);
+
+      const context = await contextCollection.findOne({ _id: "@id" });
+      assert.isObject(context["ex:hasTags"]);
+      assert.equal(context["ex:hasTags"]["@container"], "@set");
+    });
+
+    it("should add both @type and @container when both apply", async function () {
+      const combinedProperty = {
+        _id: "ex:hasMembers",
+        "@type": ["owl:ObjectProperty"],
+        "rdfs:range": "ex:Person",
+        "bold:container": "@list"
+      };
+
+      await ontologizeServer.ensurePropertyContext(combinedProperty, contextCollection);
+
+      const context = await contextCollection.findOne({ _id: "@id" });
+      assert.isObject(context["ex:hasMembers"]);
+      assert.equal(context["ex:hasMembers"]["@type"], "@id");
+      assert.equal(context["ex:hasMembers"]["@container"], "@list");
+    });
+
+    it("should preserve existing context settings when adding new ones", async function () {
+      // Pre-populate with existing property context
+      contextCollection._documents[0]["ex:existingProp"] = {
+        "@type": "@id",
+        "customField": "preserved"
+      };
+
+      const arrayProperty = {
+        _id: "ex:existingProp",
+        "@type": ["owl:ObjectProperty"],
+        "rdfs:range": "ex:Thing",
+        "bold:container": "@list"
+      };
+
+      await ontologizeServer.ensurePropertyContext(arrayProperty, contextCollection);
+
+      const context = await contextCollection.findOne({ _id: "@id" });
+      assert.isObject(context["ex:existingProp"]);
+      assert.equal(context["ex:existingProp"]["@type"], "@id");
+      assert.equal(context["ex:existingProp"]["@container"], "@list");
+      assert.equal(context["ex:existingProp"]["customField"], "preserved");
+    });
+
+    it("should lookup property from Ontology if resource lacks rdfs:range", async function () {
+      // Add property definition to ontology collection
+      await ontologyCollection.insertOne({
+        _id: "ex:lookupProp",
+        "@type": ["owl:DatatypeProperty"],
+        "rdfs:range": "xsd:boolean"
+      });
+
+      // Property resource without rdfs:range (will be looked up)
+      const propertyWithoutRange = {
+        _id: "ex:lookupProp",
+        "@type": ["owl:DatatypeProperty"]
+      };
+
+      await ontologizeServer.ensurePropertyContext(propertyWithoutRange, contextCollection);
+
+      const context = await contextCollection.findOne({ _id: "@id" });
+      assert.isObject(context["ex:lookupProp"]);
+      assert.equal(context["ex:lookupProp"]["@type"], "http://www.w3.org/2001/XMLSchema#boolean");
+    });
+
+    it("should handle property without rdfs:range gracefully", async function () {
+      const propertyWithoutRange = {
+        _id: "ex:unknownProp",
+        "@type": ["rdf:Property"]
+      };
+
+      // Should not throw, just skip
+      await ontologizeServer.ensurePropertyContext(propertyWithoutRange, contextCollection);
+
+      const context = await contextCollection.findOne({ _id: "@id" });
+      // Property should not be added since we can't determine @type or @container
+      assert.notProperty(context, "ex:unknownProp");
+    });
+
+    it("should not update context if property already has correct settings", async function () {
+      // Pre-populate with existing property context
+      contextCollection._documents[0]["ex:alreadySet"] = {
+        "@type": "@id",
+        "@container": "@list"
+      };
+
+      let updateCount = 0;
+      const originalUpdateOne = contextCollection.updateOne;
+      contextCollection.updateOne = async function(...args) {
+        updateCount++;
+        return originalUpdateOne.apply(this, args);
+      };
+
+      const property = {
+        _id: "ex:alreadySet",
+        "@type": ["owl:ObjectProperty"],
+        "rdfs:range": "ex:Thing",
+        "bold:container": "@list"
+      };
+
+      await ontologizeServer.ensurePropertyContext(property, contextCollection);
+
+      // Should not call updateOne since nothing needs to change
+      assert.equal(updateCount, 0);
+    });
+  });
 });
