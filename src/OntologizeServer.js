@@ -1698,21 +1698,21 @@ INSERT DATA {
    * For DatatypeProperty: adds @type with the XSD URI from rdfs:range
    * For array properties: adds @container: "@list" or "@set"
    *
-   * @param {Object} resource - The property resource to check
+   * @param {Object} propertyResource - The property resource to check
    * @param {Object} contextCollection - The Context collection to update
    */
-  async ensurePropertyContext(resource, contextCollection) {
-    if (!resource._id) {
+  async ensurePropertyContext(propertyResource, contextCollection) {
+    if (!propertyResource._id) {
       return;
     }
 
     try {
       // Lookup from Ontology if resource lacks rdfs:range or bold:container
-      let propertyDef = resource;
-      if (!resource["rdfs:range"] && !resource["bold:container"]) {
-        const ontologyDef = await this.collections.Ontology.findOne({ _id: resource._id });
+      let propertyDef = propertyResource;
+      if (!propertyResource["rdfs:range"] && !propertyResource["bold:container"]) {
+        const ontologyDef = await this.collections.Ontology.findOne({ _id: propertyResource._id });
         if (ontologyDef) {
-          propertyDef = { ...resource, ...ontologyDef };
+          propertyDef = { ...propertyResource, ...ontologyDef };
         }
       }
 
@@ -1734,11 +1734,11 @@ INSERT DATA {
         return;
       }
 
-      const currentProperty = existingContextDoc[resource._id];
+      const currentPropertyContext = existingContextDoc[propertyResource._id];
 
       // Check if update needed
-      const needsTypeUpdate = contextType && (!currentProperty || currentProperty["@type"] !== contextType);
-      const needsContainerUpdate = containerType && (!currentProperty || !currentProperty["@container"]);
+      const needsTypeUpdate = contextType && (!currentPropertyContext || currentPropertyContext["@type"] !== contextType);
+      const needsContainerUpdate = containerType && (!currentPropertyContext || !currentPropertyContext["@container"]);
 
       if (!needsTypeUpdate && !needsContainerUpdate) {
         return;
@@ -1746,8 +1746,8 @@ INSERT DATA {
 
       // Build context update, preserving existing settings
       const contextUpdate = {
-        [resource._id]: {
-          ...(currentProperty && typeof currentProperty === "object" ? currentProperty : {}),
+        [propertyResource._id]: {
+          ...(currentPropertyContext && typeof currentPropertyContext === "object" ? currentPropertyContext : {}),
           ...(contextType ? { "@type": contextType } : {}),
           ...(containerType ? { "@container": containerType } : {})
         }
@@ -1759,10 +1759,10 @@ INSERT DATA {
         { upsert: true }
       );
 
-      console.log(`Updated context for property ${resource._id}: @type=${contextType}, @container=${containerType}`);
+      console.log(`Updated context for property ${propertyResource._id}: @type=${contextType}, @container=${containerType}`);
     }
     catch (error) {
-      console.warn(`Failed to ensure property context for ${resource._id}: ${error.message}`);
+      console.warn(`Failed to ensure property context for ${propertyResource._id}: ${error.message}`);
     }
   }
 
