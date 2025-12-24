@@ -112,6 +112,7 @@ export class OntologizeServer extends Ontologize {
       normalize = true,
       ontologize = true,
       shareTBox = false,
+      shareStatements = false,
       clearCollection = false,
       ensureArrayProps = true,
       mergeOntology = true
@@ -150,6 +151,7 @@ export class OntologizeServer extends Ontologize {
         processedResources: 0,
         tboxResources: 0,
         aboxResources: 0,
+        statementResources: 0,
         errors: []
       };
 
@@ -164,12 +166,15 @@ export class OntologizeServer extends Ontologize {
             contextToUse,
             collection,
             this.collections.Context,
-            { normalize, ontologize, shareTBox, ensureArrayProps, mergeOntology }
+            { normalize, ontologize, shareTBox, shareStatements, ensureArrayProps, mergeOntology }
           );
 
           if (processed) {
             stats.processedResources++;
-            if (processed.isTBox) {
+            if (processed.isStatement) {
+              stats.statementResources++;
+            }
+            else if (processed.isTBox) {
               stats.tboxResources++;
             }
             else {
@@ -523,12 +528,15 @@ export class OntologizeServer extends Ontologize {
       normalize = true,
       ontologize = true,
       shareTBox = false,
+      shareStatements = false,
       ensureArrayProps = true,
       mergeOntology = true
     } = opts;
     const ontologyCollection = this.collections.Ontology;
+    const statementsCollection = this.collections.Statements;
     let processedResource = { ...resource };
     let isTBoxResource = false;
+    let isStatementResource = false;
 
     // Step 1: Normalize resource using LD.compact if requested
     if (normalize) {
@@ -585,13 +593,51 @@ export class OntologizeServer extends Ontologize {
       isTBoxResource = this._isTBoxResource(processedResource);
     }
 
-    // Step 5.5: Handle property context updates (@type and @container)
+    // Step 5.5: Detect Statement resources
+    isStatementResource = this.isStatementResource(processedResource);
+
+    // Step 5.6: If Statement, ensure @type includes "rdf:Statement"
+    if (isStatementResource) {
+      if (!processedResource["@type"]) {
+        processedResource["@type"] = ["rdf:Statement"];
+      }
+      else {
+        const types = Array.isArray(processedResource["@type"])
+          ? processedResource["@type"]
+          : [processedResource["@type"]];
+
+        // Check if rdf:Statement is already present (compacted or expanded form)
+        const hasStatementType = types.some(type =>
+          type === "rdf:Statement" ||
+          type === "http://www.w3.org/1999/02/22-rdf-syntax-ns#Statement"
+        );
+
+        if (!hasStatementType) {
+          processedResource["@type"] = [...types, "rdf:Statement"];
+        }
+      }
+    }
+
+    // Step 5.7: Handle property context updates (@type and @container)
     if (ensureArrayProps && this._isPropertyResource(processedResource)) {
       await this.ensurePropertyContext(processedResource, contextCollection);
     }
 
     // Step 6: Save to appropriate collection(s)
-    if (isTBoxResource || collection === ontologyCollection) {
+    if (isStatementResource && statementsCollection) {
+      // Statement resource - save to Statements collection with merge strategy
+      await this._saveResourceWithMerge(processedResource, statementsCollection, { mergeOntology });
+
+      // Also save to target collection if shareStatements is true
+      if (shareStatements && collection !== statementsCollection) {
+        await collection.replaceOne(
+          { _id: processedResource._id },
+          processedResource,
+          { upsert: true }
+        );
+      }
+    }
+    else if (isTBoxResource || collection === ontologyCollection) {
       // TBox resource - save to Ontology collection with merge strategy.
       await this._saveResourceWithMerge(processedResource, ontologyCollection, { mergeOntology });
 
@@ -618,6 +664,7 @@ export class OntologizeServer extends Ontologize {
     return {
       success: true,
       isTBox: isTBoxResource,
+      isStatement: isStatementResource,
       resource: processedResource
     };
   }

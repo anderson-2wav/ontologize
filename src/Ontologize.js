@@ -71,7 +71,46 @@ export class Ontologize {
     return true;
   }
 
+  /**
+   * Determine if a resource is an RDF Statement resource
+   *
+   * Detection criteria:
+   * - Resource has @type of rdf:Statement
+   * - Resource has properties rdf:subject, rdf:predicate, rdf:object (implies Statement by domain)
+   *
+   * @param {object} resource - The resource to check
+   * @returns {boolean} True if the resource is an RDF Statement
+   */
+  isStatementResource(resource) {
+    check(resource, Object);
 
+    // Check for explicit @type of rdf:Statement
+    if (resource["@type"]) {
+      const types = Array.isArray(resource["@type"]) ? resource["@type"] : [resource["@type"]];
+
+      // Support both compacted and expanded forms
+      const statementTypes = [
+        "rdf:Statement",
+        "http://www.w3.org/1999/02/22-rdf-syntax-ns#Statement"
+      ];
+
+      if (types.some(type => statementTypes.includes(type))) {
+        return true;
+      }
+    }
+
+    // Check for rdf:subject, rdf:predicate, rdf:object properties
+    // These properties have domain rdf:Statement, so their presence implies Statement
+    const hasSubject = resource["rdf:subject"] !== undefined ||
+      resource["http://www.w3.org/1999/02/22-rdf-syntax-ns#subject"] !== undefined;
+    const hasPredicate = resource["rdf:predicate"] !== undefined ||
+      resource["http://www.w3.org/1999/02/22-rdf-syntax-ns#predicate"] !== undefined;
+    const hasObject = resource["rdf:object"] !== undefined ||
+      resource["http://www.w3.org/1999/02/22-rdf-syntax-ns#object"] !== undefined;
+
+    // If resource has all three statement properties, it's a Statement
+    return hasSubject && hasPredicate && hasObject;
+  }
 
   /**
    * Get the label for a resource, preferring rdfs:label

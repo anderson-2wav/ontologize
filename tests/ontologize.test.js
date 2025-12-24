@@ -692,4 +692,100 @@ describe("Ontologize", function () {
       assert.equal(version, "0.1.0");
     });
   });
+
+  describe("isStatementResource", function () {
+    it("should return true for resource with @type rdf:Statement", function () {
+      const resource = {
+        "@id": "ex:statement-1",
+        "@type": "rdf:Statement",
+        "rdf:subject": "ex:Subject",
+        "rdf:predicate": "ex:predicate",
+        "rdf:object": "ex:Object"
+      };
+      assert.isTrue(ontologize.isStatementResource(resource));
+    });
+
+    it("should return true for resource with @type rdf:Statement in array", function () {
+      const resource = {
+        "@id": "ex:statement-1",
+        "@type": ["rdf:Statement", "ex:OtherType"],
+        "rdf:subject": "ex:Subject",
+        "rdf:predicate": "ex:predicate",
+        "rdf:object": "ex:Object"
+      };
+      assert.isTrue(ontologize.isStatementResource(resource));
+    });
+
+    it("should return true for resource with expanded rdf:Statement URI", function () {
+      const resource = {
+        "@id": "ex:statement-1",
+        "@type": "http://www.w3.org/1999/02/22-rdf-syntax-ns#Statement",
+        "rdf:subject": "ex:Subject",
+        "rdf:predicate": "ex:predicate",
+        "rdf:object": "ex:Object"
+      };
+      assert.isTrue(ontologize.isStatementResource(resource));
+    });
+
+    it("should return true for resource with rdf:subject, rdf:predicate, rdf:object properties (no @type)", function () {
+      // This is the key case - detection by properties alone
+      const resource = {
+        "@id": "dwcbfo:dwc-bfo-statement-1",
+        "rdf:subject": "dwc:Dataset",
+        "rdf:predicate": "rdfs:subClassOf",
+        "rdf:object": "bfo:immaterial-entity",
+        "dcterms:isPartOf": "dwcbfo:dwcbfo.owl"
+      };
+      assert.isTrue(ontologize.isStatementResource(resource));
+    });
+
+    it("should return true for resource with expanded RDF property URIs", function () {
+      const resource = {
+        "@id": "ex:statement-1",
+        "http://www.w3.org/1999/02/22-rdf-syntax-ns#subject": "ex:Subject",
+        "http://www.w3.org/1999/02/22-rdf-syntax-ns#predicate": "ex:predicate",
+        "http://www.w3.org/1999/02/22-rdf-syntax-ns#object": "ex:Object"
+      };
+      assert.isTrue(ontologize.isStatementResource(resource));
+    });
+
+    it("should return false for resource without Statement type or properties", function () {
+      const resource = {
+        "@id": "ex:RegularResource",
+        "@type": "owl:Class",
+        "rdfs:label": "Regular Class"
+      };
+      assert.isFalse(ontologize.isStatementResource(resource));
+    });
+
+    it("should return false for resource with only rdf:subject (missing other properties)", function () {
+      const resource = {
+        "@id": "ex:Incomplete",
+        "rdf:subject": "ex:Subject"
+      };
+      assert.isFalse(ontologize.isStatementResource(resource));
+    });
+
+    it("should return false for resource with only rdf:subject and rdf:predicate (missing rdf:object)", function () {
+      const resource = {
+        "@id": "ex:Incomplete",
+        "rdf:subject": "ex:Subject",
+        "rdf:predicate": "ex:predicate"
+      };
+      assert.isFalse(ontologize.isStatementResource(resource));
+    });
+
+    it("should return true for resource with all three properties and additional metadata", function () {
+      // Real-world example with dcterms metadata
+      const resource = {
+        "@id": "dwcbfo:dwc-bfo-statement-1",
+        "rdf:subject": "dwc:Dataset",
+        "rdf:predicate": "rdfs:subClassOf",
+        "rdf:object": "bfo:immaterial-entity",
+        "dcterms:isPartOf": "dwcbfo:dwcbfo.owl",
+        "rdfs:comment": "This statement bridges DWC and BFO ontologies"
+      };
+      assert.isTrue(ontologize.isStatementResource(resource));
+    });
+  });
 });

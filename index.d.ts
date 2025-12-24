@@ -53,6 +53,14 @@ export declare class Ontologize {
    */
   isValidOntologyResource(resource: Resource): resource is OntologyResource;
 
+  /**
+   * Determine if a resource is an RDF Statement resource
+   *
+   * Detection criteria:
+   * - Resource has @type of rdf:Statement
+   * - Resource has properties rdf:subject, rdf:predicate, rdf:object (implies Statement by domain)
+   */
+  isStatementResource(resource: Resource): boolean;
 
   /**
    * Get the label for a resource, preferring rdfs:label

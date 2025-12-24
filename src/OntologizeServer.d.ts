@@ -14,6 +14,8 @@ export interface ImportOptions {
   ontologize?: boolean;
   /** Store TBox resources in both collections */
   shareTBox?: boolean;
+  /** Store Statement resources in both Statements collection and target collection (default: false) */
+  shareStatements?: boolean;
   /** Clear collections before importing */
   clearCollection?: boolean;
   /** Ensure array props including @type */
@@ -31,6 +33,7 @@ export interface ImportResult {
   processedResources: number;
   tboxResources: number;
   aboxResources: number;
+  statementResources: number;
   errors: Array<{
     resource: string;
     error: string;
@@ -45,6 +48,7 @@ export interface ContextAndResources {
 export interface ProcessedResource {
   success: boolean;
   isTBox: boolean;
+  isStatement: boolean;
   resource: Resource;
 }
 
