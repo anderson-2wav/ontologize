@@ -805,9 +805,12 @@ export class OntologizeServer extends Ontologize {
     // Step 5: Get all properties grouped by type
     const allProperties = await this._getAllPropertiesGroupedByType();
 
-    // Step 6: Build the explorer map with Classes and Properties sections
+    // Step 6: Get all ontology resources
+    const allOntologies = await this._getAllOntologies();
+
+    // Step 7: Build the explorer map with Classes, Properties, and Ontologies sections
     const ontMap = {};
-    ontMap.README = "This is a JSON map of the ontology structure. Classes are ordered from least to most specific, showing domain properties and instance properties. Properties are grouped by ObjectProperties, DatatypeProperties, and general Properties.";
+    ontMap.README = "This is a JSON map of the ontology structure. Classes are ordered from least to most specific, showing domain properties and instance properties. Properties are grouped by ObjectProperties, DatatypeProperties, and general Properties. Ontologies shows loaded ontology definitions.";
 
     // Classes section
     ontMap.Classes = {};
@@ -823,6 +826,9 @@ export class OntologizeServer extends Ontologize {
 
     // Properties section
     ontMap.Properties = allProperties;
+
+    // Ontologies section
+    ontMap.Ontologies = allOntologies;
 
     return ontMap;
   }
@@ -1081,6 +1087,24 @@ export class OntologizeServer extends Ontologize {
     }
 
     return propertiesGrouped;
+  }
+
+  /**
+   * Get all ontology resources from the ontology collection
+   * @private
+   */
+  async _getAllOntologies() {
+    const ontologies = {};
+    const cursor = this.collections.Ontology.find({
+      "@type": { $in: ["owl:Ontology"] }
+    });
+    const ontologyResources = await cursor.toArray();
+
+    for (const ontologyResource of ontologyResources) {
+      ontologies[ontologyResource._id] = ontologyResource;
+    }
+
+    return ontologies;
   }
 
   /**
