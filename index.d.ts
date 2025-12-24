@@ -4,7 +4,7 @@
  */
 
 export interface OntologizeOptions {
-  /** Named collections in addition to ontology and context */
+  /** Named collections in addition to ontology, context, and statements */
   collections?: Record<string, any>;
   /** Default JSON-LD context */
   defaultContext?: Record<string, any>;
@@ -36,6 +36,7 @@ export declare class Ontologize {
   collections: {
     Ontology: MongoCollection;
     Context: MongoCollection;
+    Statements: MongoCollection;
     [key: string]: MongoCollection;
   };
   /** Configuration options */
@@ -46,7 +47,7 @@ export declare class Ontologize {
   /**
    * Create a new Ontologize instance
    */
-  constructor(ontologyCollection: MongoCollection, contextCollection: MongoCollection, opts?: OntologizeOptions);
+  constructor(ontologyCollection: MongoCollection, contextCollection: MongoCollection, statementsCollection: MongoCollection, opts?: OntologizeOptions);
 
   /**
    * Validate that a resource is a valid ontology resource

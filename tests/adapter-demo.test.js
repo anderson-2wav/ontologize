@@ -2,6 +2,21 @@ import { assert } from "chai";
 import { Ontologize } from "../src/Ontologize.js";
 import { MeteorCollectionAdapter } from "../src/adapters/index.js";
 
+// Helper function to create a mock statements collection
+function createMockStatementsCollection() {
+  return {
+    findOne: () => null,
+    find: () => ({
+      fetch: () => [],
+      toArray: () => Promise.resolve([])
+    }),
+    insert: () => Promise.resolve({ insertedId: "test-id" }),
+    insertMany: () => Promise.resolve({ insertedIds: ["test-id-1", "test-id-2"] }),
+    replaceOne: () => Promise.resolve({ modifiedCount: 1 }),
+    count: () => 0
+  };
+}
+
 describe("Collection Adapter Demo", function () {
 
   describe("Client-side usage with MeteorCollectionAdapter", function () {
@@ -28,12 +43,15 @@ describe("Collection Adapter Demo", function () {
         count: () => 0
       };
 
+      const clientStatementsCollection = createMockStatementsCollection();
+
       // Create adapters for client-side Meteor collections
       const ontologyAdapter = new MeteorCollectionAdapter(clientOntologyCollection, "Ontology");
       const contextAdapter = new MeteorCollectionAdapter(clientContextCollection, "Context");
-      
+      const statementsAdapter = new MeteorCollectionAdapter(clientStatementsCollection, "Statements");
+
       // Create Ontologize instance with adapters
-      const ontologize = new Ontologize(ontologyAdapter, contextAdapter);
+      const ontologize = new Ontologize(ontologyAdapter, contextAdapter, statementsAdapter);
 
       // Test the async getLabelFromId method
       const label = await ontologize.getLabelFromId("ex:TestClass");
@@ -69,8 +87,10 @@ describe("Collection Adapter Demo", function () {
         countDocuments: async () => 0
       };
 
+      const serverStatementsCollection = createMockStatementsCollection();
+
       // Use raw MongoDB collections directly (no adapter)
-      const ontologize = new Ontologize(serverOntologyCollection, serverContextCollection);
+      const ontologize = new Ontologize(serverOntologyCollection, serverContextCollection, serverStatementsCollection);
 
       // Test the async getLabelFromId method
       const label = await ontologize.getLabelFromId("ex:TestClass");
@@ -109,14 +129,19 @@ describe("Collection Adapter Demo", function () {
       const meteorContext = { findOne: () => null, find: () => ({ fetch: () => [] }), count: () => 0 };
       const mongoContext = { findOne: async () => null, find: () => ({ toArray: async () => [] }), countDocuments: async () => 0 };
 
+      // Statements collections
+      const meteorStatements = createMockStatementsCollection();
+      const mongoStatements = createMockStatementsCollection();
+
       // Client-side: Use adapters with Meteor collections
       const clientOntologize = new Ontologize(
         new MeteorCollectionAdapter(meteorCollection, "Ontology"),
-        new MeteorCollectionAdapter(meteorContext, "Context")
+        new MeteorCollectionAdapter(meteorContext, "Context"),
+        new MeteorCollectionAdapter(meteorStatements, "Statements")
       );
 
       // Server-side: Use raw MongoDB collections directly
-      const serverOntologize = new Ontologize(mongoCollection, mongoContext);
+      const serverOntologize = new Ontologize(mongoCollection, mongoContext, mongoStatements);
 
       // Test that both produce identical results
       const clientLabel = await clientOntologize.getLabelFromId("ex:TestClass");

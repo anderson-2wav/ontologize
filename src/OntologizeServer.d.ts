@@ -72,7 +72,7 @@ export declare class OntologizeServer extends Ontologize {
   /**
    * Create a new OntologizeServer instance
    */
-  constructor(ontologyCollection: MongoCollection, contextCollection: MongoCollection, opts?: OntologizeOptions);
+  constructor(ontologyCollection: MongoCollection, contextCollection: MongoCollection, statementsCollection: MongoCollection, opts?: OntologizeOptions);
 
   /**
    * Load ontology data from a file

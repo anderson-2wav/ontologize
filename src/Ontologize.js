@@ -20,25 +20,22 @@ export class Ontologize {
    *
    * @param {object} ontologyCollection - Collection adapter or raw MongoDB collection
    * @param {object} contextCollection - Collection adapter or raw MongoDB collection
+   * @param {object} statementsCollection - Collection adapter or raw MongoDB collection for Statements
    * @param {object} [opts] - Configuration options
-   * @param {object} [opts.collections] - named collections in addition to ontology and context
-   * @param {object} [opts.statementsCollection] - Statements collection for reasoning metadata
+   * @param {object} [opts.collections] - named collections in addition to ontology, context, and statements
    * @param {object} [opts.context] - Default JSON-LD context
    * @param {boolean} [opts.debug=false] - Enable debug logging
    */
-  constructor(ontologyCollection, contextCollection, opts = {}) {
+  constructor(ontologyCollection, contextCollection, statementsCollection, opts = {}) {
     check(ontologyCollection, Object);
     check(contextCollection, Object);
+    check(statementsCollection, Object);
 
     this.collections = {
       Ontology: ontologyCollection,
-      Context: contextCollection
+      Context: contextCollection,
+      Statements: statementsCollection
     };
-
-    // Add Statements collection if provided
-    if (opts.statementsCollection) {
-      this.collections.Statements = opts.statementsCollection;
-    }
 
     this.opts = opts;
     this.opts.defaultContext = this.opts.defaultContext || Ontologize.DEFAULT_CONTEXT;

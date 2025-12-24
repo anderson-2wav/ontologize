@@ -3,6 +3,21 @@ import { OntologizeServer } from "../src/OntologizeServer.js";
 import { readFile } from "fs/promises";
 import path from "path";
 
+// Helper function to create a mock statements collection
+function createMockStatementsCollection() {
+  return {
+    findOne: () => null,
+    find: () => ({
+      fetch: () => [],
+      toArray: () => Promise.resolve([])
+    }),
+    insert: () => Promise.resolve({ insertedId: "test-id" }),
+    insertMany: () => Promise.resolve({ insertedIds: ["test-id-1", "test-id-2"] }),
+    replaceOne: () => Promise.resolve({ modifiedCount: 1 }),
+    count: () => 0
+  };
+}
+
 describe("OntologizeServer", function () {
   this.timeout(0);
   let ontologizeServer;
@@ -11,7 +26,8 @@ describe("OntologizeServer", function () {
     // Mock collections for testing
     const mockOntologyCollection = {};
     const mockContextCollection = {};
-    ontologizeServer = new OntologizeServer(mockOntologyCollection, mockContextCollection);
+    const mockStatementsCollection = createMockStatementsCollection();
+    ontologizeServer = new OntologizeServer(mockOntologyCollection, mockContextCollection, mockStatementsCollection);
   });
 
   describe("inheritance", function () {
@@ -154,7 +170,8 @@ describe("OntologizeServer", function () {
         }
       };
 
-      ontologizeServer = new OntologizeServer(testCollection, contextCollection);
+      const statementsCollection = createMockStatementsCollection();
+      ontologizeServer = new OntologizeServer(testCollection, contextCollection, statementsCollection);
     });
 
     it("should export data from collection", async function () {
@@ -412,7 +429,8 @@ describe("OntologizeServer", function () {
         }
       };
 
-      ontologizeServer = new OntologizeServer(ontologyCollection, contextCollection);
+      const statementsCollection = createMockStatementsCollection();
+      ontologizeServer = new OntologizeServer(ontologyCollection, contextCollection, statementsCollection);
 
       // Add some ontology definitions
       await ontologyCollection.insertOne({
@@ -728,7 +746,8 @@ describe("OntologizeServer", function () {
         }
       };
 
-      ontologizeServer = new OntologizeServer(ontologyCollection, contextCollection);
+      const statementsCollection = createMockStatementsCollection();
+      ontologizeServer = new OntologizeServer(ontologyCollection, contextCollection, statementsCollection);
     });
 
     it("should add @type: '@id' for ObjectProperty", async function () {

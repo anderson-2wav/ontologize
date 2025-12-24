@@ -3,11 +3,27 @@ import { OntologizeServer } from "../src/OntologizeServer.js";
 import { readFile } from "fs/promises";
 import { join } from "path";
 
+// Helper function to create a mock statements collection
+function createMockStatementsCollection() {
+  return {
+    findOne: () => null,
+    find: () => ({
+      fetch: () => [],
+      toArray: () => Promise.resolve([])
+    }),
+    insert: () => Promise.resolve({ insertedId: "test-id" }),
+    insertMany: () => Promise.resolve({ insertedIds: ["test-id-1", "test-id-2"] }),
+    replaceOne: () => Promise.resolve({ modifiedCount: 1 }),
+    count: () => 0
+  };
+}
+
 describe("OntologizeServer Import", function () {
   this.timeout(0); // turn off timeout for debugging
   let ontologizeServer;
   let mockOntologyCollection;
   let mockContextCollection;
+  let mockStatementsCollection;
   let ontologyData = [];
   let contextData = {};
 
@@ -86,8 +102,10 @@ describe("OntologizeServer Import", function () {
       }
     };
 
+    mockStatementsCollection = createMockStatementsCollection();
+
     // Create the ontologize server instance with the mock collections
-    ontologizeServer = new OntologizeServer(mockOntologyCollection, mockContextCollection);
+    ontologizeServer = new OntologizeServer(mockOntologyCollection, mockContextCollection, mockStatementsCollection);
   });
 
   describe("importOntologyFromFile", function () {

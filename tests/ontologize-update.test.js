@@ -146,9 +146,7 @@ describe("OntologizeServer updateOne", function () {
     const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "Statements");
 
     // Create OntologizeServer instance
-    ontologizeServer = new OntologizeServer(ontologyAdapter, contextAdapter, {
-      statementsCollection: statementsAdapter
-    });
+    ontologizeServer = new OntologizeServer(ontologyAdapter, contextAdapter, statementsAdapter);
   });
 
   describe("updateOne method", function () {
