@@ -591,7 +591,7 @@ export class OntologizeServer extends Ontologize {
     }
 
     // Step 6: Save to appropriate collection(s)
-    if (isTBoxResource) {
+    if (isTBoxResource || collection === ontologyCollection) {
       // TBox resource - save to Ontology collection with merge strategy.
       await this._saveResourceWithMerge(processedResource, ontologyCollection, { mergeOntology });
 
