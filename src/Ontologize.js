@@ -627,6 +627,216 @@ export class Ontologize {
   }
 
   /**
+   * Get the assembled bui:schema for a property in the context of a resource.
+   *
+   * This function collects bui:schema definitions from multiple sources,
+   * merged from least specific to most specific:
+   * 1. The property definition itself (e.g., the ontology resource for "foo")
+   * 2. All @types of the resource, walking up the rdfs:subClassOf hierarchy
+   * 3. The resource instance itself (most specific override)
+   *
+   * For classes and resource instances, the bui:schema.properties[property]
+   * subschema is extracted. Schemas are merged so more specific sources
+   * override less specific ones.
+   *
+   * @param {string} property - The property name (e.g., "foo")
+   * @param {Object} [resource] - The resource context (used to determine @types and instance schema)
+   * @returns {Promise<Object>} The merged bui:schema object, or empty object if none found
+   */
+  async getSchema(property, resource) {
+    check(property, String);
+    check(resource, Match.Optional(Object));
+
+    const schemas = await this._findSchemasWithProperty(resource, property, "bui:schema");
+    let mergedSchema = {};
+
+    // Iterate from least to most specific (reverse order)
+    // schemas array contains: [property, ...superclasses, ...directTypes]
+    for (let i = schemas.length - 1; i >= 0; i--) {
+      const schema = schemas[i];
+      let buiSchema;
+
+      // If schema is a class, look for bui:schema.properties[property]
+      if (this._isClassResource(schema)) {
+        const classSchema = schema["bui:schema"];
+        if (classSchema?.properties?.[property] !== undefined) {
+          buiSchema = classSchema.properties[property];
+        }
+      }
+      // Otherwise (property definition), use bui:schema directly
+      else if (schema["bui:schema"]) {
+        buiSchema = schema["bui:schema"];
+      }
+
+      if (buiSchema) {
+        mergedSchema = this._mergeSchemas(mergedSchema, buiSchema);
+      }
+    }
+
+    // Finally, apply the resource instance's own bui:schema (most specific)
+    if (resource && resource["bui:schema"]) {
+      const instanceSchema = resource["bui:schema"];
+      // For resource instances, look for bui:schema.properties[property]
+      if (instanceSchema?.properties?.[property] !== undefined) {
+        mergedSchema = this._mergeSchemas(mergedSchema, instanceSchema.properties[property]);
+      }
+    }
+
+    return mergedSchema;
+  }
+
+  /**
+   * Find all ontology resources that have a specified property and are related
+   * to the given resource (through @type hierarchy) or are the property definition itself.
+   *
+   * @param {Object} [resource] - The resource to find schemas for
+   * @param {string} property - The property name to look up
+   * @param {string} ontologyProperty - The ontology property to search for (e.g., "bui:schema")
+   * @returns {Promise<Object[]>} Array of ontology resources with the specified property
+   * @private
+   */
+  async _findSchemasWithProperty(resource, property, ontologyProperty) {
+    check(resource, Match.Optional(Object));
+    check(property, String);
+    check(ontologyProperty, String);
+
+    const foundSchemas = [];
+    const exploredTypes = new Set();
+
+    // First, check if the property itself has the ontology property
+    const propertyDef = await this.collections.Ontology.findOne({ _id: property });
+    if (propertyDef && propertyDef[ontologyProperty] !== undefined) {
+      foundSchemas.push(propertyDef);
+    }
+
+    // If no resource provided, just return property schema
+    if (!resource) {
+      return foundSchemas;
+    }
+
+    // Get resource types
+    const resourceTypes = Array.isArray(resource["@type"])
+      ? resource["@type"]
+      : (resource["@type"] ? [resource["@type"]] : []);
+
+    // Breadth-first search across resource types
+    for (const typ of resourceTypes) {
+      if (exploredTypes.has(typ)) continue;
+      exploredTypes.add(typ);
+
+      const classResource = await this.collections.Ontology.findOne({ _id: typ });
+      if (classResource && classResource[ontologyProperty] !== undefined) {
+        foundSchemas.push(classResource);
+      }
+    }
+
+    // Recursive function to walk up the class hierarchy
+    const lookDeep = async (classResource) => {
+      if (!classResource) return;
+
+      // Check if this class has the ontology property
+      if (classResource[ontologyProperty] !== undefined) {
+        if (!exploredTypes.has(classResource._id)) {
+          foundSchemas.push(classResource);
+        }
+      }
+
+      if (!exploredTypes.has(classResource._id)) {
+        exploredTypes.add(classResource._id);
+      }
+
+      // Walk up rdfs:subClassOf hierarchy
+      if (classResource["rdfs:subClassOf"]) {
+        const superClasses = Array.isArray(classResource["rdfs:subClassOf"])
+          ? classResource["rdfs:subClassOf"]
+          : [classResource["rdfs:subClassOf"]];
+
+        for (const superClass of superClasses) {
+          // Handle both string IDs and object references
+          const superClassId = typeof superClass === "object"
+            ? (superClass["@id"] || superClass._id)
+            : superClass;
+
+          if (superClassId && !exploredTypes.has(superClassId) && !superClassId.startsWith("_:")) {
+            const superClassResource = await this.collections.Ontology.findOne({ _id: superClassId });
+            if (superClassResource) {
+              await lookDeep(superClassResource);
+            }
+          }
+        }
+      }
+    };
+
+    // Walk up hierarchy from each resource type
+    for (const typ of resourceTypes) {
+      const classResource = await this.collections.Ontology.findOne({ _id: typ });
+      if (classResource) {
+        await lookDeep(classResource);
+      }
+    }
+
+    return foundSchemas;
+  }
+
+  /**
+   * Check if a resource is a class (rdfs:Class, owl:Class)
+   *
+   * @param {Object} resource - The resource to check
+   * @returns {boolean} True if the resource is a class
+   * @private
+   */
+  _isClassResource(resource) {
+    if (!resource || !resource["@type"]) {
+      return false;
+    }
+
+    const types = Array.isArray(resource["@type"]) ? resource["@type"] : [resource["@type"]];
+    const classTypes = [
+      "rdfs:Class",
+      "owl:Class",
+      "http://www.w3.org/2000/01/rdf-schema#Class",
+      "http://www.w3.org/2002/07/owl#Class"
+    ];
+
+    return types.some(t => classTypes.includes(t));
+  }
+
+  /**
+   * Merge two schema objects, with arrays being merged using union.
+   *
+   * @param {Object} base - The base schema
+   * @param {Object} override - The schema to merge on top
+   * @returns {Object} The merged schema
+   * @private
+   */
+  _mergeSchemas(base, override) {
+    const result = { ...base };
+
+    for (const [key, value] of Object.entries(override)) {
+      if (result[key] === undefined) {
+        result[key] = value;
+      }
+      else if (Array.isArray(result[key]) || Array.isArray(value)) {
+        // Merge arrays using union
+        const baseArr = Array.isArray(result[key]) ? result[key] : [result[key]];
+        const overrideArr = Array.isArray(value) ? value : [value];
+        // For arrays, override completely (like CTB behavior with _.union)
+        result[key] = [...new Set([...baseArr, ...overrideArr])];
+      }
+      else if (typeof result[key] === "object" && typeof value === "object") {
+        // Recursively merge objects
+        result[key] = this._mergeSchemas(result[key], value);
+      }
+      else {
+        // Override primitive values
+        result[key] = value;
+      }
+    }
+
+    return result;
+  }
+
+  /**
    * Get module version
    *
    * @returns {string} The module version
