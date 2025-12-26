@@ -1845,9 +1845,8 @@ INSERT DATA {
       this._jsonPropertyCache = new Set();
     }
     const jsonProps = this._jsonPropertyCache;
-
-    if (useCache && this._jsonPropertyIdsCache.size) {
-      return this._jsonPropertyIdsCache;
+    if (useCache && this._jsonPropertyCache.size) {
+      return this._jsonPropertyCache;
     }
 
     // Find properties with bui:JSON or bui:Schema range
@@ -1873,7 +1872,6 @@ INSERT DATA {
    */
   clearJsonPropertyCache() {
     this._jsonPropertyCache = null;
-    this._jsonPropertyIdsCache = null;
   }
 
   /**
