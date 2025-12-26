@@ -1138,6 +1138,252 @@ export class Ontologize {
     "wot:assurance": { "@type": "@id" },
     "wot:src_assurance": { "@type": "@id" }
   };
+
+  // ============================================================================
+  // Explorer Methods (client/server compatible)
+  // ============================================================================
+
+  /**
+   * Explore the ontology structure showing classes, properties, and ontologies.
+   * This is the client/server compatible version that only uses the Ontology collection.
+   *
+   * @param {Object} [opts] - Options
+   * @returns {Promise<Object>} Explorer data with Classes, Properties, and Ontologies sections
+   */
+  async explorer(opts = {}) {
+    check(opts, Match.Optional(Object));
+
+    // Step 1: Get all classes from the ontology
+    const allClasses = await this._getAllClassesFromOntology();
+
+    // Step 2: Order classes by specificity (least to most specific)
+    const orderedClasses = await this._orderClassesBySpecificity(allClasses);
+
+    // Step 3: For each class, get properties with this class as rdfs:domain
+    const domainProperties = await this._getPropertiesByDomain();
+
+    // Step 4: Get all properties grouped by type
+    const allProperties = await this._getAllPropertiesGroupedByType();
+
+    // Step 5: Get all ontology resources
+    const allOntologies = await this._getAllOntologies();
+
+    // Step 6: Build the explorer map
+    const ontMap = {};
+    ontMap.README = "This is a JSON map of the ontology structure. Classes are ordered from least to most specific, showing domain properties. Properties are grouped by ObjectProperties, DatatypeProperties, and general Properties. Ontologies shows loaded ontology definitions.";
+
+    // Classes section
+    ontMap.Classes = {};
+    for (const className of orderedClasses) {
+      const classInfo = allClasses[className] || {};
+
+      ontMap.Classes[className] = {
+        classInfo: classInfo,
+        domainProperties: domainProperties[className] || {}
+      };
+    }
+
+    // Properties section
+    ontMap.Properties = allProperties;
+
+    // Ontologies section
+    ontMap.Ontologies = allOntologies;
+
+    return ontMap;
+  }
+
+  /**
+   * Get all classes from the ontology collection
+   * @private
+   */
+  async _getAllClassesFromOntology() {
+    const classes = {};
+    const cursor = this.collections.Ontology.find({
+      "@type": { $in: ["owl:Class", "rdfs:Class"] }
+    });
+
+    // Support both MongoDB (toArray) and Meteor (fetch) patterns
+    const classResources = cursor.toArray ? await cursor.toArray() : cursor.fetch();
+
+    for (const classResource of classResources) {
+      classes[classResource._id] = classResource;
+    }
+
+    return classes;
+  }
+
+  /**
+   * Order classes by specificity using rdfs:subClassOf relationships.
+   * Returns array of class names ordered from least to most specific, with blank nodes at the end.
+   * @private
+   */
+  async _orderClassesBySpecificity(allClasses) {
+    const classNames = Object.keys(allClasses);
+    const subClassMap = {};
+
+    // Separate blank nodes from named classes
+    const namedClasses = classNames.filter(name => !this._isBlankNodeId(name));
+    const blankNodes = classNames.filter(name => this._isBlankNodeId(name));
+
+    // Build subclass relationships for named classes only
+    for (const className of namedClasses) {
+      const classResource = allClasses[className];
+      const subClassOf = classResource["rdfs:subClassOf"];
+
+      if (subClassOf) {
+        const parents = Array.isArray(subClassOf) ? subClassOf : [subClassOf];
+        subClassMap[className] = parents.map(parent =>
+          typeof parent === "object" ? parent["@id"] || parent._id : parent
+        ).filter(parent => parent && namedClasses.includes(parent));
+      }
+      else {
+        subClassMap[className] = [];
+      }
+    }
+
+    // Topological sort to order by specificity (least to most specific)
+    const visited = new Set();
+    const result = [];
+    const visiting = new Set();
+
+    const visit = (className) => {
+      if (visiting.has(className)) {
+        // Circular dependency - skip to avoid infinite loop
+        return;
+      }
+      if (visited.has(className)) {
+        return;
+      }
+
+      visiting.add(className);
+
+      // Visit all parent classes first (they are less specific)
+      for (const parent of subClassMap[className] || []) {
+        if (namedClasses.includes(parent)) {
+          visit(parent);
+        }
+      }
+
+      visiting.delete(className);
+      visited.add(className);
+      result.push(className);
+    };
+
+    // Visit all named classes first
+    for (const className of namedClasses) {
+      visit(className);
+    }
+
+    // Add blank nodes at the end, sorted alphabetically for consistency
+    const sortedBlankNodes = blankNodes.sort();
+    result.push(...sortedBlankNodes);
+
+    return result;
+  }
+
+  /**
+   * Check if a class name is a blank node (starts with _:)
+   * @private
+   */
+  _isBlankNodeId(className) {
+    return typeof className === "string" && className.startsWith("_:");
+  }
+
+  /**
+   * Get all properties grouped by their rdfs:domain
+   * @private
+   */
+  async _getPropertiesByDomain() {
+    const domainMap = {};
+    const cursor = this.collections.Ontology.find({
+      "@type": {
+        $in: ["owl:ObjectProperty", "owl:DatatypeProperty", "owl:AnnotationProperty", "rdf:Property"]
+      }
+    });
+
+    // Support both MongoDB (toArray) and Meteor (fetch) patterns
+    const properties = cursor.toArray ? await cursor.toArray() : cursor.fetch();
+
+    for (const property of properties) {
+      const domain = property["rdfs:domain"];
+      if (domain) {
+        const domains = Array.isArray(domain) ? domain : [domain];
+
+        for (const domainValue of domains) {
+          const domainClass = typeof domainValue === "object" ?
+            (domainValue["@id"] || domainValue._id) : domainValue;
+
+          if (domainClass) {
+            domainMap[domainClass] = domainMap[domainClass] || {};
+            domainMap[domainClass][property._id] = property;
+          }
+        }
+      }
+    }
+
+    return domainMap;
+  }
+
+  /**
+   * Get all properties from the ontology grouped by their types
+   * @private
+   */
+  async _getAllPropertiesGroupedByType() {
+    const propertiesGrouped = {
+      ObjectProperties: {},
+      DatatypeProperties: {},
+      AnnotationProperties: {},
+      Properties: {}
+    };
+
+    const cursor = this.collections.Ontology.find({
+      "@type": {
+        $in: ["owl:ObjectProperty", "owl:DatatypeProperty", "owl:AnnotationProperty", "rdf:Property"]
+      }
+    });
+
+    // Support both MongoDB (toArray) and Meteor (fetch) patterns
+    const properties = cursor.toArray ? await cursor.toArray() : cursor.fetch();
+
+    for (const property of properties) {
+      const types = Array.isArray(property["@type"]) ? property["@type"] : [property["@type"]];
+
+      if (types.includes("owl:ObjectProperty")) {
+        propertiesGrouped.ObjectProperties[property._id] = property;
+      }
+      else if (types.includes("owl:DatatypeProperty")) {
+        propertiesGrouped.DatatypeProperties[property._id] = property;
+      }
+      else if (types.includes("owl:AnnotationProperty")) {
+        propertiesGrouped.AnnotationProperties[property._id] = property;
+      }
+      else if (types.includes("rdf:Property")) {
+        propertiesGrouped.Properties[property._id] = property;
+      }
+    }
+
+    return propertiesGrouped;
+  }
+
+  /**
+   * Get all ontology resources from the ontology collection
+   * @private
+   */
+  async _getAllOntologies() {
+    const ontologies = {};
+    const cursor = this.collections.Ontology.find({
+      "@type": { $in: ["owl:Ontology"] }
+    });
+
+    // Support both MongoDB (toArray) and Meteor (fetch) patterns
+    const ontologyResources = cursor.toArray ? await cursor.toArray() : cursor.fetch();
+
+    for (const ontologyResource of ontologyResources) {
+      ontologies[ontologyResource._id] = ontologyResource;
+    }
+
+    return ontologies;
+  }
 }
 
 // Export the class as default
