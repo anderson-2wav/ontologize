@@ -136,11 +136,19 @@ export class Ontologize {
   getLabel(resource, fallback) {
     check(resource, Object);
     check(fallback, Match.Optional(String));
-
-    if (resource["rdfs:label"]) {
-      return Array.isArray(resource["rdfs:label"]) ?
-        resource["rdfs:label"][0] :
-        resource["rdfs:label"];
+    // specific to generic label properties
+    const labelProps = ["dcterms:title", "rdfs:label"];
+    for (const prop of labelProps) {
+      if (resource[prop]) {
+        if (this.ld().isProxy(resource)) {
+          return resource[prop];
+        }
+        else {
+          return Array.isArray(resource[prop]) ?
+            resource[prop][0] :
+            resource[prop];
+        }
+      }
     }
 
     if (resource["@id"]) {
