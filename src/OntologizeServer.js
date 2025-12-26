@@ -366,7 +366,11 @@ export class OntologizeServer extends Ontologize {
       processed["@type"] = [processed["@type"]];
     }
 
-    // Step 3: Apply normalization if requested
+    // Step 3: Stringify bui:JSON/bui:Schema property values before JSON-LD processing
+    // For export, POJOs in MongoDB should become JSON strings in the output file
+    processed = await this._stringifyJsonProperties(processed);
+
+    // Step 4: Apply normalization if requested
     if (normalize) {
       try {
         const contextForCompaction = await this.getContext(context);
@@ -408,6 +412,9 @@ export class OntologizeServer extends Ontologize {
         console.warn(`Failed to process resource ${resource._id || resource["@id"]} for export: ${error.message}`);
       }
     }
+
+    // Note: We do NOT parse JSON properties back to POJOs for export
+    // The stringified values should remain as strings in the output file
 
     return processed;
   }
@@ -542,9 +549,15 @@ export class OntologizeServer extends Ontologize {
     // Step 1: Normalize resource using LD.compact if requested
     if (normalize) {
       const ld = new LD();
-      // step 1-b: expand resource with its own context
+
+      // Step 1-a: Stringify bui:JSON/bui:Schema property values before JSON-LD processing
+      // This prevents the JSON-LD processor from altering nested POJO structure
+      // useCache: false is necessary because cache keeps updating as we add new resources
+      processedResource = await this._stringifyJsonProperties(processedResource, {useCache: false});
+
+      // Step 1-b: expand resource with its own context
       if (incomingContext) {
-        processedResource = await ld.expand(processedResource,incomingContext);
+        processedResource = await ld.expand(processedResource, incomingContext);
       }
 
       // Get context for compaction (provided, from Context collection, or default)
@@ -571,6 +584,9 @@ export class OntologizeServer extends Ontologize {
       catch (error) {
         console.warn(`Failed to compact resource ${resource._id || resource["@id"]}: ${error.message}`);
       }
+
+      // Step 1-c: Parse bui:JSON/bui:Schema property values back to POJOs for MongoDB storage
+      processedResource = await this._parseJsonProperties(processedResource);
     }
 
     // Step 2: Ensure @type is array. This _should be
@@ -1760,6 +1776,187 @@ INSERT DATA {
     }
 
     return null; // No type determination possible
+  }
+
+  /**
+   * BUI JSON type URIs that require special serialization handling.
+   * Properties with these ranges store POJOs in MongoDB but serialize as JSON strings.
+   * @private
+   */
+  static BUI_JSON_TYPES = [
+    "bui:JSON",
+    "bui:Schema",
+    "https://ontology.2wav.com/bold-ui#JSON",
+    "https://ontology.2wav.com/bold-ui#Schema"
+  ];
+
+  /**
+   * Check if a property has a bui:JSON or bui:Schema range (or subclass).
+   * These properties require special handling during import/export.
+   *
+   * @param {string} propertyId - The property identifier (e.g., "bui:schema")
+   * @returns {Promise<boolean>} True if the property has a JSON-type range
+   * @private
+   */
+  async _isJsonProperty(propertyId) {
+    if (!propertyId) return false;
+
+    // Check cache first
+    if (!this._jsonPropertyCache) {
+      this._jsonPropertyCache = new Map();
+    }
+    if (this._jsonPropertyCache.has(propertyId)) {
+      return this._jsonPropertyCache.get(propertyId);
+    }
+
+    // Look up property definition in Ontology collection
+    const propertyDef = await this.collections.Ontology.findOne({ _id: propertyId });
+    if (!propertyDef) {
+      this._jsonPropertyCache.set(propertyId, false);
+      return false;
+    }
+
+    // Check for explicit bold:isJsonProperty marker
+    if (propertyDef["bold:isJsonProperty"] === true) {
+      this._jsonPropertyCache.set(propertyId, true);
+      return true;
+    }
+
+    // Check rdfs:range
+    const range = propertyDef["rdfs:range"];
+    if (range && OntologizeServer.BUI_JSON_TYPES.includes(range)) {
+      this._jsonPropertyCache.set(propertyId, true);
+      return true;
+    }
+
+    this._jsonPropertyCache.set(propertyId, false);
+    return false;
+  }
+
+  /**
+   * Get all known JSON-type property IDs from the Ontology collection.
+   * Caches results for performance.
+   *
+   * @returns {Promise<Set<string>>} Set of property IDs with JSON-type ranges
+   * @private
+   */
+  async _getJsonPropertyIds(useCache = true) {
+    if (!this._jsonPropertyCache) {
+      this._jsonPropertyCache = new Set();
+    }
+    const jsonProps = this._jsonPropertyCache;
+
+    if (useCache && this._jsonPropertyIdsCache.size) {
+      return this._jsonPropertyIdsCache;
+    }
+
+    // Find properties with bui:JSON or bui:Schema range
+    const cursor = this.collections.Ontology.find({
+      $or: [
+        { "rdfs:range": { $in: OntologizeServer.BUI_JSON_TYPES } },
+        { "bold:isJsonProperty": true }
+      ]
+    });
+
+    const props = await cursor.toArray();
+    for (const prop of props) {
+      if (prop._id) {
+        jsonProps.add(prop._id);
+      }
+    }
+
+    return jsonProps;
+  }
+
+  /**
+   * Clear the JSON property cache (call when ontology changes)
+   */
+  clearJsonPropertyCache() {
+    this._jsonPropertyCache = null;
+    this._jsonPropertyIdsCache = null;
+  }
+
+  /**
+   * Pre-process a resource before JSON-LD expansion/compaction.
+   * Stringifies POJO values on bui:JSON/bui:Schema properties to prevent
+   * the JSON-LD processor from altering their structure.
+   *
+   * @param {Object} resource - The resource to process
+   * @returns {Promise<Object>} Resource with JSON property values stringified
+   * @private
+   */
+  async _stringifyJsonProperties(resource, opts = {}) {
+    opts.useCache = opts.useCache !== false;
+    const jsonPropertyIds = await this._getJsonPropertyIds(opts.useCache);
+    if (jsonPropertyIds.size === 0) {
+      return resource;
+    }
+
+    const processed = { ...resource };
+    for (const propId of jsonPropertyIds) {
+      if (propId in processed) {
+        const value = processed[propId];
+        // Only stringify if it's a POJO (not already a string)
+        if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+          processed[propId] = JSON.stringify(value);
+        }
+        else if (Array.isArray(value)) {
+          // Handle array of POJOs
+          processed[propId] = value.map(v =>
+            (v !== null && typeof v === "object") ? JSON.stringify(v) : v
+          );
+        }
+      }
+    }
+
+    return processed;
+  }
+
+  /**
+   * Post-process a resource after JSON-LD expansion/compaction.
+   * Parses JSON string values back to POJOs for bui:JSON/bui:Schema properties.
+   *
+   * @param {Object} resource - The resource to process
+   * @returns {Promise<Object>} Resource with JSON property values parsed
+   * @private
+   */
+  async _parseJsonProperties(resource) {
+    const jsonPropertyIds = await this._getJsonPropertyIds();
+    if (jsonPropertyIds.size === 0) {
+      return resource;
+    }
+
+    const processed = { ...resource };
+    for (const propId of jsonPropertyIds) {
+      if (propId in processed) {
+        const value = processed[propId];
+        // Parse string values back to POJOs
+        if (typeof value === "string") {
+          try {
+            processed[propId] = JSON.parse(value);
+          }
+          catch (e) {
+            // Not valid JSON, leave as string
+          }
+        }
+        else if (Array.isArray(value)) {
+          // Handle array of JSON strings
+          processed[propId] = value.map(v => {
+            if (typeof v === "string") {
+              try {
+                return JSON.parse(v);
+              }
+              catch (e) {
+                return v;
+              }
+            }
+            return v;
+          });
+        }
+      }
+    }
+
+    return processed;
   }
 
   /**
