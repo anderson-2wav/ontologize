@@ -162,6 +162,34 @@ export class Ontologize {
   }
 
   /**
+   * Get the description for a resource, preferring dcterms:description then rdfs:comment
+   *
+   * @param {object} resource - The resource
+   * @param {string} [fallback] - Fallback if no description found
+   * @returns {string} The description or fallback
+   */
+  getDescription(resource, fallback) {
+    check(resource, Object);
+    check(fallback, Match.Optional(String));
+    // specific to generic description properties
+    const descProps = ["dcterms:description", "rdfs:comment"];
+    for (const prop of descProps) {
+      if (resource[prop]) {
+        if (this.ld().isProxy(resource)) {
+          return resource[prop];
+        }
+        else {
+          return Array.isArray(resource[prop]) ?
+            resource[prop][0] :
+            resource[prop];
+        }
+      }
+    }
+
+    return fallback || "";
+  }
+
+  /**
    * Get the label for a resource by looking it up from the ontology collection
    *
    * @param {string} resourceId - The resource ID to look up
