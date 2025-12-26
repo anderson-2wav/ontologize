@@ -5,6 +5,7 @@
 
 import { check, Match } from "./lib/check.js";
 import jsonPath from "./lib/jsonpath.js";
+import LD from "bold-ld";
 
 /**
  * Ontologize - Utilities for working with ontology data in JSON-LD format
@@ -44,6 +45,22 @@ export class Ontologize {
       Object.assign(this.collections, this.opts.collections);
     }
     this.version = "0.1.0";
+
+    // Initialize singleton LD instance for this Ontologize instance
+    this._ld = null;
+  }
+
+  /**
+   * Get the singleton LD instance for this Ontologize instance.
+   * Creates the instance on first access.
+   *
+   * @returns {LD} The LD instance
+   */
+  ld() {
+    if (!this._ld) {
+      this._ld = new LD();
+    }
+    return this._ld;
   }
 
   /**
@@ -149,7 +166,8 @@ export class Ontologize {
 
     try {
       // Look up the resource from the ontology collection
-      const resource = await this.collections.Ontology.findOne({ _id: resourceId });
+      const rawResource = await this.collections.Ontology.findOne({ _id: resourceId });
+      const resource = rawResource ? this.ld().proxy(rawResource) : null;
 
       if (resource) {
         // Use the synchronous getLabel method on the found resource
@@ -268,7 +286,8 @@ export class Ontologize {
     // If we don't have the resource object, check ontology collection for bold:container property
     if (!propertyResource) {
       try {
-        const ontologyResource = await this.collections.Ontology.findOne({ _id: propertyId });
+        const rawResource = await this.collections.Ontology.findOne({ _id: propertyId });
+        const ontologyResource = rawResource ? this.ld().proxy(rawResource) : null;
         if (ontologyResource && ontologyResource["bold:container"]) {
           const container = ontologyResource["bold:container"];
           return container === "@list" || container === "@set";
@@ -472,7 +491,8 @@ export class Ontologize {
         const cursor = this.collections.Ontology.find({
           _id: { $in: batch }
         });
-        const results = await cursor.toArray();
+        const rawResults = await cursor.toArray();
+        const results = rawResults.map(r => this.ld().proxy(r));
 
         // Cache the results and queue up parent classes
         for (const resource of results) {
@@ -704,7 +724,8 @@ export class Ontologize {
     const exploredTypes = new Set();
 
     // First, check if the property itself has the ontology property
-    const propertyDef = await this.collections.Ontology.findOne({ _id: property });
+    const rawPropertyDef = await this.collections.Ontology.findOne({ _id: property });
+    const propertyDef = rawPropertyDef ? this.ld().proxy(rawPropertyDef) : null;
     if (propertyDef && propertyDef[ontologyProperty] !== undefined) {
       foundSchemas.push(propertyDef);
     }
@@ -724,7 +745,8 @@ export class Ontologize {
       if (exploredTypes.has(typ)) continue;
       exploredTypes.add(typ);
 
-      const classResource = await this.collections.Ontology.findOne({ _id: typ });
+      const rawClassResource = await this.collections.Ontology.findOne({ _id: typ });
+      const classResource = rawClassResource ? this.ld().proxy(rawClassResource) : null;
       if (classResource && classResource[ontologyProperty] !== undefined) {
         foundSchemas.push(classResource);
       }
@@ -758,7 +780,8 @@ export class Ontologize {
             : superClass;
 
           if (superClassId && !exploredTypes.has(superClassId) && !superClassId.startsWith("_:")) {
-            const superClassResource = await this.collections.Ontology.findOne({ _id: superClassId });
+            const rawSuperClassResource = await this.collections.Ontology.findOne({ _id: superClassId });
+            const superClassResource = rawSuperClassResource ? this.ld().proxy(rawSuperClassResource) : null;
             if (superClassResource) {
               await lookDeep(superClassResource);
             }
@@ -769,7 +792,8 @@ export class Ontologize {
 
     // Walk up hierarchy from each resource type
     for (const typ of resourceTypes) {
-      const classResource = await this.collections.Ontology.findOne({ _id: typ });
+      const rawClassResource = await this.collections.Ontology.findOne({ _id: typ });
+      const classResource = rawClassResource ? this.ld().proxy(rawClassResource) : null;
       if (classResource) {
         await lookDeep(classResource);
       }
@@ -1203,7 +1227,7 @@ export class Ontologize {
     });
 
     // Support both MongoDB (toArray) and Meteor (fetch) patterns
-    const classResources = cursor.toArray ? await cursor.toArray() : cursor.fetch();
+    const classResources = (cursor.toArray ? await cursor.toArray() : cursor.fetch()).map(r => this.ld().proxy(r));
 
     for (const classResource of classResources) {
       classes[classResource._id] = classResource;
@@ -1302,7 +1326,8 @@ export class Ontologize {
     });
 
     // Support both MongoDB (toArray) and Meteor (fetch) patterns
-    const properties = cursor.toArray ? await cursor.toArray() : cursor.fetch();
+    const rawProperties = cursor.toArray ? await cursor.toArray() : cursor.fetch();
+    const properties = rawProperties.map(r => this.ld().proxy(r));
 
     for (const property of properties) {
       const domain = property["rdfs:domain"];
@@ -1343,7 +1368,8 @@ export class Ontologize {
     });
 
     // Support both MongoDB (toArray) and Meteor (fetch) patterns
-    const properties = cursor.toArray ? await cursor.toArray() : cursor.fetch();
+    const rawProperties = cursor.toArray ? await cursor.toArray() : cursor.fetch();
+    const properties = rawProperties.map(r => this.ld().proxy(r));
 
     for (const property of properties) {
       const types = Array.isArray(property["@type"]) ? property["@type"] : [property["@type"]];
@@ -1376,7 +1402,8 @@ export class Ontologize {
     });
 
     // Support both MongoDB (toArray) and Meteor (fetch) patterns
-    const ontologyResources = cursor.toArray ? await cursor.toArray() : cursor.fetch();
+    const rawOntologyResources = cursor.toArray ? await cursor.toArray() : cursor.fetch();
+    const ontologyResources = rawOntologyResources.map(r => this.ld().proxy(r));
 
     for (const ontologyResource of ontologyResources) {
       ontologies[ontologyResource._id] = ontologyResource;
