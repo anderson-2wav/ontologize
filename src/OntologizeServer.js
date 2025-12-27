@@ -356,9 +356,14 @@ export class OntologizeServer extends Ontologize {
     let processed = { ...resource };
 
     // Step 1: Convert _id back to @id for JSON-LD
+    // and ensure it is first property
     if (processed._id && !processed["@id"]) {
-      processed["@id"] = processed._id;
+      const _id = processed._id;
       delete processed._id;
+      processed = {
+        "@id": _id,
+        ...processed
+      };
     }
 
     // Step 2: Ensure @type is array if needed
@@ -402,10 +407,13 @@ export class OntologizeServer extends Ontologize {
           }
           // final patchup... compact probably turned @id back into _id
           if (processed._id) {
-            processed["@id"] = processed._id;
+            const _id = processed._id;
             delete processed._id;
+            processed = {
+              "@id": _id,
+              ...processed
+            };
           }
-
         }
       }
       catch (error) {
