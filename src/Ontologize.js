@@ -178,6 +178,36 @@ export class Ontologize {
   }
 
   /**
+   * Get the label property for a resource, checking properties in order of preference.
+   * Property order can be overridden by bui:schema.labelProperties on the resource's class,
+   * otherwise uses opts.labelProperties (default: dcterms:title, foaf:name, rdfs:label)
+   *
+   * If no label property is found on the resource, then the last property of
+   * ontologize.opts.labelProperties is returned, which is assumed to be the most generic.
+   * It will be up to caller to handle that resource[prop] is undefined.
+   *
+   * @param {object} resource - The resource
+   * @param {string} [fallback] - Fallback if no label found
+   * @returns {Promise<string>} The label or fallback
+   */
+  async getLabelProperty(resource, fallback) {
+    check(resource, Object);
+    check(fallback, Match.Optional(String));
+
+    // Get the assembled class schema to check for labelProperties override
+    const classSchema = await this.getSchema(undefined, resource);
+    const labelProperties = classSchema?.labelProperties || this.opts.labelProperties;
+
+    // Check label properties in order of preference
+    for (const prop of labelProperties) {
+      if (resource[prop]) {
+        return prop;
+      }
+    }
+
+    return fallback || this.opts.labelProperties[this.opts.labelProperties - 1];
+  }
+  /**
    * Get the description for a resource, checking properties in order of preference.
    * Property order can be overridden by bui:schema.descriptionProperties on the resource's class,
    * otherwise uses opts.descriptionProperties (default: dcterms:description, rdfs:comment)
@@ -209,6 +239,37 @@ export class Ontologize {
     }
 
     return fallback || "";
+  }
+
+  /**
+   * Get the property name for the description of a resource, checking properties in order of preference.
+   * Property order can be overridden by bui:schema.descriptionProperties on the resource's class,
+   * otherwise uses opts.descriptionProperties (default: dcterms:description, rdfs:comment)
+   *
+   * If no description property is found on the resource, then the last property of
+   * ontologize.opts.descriptionProperties is returned, which is assumed to be the most generic.
+   * It will be up to caller to handle that resource[prop] is undefined.
+   *
+   * @param {object} resource - The resource
+   * @param {string} [fallback] - Fallback if no description property found
+   * @returns {Promise<string>} The description or fallback
+   */
+  async getDescriptionProperty(resource, fallback) {
+    check(resource, Object);
+    check(fallback, Match.Optional(String));
+
+    // Get the assembled class schema to check for descriptionProperties override
+    const classSchema = await this.getSchema(undefined, resource);
+    const descriptionProperties = classSchema?.descriptionProperties || this.opts.descriptionProperties;
+
+    // Check description properties in order of preference
+    for (const prop of descriptionProperties) {
+      if (resource[prop]) {
+        return prop;
+      }
+    }
+    // the last default descriptionProperties is the most generic
+    return fallback || this.opts.descriptionProperties[this.opts.descriptionProperties.length - 1];
   }
 
   /**
