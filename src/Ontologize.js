@@ -16,6 +16,12 @@ import LD from "bold-ld";
  * @class
  */
 export class Ontologize {
+  // Default properties for getLabel (in order of preference)
+  static DEFAULT_LABEL_PROPERTIES = ["dcterms:title", "foaf:name", "rdfs:label"];
+
+  // Default properties for getDescription (in order of preference)
+  static DEFAULT_DESCRIPTION_PROPERTIES = ["dcterms:description", "rdfs:comment"];
+
   /**
    * Create a new Ontologize instance
    *
@@ -26,6 +32,8 @@ export class Ontologize {
    * @param {object} [opts.collections] - named collections in addition to ontology, context, and statements
    * @param {object} [opts.context] - Default JSON-LD context
    * @param {boolean} [opts.debug=false] - Enable debug logging
+   * @param {string[]} [opts.labelProperties] - Properties to check for labels (in order of preference)
+   * @param {string[]} [opts.descriptionProperties] - Properties to check for descriptions (in order of preference)
    */
   constructor(ontologyCollection, contextCollection, statementsCollection, opts = {}) {
     check(ontologyCollection, Object);
@@ -41,6 +49,8 @@ export class Ontologize {
     this.opts = opts;
     this.opts.defaultContext = this.opts.defaultContext || Ontologize.DEFAULT_CONTEXT;
     this.opts.debug = this.opts.debug || false;
+    this.opts.labelProperties = this.opts.labelProperties || Ontologize.DEFAULT_LABEL_PROPERTIES;
+    this.opts.descriptionProperties = this.opts.descriptionProperties || Ontologize.DEFAULT_DESCRIPTION_PROPERTIES;
     if (this.opts.collections) {
       Object.assign(this.collections, this.opts.collections);
     }
@@ -127,7 +137,8 @@ export class Ontologize {
   }
 
   /**
-   * Get the label for a resource, preferring rdfs:label
+   * Get the label for a resource, checking properties in order of preference.
+   * Property order is configurable via opts.labelProperties (default: dcterms:title, foaf:name, rdfs:label)
    *
    * @param {object} resource - The resource
    * @param {string} [fallback] - Fallback if no label found
@@ -136,9 +147,8 @@ export class Ontologize {
   getLabel(resource, fallback) {
     check(resource, Object);
     check(fallback, Match.Optional(String));
-    // specific to generic label properties
-    const labelProps = ["dcterms:title", "rdfs:label"];
-    for (const prop of labelProps) {
+    // Check label properties in order of preference
+    for (const prop of this.opts.labelProperties) {
       if (resource[prop]) {
         if (this.ld().isProxy(resource)) {
           return resource[prop];
@@ -162,7 +172,8 @@ export class Ontologize {
   }
 
   /**
-   * Get the description for a resource, preferring dcterms:description then rdfs:comment
+   * Get the description for a resource, checking properties in order of preference.
+   * Property order is configurable via opts.descriptionProperties (default: dcterms:description, rdfs:comment)
    *
    * @param {object} resource - The resource
    * @param {string} [fallback] - Fallback if no description found
@@ -171,9 +182,8 @@ export class Ontologize {
   getDescription(resource, fallback) {
     check(resource, Object);
     check(fallback, Match.Optional(String));
-    // specific to generic description properties
-    const descProps = ["dcterms:description", "rdfs:comment"];
-    for (const prop of descProps) {
+    // Check description properties in order of preference
+    for (const prop of this.opts.descriptionProperties) {
       if (resource[prop]) {
         if (this.ld().isProxy(resource)) {
           return resource[prop];
