@@ -138,17 +138,23 @@ export class Ontologize {
 
   /**
    * Get the label for a resource, checking properties in order of preference.
-   * Property order is configurable via opts.labelProperties (default: dcterms:title, foaf:name, rdfs:label)
+   * Property order can be overridden by bui:schema.labelProperties on the resource's class,
+   * otherwise uses opts.labelProperties (default: dcterms:title, foaf:name, rdfs:label)
    *
    * @param {object} resource - The resource
    * @param {string} [fallback] - Fallback if no label found
-   * @returns {string} The label or fallback
+   * @returns {Promise<string>} The label or fallback
    */
-  getLabel(resource, fallback) {
+  async getLabel(resource, fallback) {
     check(resource, Object);
     check(fallback, Match.Optional(String));
+
+    // Get the assembled class schema to check for labelProperties override
+    const classSchema = await this.getSchema(undefined, resource);
+    const labelProperties = classSchema?.labelProperties || this.opts.labelProperties;
+
     // Check label properties in order of preference
-    for (const prop of this.opts.labelProperties) {
+    for (const prop of labelProperties) {
       if (resource[prop]) {
         if (this.ld().isProxy(resource)) {
           return resource[prop];
@@ -173,17 +179,23 @@ export class Ontologize {
 
   /**
    * Get the description for a resource, checking properties in order of preference.
-   * Property order is configurable via opts.descriptionProperties (default: dcterms:description, rdfs:comment)
+   * Property order can be overridden by bui:schema.descriptionProperties on the resource's class,
+   * otherwise uses opts.descriptionProperties (default: dcterms:description, rdfs:comment)
    *
    * @param {object} resource - The resource
    * @param {string} [fallback] - Fallback if no description found
-   * @returns {string} The description or fallback
+   * @returns {Promise<string>} The description or fallback
    */
-  getDescription(resource, fallback) {
+  async getDescription(resource, fallback) {
     check(resource, Object);
     check(fallback, Match.Optional(String));
+
+    // Get the assembled class schema to check for descriptionProperties override
+    const classSchema = await this.getSchema(undefined, resource);
+    const descriptionProperties = classSchema?.descriptionProperties || this.opts.descriptionProperties;
+
     // Check description properties in order of preference
-    for (const prop of this.opts.descriptionProperties) {
+    for (const prop of descriptionProperties) {
       if (resource[prop]) {
         if (this.ld().isProxy(resource)) {
           return resource[prop];
@@ -216,8 +228,8 @@ export class Ontologize {
       const resource = rawResource ? this.ld().proxy(rawResource) : null;
 
       if (resource) {
-        // Use the synchronous getLabel method on the found resource
-        return this.getLabel(resource, fallback);
+        // Use the getLabel method on the found resource
+        return await this.getLabel(resource, fallback);
       }
     }
     catch (error) {

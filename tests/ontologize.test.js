@@ -190,48 +190,48 @@ describe("Ontologize", function () {
 
 
   describe("getLabel", function () {
-    it("should return rdfs:label when present", function () {
+    it("should return rdfs:label when present", async function () {
       const resource = {
         "@id": "ex:TestClass",
         "@type": "owl:Class",
         "rdfs:label": "Test Class"
       };
-      const label = ontologize.getLabel(resource);
+      const label = await ontologize.getLabel(resource);
       assert.equal(label, "Test Class");
     });
 
-    it("should return first label from array", function () {
+    it("should return first label from array", async function () {
       const resource = {
         "@id": "ex:TestClass",
         "@type": "owl:Class",
         "rdfs:label": ["Test Class", "Another Label"]
       };
-      const label = ontologize.getLabel(resource);
+      const label = await ontologize.getLabel(resource);
       assert.equal(label, "Test Class");
     });
 
-    it("should extract label from @id when rdfs:label not present", function () {
+    it("should extract label from @id when rdfs:label not present", async function () {
       const resource = {
         "@id": "ex:TestClass",
         "@type": "owl:Class"
       };
-      const label = ontologize.getLabel(resource);
+      const label = await ontologize.getLabel(resource);
       assert.equal(label, "TestClass");
     });
 
-    it("should use fallback when no label or @id", function () {
+    it("should use fallback when no label or @id", async function () {
       const resource = {
         "@type": "owl:Class"
       };
-      const label = ontologize.getLabel(resource, "Fallback");
+      const label = await ontologize.getLabel(resource, "Fallback");
       assert.equal(label, "Fallback");
     });
 
-    it("should use default fallback", function () {
+    it("should use default fallback", async function () {
       const resource = {
         "@type": "owl:Class"
       };
-      const label = ontologize.getLabel(resource);
+      const label = await ontologize.getLabel(resource);
       assert.equal(label, "Unknown");
     });
   });

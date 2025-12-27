@@ -24,8 +24,16 @@ describe("OntologizeServer", function () {
 
   beforeEach(function () {
     // Mock collections for testing
-    const mockOntologyCollection = {};
-    const mockContextCollection = {};
+    const mockOntologyCollection = {
+      findOne: () => Promise.resolve(null),
+      find: () => ({
+        fetch: () => [],
+        toArray: () => Promise.resolve([])
+      })
+    };
+    const mockContextCollection = {
+      findOne: () => Promise.resolve(null)
+    };
     const mockStatementsCollection = createMockStatementsCollection();
     ontologizeServer = new OntologizeServer(mockOntologyCollection, mockContextCollection, mockStatementsCollection);
   });
@@ -47,7 +55,7 @@ describe("OntologizeServer", function () {
       assert.equal(ontologizeServer.getVersion(), "0.1.0");
     });
 
-    it("should inherit parent class functionality", function () {
+    it("should inherit parent class functionality", async function () {
       const validResource = {
         "@id": "ex:TestClass",
         "@type": "owl:Class",
@@ -56,7 +64,7 @@ describe("OntologizeServer", function () {
 
       // Should work like parent class
       assert.isTrue(ontologizeServer.isValidOntologyResource(validResource));
-      assert.equal(ontologizeServer.getLabel(validResource), "Test Class");
+      assert.equal(await ontologizeServer.getLabel(validResource), "Test Class");
     });
   });
 
