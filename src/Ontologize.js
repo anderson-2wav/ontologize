@@ -693,8 +693,10 @@ export class Ontologize {
   }
 
   /**
-   * Get the assembled bui:schema for a property in the context of a resource.
+   * Get the assembled bui:schema for a property in the context of a resource,
+   * or the class schema for a resource if no property is specified.
    *
+   * When property is provided:
    * This function collects bui:schema definitions from multiple sources,
    * merged from least specific to most specific:
    * 1. The property definition itself (e.g., the ontology resource for "foo")
@@ -705,13 +707,29 @@ export class Ontologize {
    * subschema is extracted. Schemas are merged so more specific sources
    * override less specific ones.
    *
-   * @param {string} property - The property name (e.g., "foo")
+   * When property is NOT provided (class schema mode):
+   * Returns the merged bui:schema for the resource's classes:
+   * 1. Traverse @types from least to most specific (via rdfs:subClassOf)
+   * 2. Merge bui:schema from each class directly
+   * 3. Merge the resource instance's own bui:schema (most specific)
+   *
+   * @param {string} [property] - The property name (e.g., "foo"). If omitted, returns class schema.
    * @param {Object} [resource] - The resource context (used to determine @types and instance schema)
    * @returns {Promise<Object>} The merged bui:schema object, or empty object if none found
    */
   async getSchema(property, resource) {
-    check(property, String);
+    check(property, Match.Optional(String));
     check(resource, Match.Optional(Object));
+
+    // Class schema mode: no property provided, but resource is
+    if (!property && resource) {
+      return this._getClassSchema(resource);
+    }
+
+    // Property schema mode (original behavior)
+    if (!property) {
+      return {};
+    }
 
     const schemas = await this._findSchemasWithProperty(resource, property, "bui:schema");
     let mergedSchema = {};
@@ -746,6 +764,80 @@ export class Ontologize {
       if (instanceSchema?.properties?.[property] !== undefined) {
         mergedSchema = this._mergeSchemas(mergedSchema, instanceSchema.properties[property]);
       }
+    }
+
+    return mergedSchema;
+  }
+
+  /**
+   * Get the merged bui:schema for a resource's class hierarchy.
+   * Traverses @types from least to most specific, merging bui:schema from each.
+   *
+   * @param {Object} resource - The resource to get class schema for
+   * @returns {Promise<Object>} The merged class schema, or empty object if none found
+   * @private
+   */
+  async _getClassSchema(resource) {
+    check(resource, Object);
+
+    let mergedSchema = {};
+    const exploredTypes = new Set();
+
+    // Get resource types
+    const resourceTypes = Array.isArray(resource["@type"])
+      ? resource["@type"]
+      : (resource["@type"] ? [resource["@type"]] : []);
+
+    // Collect all class resources with their hierarchy depth
+    const classesWithDepth = [];
+
+    // Recursive function to walk up the class hierarchy and collect classes
+    const collectClasses = async (typeId, depth) => {
+      if (!typeId || exploredTypes.has(typeId) || typeId.startsWith("_:")) {
+        return;
+      }
+      exploredTypes.add(typeId);
+
+      const rawClassResource = await this.collections.Ontology.findOne({ _id: typeId });
+      const classResource = rawClassResource ? this.ld().proxy(rawClassResource) : null;
+
+      if (classResource) {
+        classesWithDepth.push({ resource: classResource, depth });
+
+        // Walk up rdfs:subClassOf hierarchy
+        if (classResource["rdfs:subClassOf"]) {
+          const superClasses = Array.isArray(classResource["rdfs:subClassOf"])
+            ? classResource["rdfs:subClassOf"]
+            : [classResource["rdfs:subClassOf"]];
+
+          for (const superClass of superClasses) {
+            const superClassId = typeof superClass === "object"
+              ? (superClass["@id"] || superClass._id)
+              : superClass;
+            await collectClasses(superClassId, depth + 1);
+          }
+        }
+      }
+    };
+
+    // Collect all classes from resource types
+    for (const typ of resourceTypes) {
+      await collectClasses(typ, 0);
+    }
+
+    // Sort by depth descending (least specific first = highest depth)
+    classesWithDepth.sort((a, b) => b.depth - a.depth);
+
+    // Merge schemas from least to most specific
+    for (const { resource: classResource } of classesWithDepth) {
+      if (classResource["bui:schema"]) {
+        mergedSchema = this._mergeSchemas(mergedSchema, classResource["bui:schema"]);
+      }
+    }
+
+    // Finally, apply the resource instance's own bui:schema (most specific)
+    if (resource["bui:schema"]) {
+      mergedSchema = this._mergeSchemas(mergedSchema, resource["bui:schema"]);
     }
 
     return mergedSchema;
