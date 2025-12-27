@@ -1128,42 +1128,6 @@ export class Ontologize {
     "rdfs:domain" : {
       "@type" : "@id"
     },
-    "ctb:importance" : {
-      "@type" : "http://www.w3.org/2001/XMLSchema#integer"
-    },
-    "ctb:when" : {
-      "@type" : "http://www.w3.org/2001/XMLSchema#dateTime"
-    },
-    "rdfs:comment" : {
-      "@type" : "http://www.w3.org/2001/XMLSchema#string"
-    },
-    "ctb:confidence" : {
-      "@type" : "http://www.w3.org/2001/XMLSchema#string"
-    },
-    "ctb:hasBeginning" : {
-      "@type" : "http://www.w3.org/2001/XMLSchema#dateTime"
-    },
-    "ctb:hasCertification" : {
-      "@type" : "@id"
-    },
-    "ctb:hasEnd" : {
-      "@type" : "http://www.w3.org/2001/XMLSchema#dateTime"
-    },
-    "ctb:hasKnowledge" : {
-      "@type" : "@id"
-    },
-    "ctb:hasPosition" : {
-      "@type" : "@id"
-    },
-    "ctb:hasSkill" : {
-      "@type" : "@id"
-    },
-    "ctb:hasTask" : {
-      "@type" : "@id"
-    },
-    "ctb:jobTitle" : {
-      "@type" : "http://www.w3.org/2001/XMLSchema#string"
-    },
     "org:memberDuring" : {
       "@type" : "@id"
     },
@@ -1179,29 +1143,11 @@ export class Ontologize {
     "rdfs:subClassOf" : {
       "@type" : "@id"
     },
-    "2do:schema" : {
-
-    },
     "dc:description" : {
       "@type" : "http://www.w3.org/2001/XMLSchema#string"
     },
-    "ctb:collection" : {
-      "@type" : "http://www.w3.org/2001/XMLSchema#string"
-    },
-    "ctb:completedDate" : {
-      "@type" : "http://www.w3.org/2001/XMLSchema#dateTime"
-    },
-    "ctb:dueDate" : {
-      "@type" : "http://www.w3.org/2001/XMLSchema#dateTime"
-    },
-    "ctb:projectStatus" : {
-      "@type" : "http://www.w3.org/2001/XMLSchema#string"
-    },
-    "ctb:severity" : {
-      "@type" : "http://www.w3.org/2001/XMLSchema#string"
-    },
-    "ctb:startDate" : {
-      "@type" : "http://www.w3.org/2001/XMLSchema#dateTime"
+    "dcterms:license": {
+      "@type": "@id"
     },
     "schema:eligibleRegion" : {
 
@@ -1216,45 +1162,6 @@ export class Ontologize {
       "@type" : "@id"
     },
     "wot:src_assurance" : {
-      "@type" : "@id"
-    },
-    "nice:description" : {
-
-    },
-    "nice:inCategory" : {
-      "@type" : "@id"
-    },
-    "nice:inSpecialtyArea" : {
-      "@type" : "@id"
-    },
-    "nice:name" : {
-
-    },
-    "nice:abbrev" : {
-
-    },
-    "nice:requiresAbility" : {
-      "@type" : "@id"
-    },
-    "nice:requiresKnowledge" : {
-      "@type" : "@id"
-    },
-    "nice:requiresSkill" : {
-      "@type" : "@id"
-    },
-    "nice:requiresTask" : {
-      "@type" : "@id"
-    },
-    "nice:title" : {
-
-    },
-    "nice:competencyType" : {
-      "@type" : "@id"
-    },
-    "ctl:related" : {
-      "@type" : "@id"
-    },
-    "ctl:memberOf": {
       "@type" : "@id"
     },
     "owl:sameAs" : {
@@ -1281,6 +1188,15 @@ export class Ontologize {
     "owl:disjointWith": {
       "@type" : "@id"
     },
+    "owl:inverseOf": {
+      "@type" : "@id"
+    },
+    "owl:members": {
+      "@type" : "@id"
+    },
+    "owl:versionIRI": {
+      "@type" : "@id"
+    }
   };
   static DEFAULT_CONTEXT2 = {
     _id: "@id",
