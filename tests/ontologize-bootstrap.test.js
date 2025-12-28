@@ -346,7 +346,7 @@ describe("OntologizeServer Bootstrap", function () {
   describe("bootstrapReasoner with BFO data", function () {
     it("should import and bootstrap BFO ontology", async function () {
       // First import BFO data
-      const bfoPath = path.join(__dirname, "data", "bold-bfo.jsonld");
+      const bfoPath = path.join(__dirname, "data", "bootstrap", "bold-bfo.jsonld");
       const importResult = await ontologizeServer.importOntologyFromFile(
         bfoPath,
         mockOntologyCollection,

@@ -258,7 +258,7 @@ describe("OntologizeServer", function () {
 
     it("should import and export BFO data", async function () {
       // First import BFO data
-      const bfoPath = path.resolve(process.cwd(), "../../private/data/bfo-core.jsonld");
+      const bfoPath = path.resolve(process.cwd(), "../../private/data/bootstrap/bfo-core.jsonld");
 
       try {
         const importResult = await ontologizeServer.importOntologyFromFile(

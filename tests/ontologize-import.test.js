@@ -316,7 +316,7 @@ describe("OntologizeServer Import", function () {
   describe("real file import", function () {
     it("should import actual ontology.json file", async function () {
       const cwd = process.cwd();
-      const filePath = "./tests/data/ontology.json";
+      const filePath = "./tests/data/bootstrap/ontology.json";
 
       // Test loading the file
       let fileData;
@@ -641,7 +641,7 @@ describe("OntologizeServer Import", function () {
     it("should ensure @type is array after import", async function () {
 
       // Test with actual CTB ontology if available
-      const filePath = "../../private/data/ontology.json";
+      const filePath = "../../private/data/bootstrap/ontology.json";
 
       let fileData;
       try {
@@ -845,7 +845,7 @@ describe("OntologizeServer Import", function () {
 
     it("should import FOAF ontology with TBox resources going to Ontology collection", async function () {
 
-      const filePath = "./tests/data/foaf.jsonld";
+      const filePath = "./tests/data/bootstrap/foaf.jsonld";
 
       // Test import of FOAF ontology
       const result = await ontologizeServer.importOntologyFromFile(
@@ -918,7 +918,7 @@ describe("OntologizeServer Import", function () {
       ontologyData.push({ _id: "test:ExistingClass", "@type": ["rdfs:Class"] });
       foafData.push({ _id: "test:ExistingFoafResource", "@type": ["foaf:Person"] });
 
-      const filePath = "./tests/data/foaf.jsonld";
+      const filePath = "./tests/data/bootstrap/foaf.jsonld";
 
       const result = await ontologizeServer.importOntologyFromFile(
         filePath,
