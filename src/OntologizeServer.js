@@ -371,7 +371,7 @@ export class OntologizeServer extends Ontologize {
       processed["@type"] = [processed["@type"]];
     }
 
-    // Step 3: Stringify bui:JSON/bui:Schema property values before JSON-LD processing
+    // Step 3: Stringify bold:JSON/bui:Schema property values before JSON-LD processing
     // For export, POJOs in MongoDB should become JSON strings in the output file
     processed = await this._stringifyJsonProperties(processed);
 
@@ -563,7 +563,7 @@ export class OntologizeServer extends Ontologize {
     if (normalize) {
       const ld = new LD();
 
-      // Step 1-a: Stringify bui:JSON/bui:Schema property values before JSON-LD processing
+      // Step 1-a: Stringify bold:JSON/bui:Schema property values before JSON-LD processing
       // This prevents the JSON-LD processor from altering nested POJO structure
       // useCache: false is necessary because cache keeps updating as we add new resources
       processedResource = await this._stringifyJsonProperties(processedResource, {useCache: false});
@@ -598,7 +598,7 @@ export class OntologizeServer extends Ontologize {
         console.warn(`Failed to compact resource ${resource._id || resource["@id"]}: ${error.message}`);
       }
 
-      // Step 1-c: Parse bui:JSON/bui:Schema property values back to POJOs for MongoDB storage
+      // Step 1-c: Parse bold:JSON/bui:Schema property values back to POJOs for MongoDB storage
       processedResource = await this._parseJsonProperties(processedResource);
     }
 
@@ -1797,9 +1797,9 @@ INSERT DATA {
    * @private
    */
   static BUI_JSON_TYPES = [
-    "bui:JSON",
+    "bold:JSON",
     "bui:Schema",
-    "https://ontology.2wav.com/bold-ui#JSON",
+    "https://ontology.2wav.com/bold#JSON",
     "https://ontology.2wav.com/bold-ui#Schema"
   ];
 
@@ -1812,7 +1812,7 @@ INSERT DATA {
   ];
 
   /**
-   * Check if a property has a bui:JSON or bui:Schema range (or subclass).
+   * Check if a property has a bold:JSON or bui:Schema range (or subclass).
    * These properties require special handling during import/export.
    *
    * @param {string} propertyId - The property identifier (e.g., "bui:schema")
@@ -1870,7 +1870,7 @@ INSERT DATA {
       return this._jsonPropertyCache;
     }
 
-    // Find properties with bui:JSON or bui:Schema range
+    // Find properties with bold:JSON or bui:Schema range
     const cursor = this.collections.Ontology.find({
       $or: [
         { "rdfs:range": { $in: OntologizeServer.BUI_JSON_TYPES } },
@@ -1901,7 +1901,7 @@ INSERT DATA {
 
   /**
    * Pre-process a resource before JSON-LD expansion/compaction.
-   * Stringifies POJO values on bui:JSON/bui:Schema properties to prevent
+   * Stringifies POJO values on bold:JSON/bui:Schema properties to prevent
    * the JSON-LD processor from altering their structure.
    *
    * @param {Object} resource - The resource to process
@@ -1937,7 +1937,7 @@ INSERT DATA {
 
   /**
    * Post-process a resource after JSON-LD expansion/compaction.
-   * Parses JSON string values back to POJOs for bui:JSON/bui:Schema properties.
+   * Parses JSON string values back to POJOs for bold:JSON/bui:Schema properties.
    *
    * @param {Object} resource - The resource to process
    * @returns {Promise<Object>} Resource with JSON property values parsed

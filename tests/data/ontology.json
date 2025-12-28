@@ -203,10 +203,10 @@
     "_id": "bui:Schema",
     "rdfs:comment": "The Datatype of a 2do Schema, an enhanced JSON-Schema object of display/editor constraints for a property. Common schema fields are enum, enumLabels, enumColors (see https://json-schema.org).",
     "@type": "rdfs:Class",
-    "rdfs:subClassOf": "bui:JSON"
+    "rdfs:subClassOf": "bold:JSON"
   },
   {
-    "_id": "bui:JSON",
+    "_id": "bold:JSON",
     "rdfs:comment": "The Datatype of a JSON object. This would be serialized as an xsd:string for export, but represented as a full object in the Ontology collection.",
     "@type": "rdfs:Class",
     "rdfs:subClassOf": "schema:Text"
