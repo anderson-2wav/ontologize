@@ -1803,6 +1803,10 @@ INSERT DATA {
     "https://ontology.2wav.com/bold-ui#Schema"
   ];
 
+  static BUI_JSON_PROPERTIES = [
+    "bui:schema"
+  ];
+
   /**
    * Check if a property has a bui:JSON or bui:Schema range (or subclass).
    * These properties require special handling during import/export.
@@ -1876,7 +1880,11 @@ INSERT DATA {
         jsonProps.add(prop._id);
       }
     }
-
+    // some props are defaulted in so that we can recognize them before their actual ontology files are bootstrapped,
+    // e.g. bui:schema
+    for (const prop of OntologizeServer.BUI_JSON_PROPERTIES) {
+      jsonProps.add(prop);
+    }
     return jsonProps;
   }
 
