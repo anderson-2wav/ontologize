@@ -1803,6 +1803,10 @@ INSERT DATA {
     "https://ontology.2wav.com/bold-ui#Schema"
   ];
 
+  /**
+   * BUI properties that are hardwired as JSON properties. This let's JSON properties be handled correctly before all ontologies are loaded.
+   * @type {[string]}
+   */
   static BUI_JSON_PROPERTIES = [
     "bui:schema"
   ];
