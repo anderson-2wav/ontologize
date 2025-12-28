@@ -470,6 +470,11 @@ export class OntologizeServer extends Ontologize {
       const foundContexts = [];
 
       for (const item of jsonldData) {
+        // this is a special accommodation of legacy ontology.json,
+        // which is an array with an item
+        //  {
+        //     "_id": "@context",
+        //     "@context": { ...
         if (item["@context"]) {
           foundContexts.push(item["@context"]);
         }
