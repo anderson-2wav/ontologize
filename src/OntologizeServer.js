@@ -1937,7 +1937,7 @@ INSERT DATA {
 
   /**
    * Post-process a resource after JSON-LD expansion/compaction.
-   * Parses JSON string values back to POJOs for bold:JSON/bui:Schema properties.
+   * Parses JSON string values back to POJOs for bui:JSON/bui:Schema properties.
    *
    * @param {Object} resource - The resource to process
    * @returns {Promise<Object>} Resource with JSON property values parsed
