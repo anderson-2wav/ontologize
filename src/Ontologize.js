@@ -58,6 +58,20 @@ export class Ontologize {
 
     // Initialize singleton LD instance for this Ontologize instance
     this._ld = null;
+    // TODO THERE ARE REAL PROBLEMS WITH CLIENT/SERVER HERE
+    // on Meteor client, findOne returns resource,
+    // on server, returns promis
+    const wat = this.collections.Context.findOne({ _id: "@id" });
+    if (wat instanceof Promise) {
+      wat.then((context) => {
+        const ld = new LD({ context });
+        this._ld = ld;
+      });
+    }
+    else if (wat) {
+      const ld = new LD({ context: wat });
+      this._ld = ld;
+    }
   }
 
   /**
@@ -68,6 +82,7 @@ export class Ontologize {
    */
   ld() {
     if (!this._ld) {
+      // this is a problem if it happens because there is no context
       this._ld = new LD();
     }
     return this._ld;
