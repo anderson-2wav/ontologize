@@ -60,7 +60,7 @@ export class Ontologize {
     this._ld = null;
     // TODO THERE ARE REAL PROBLEMS WITH CLIENT/SERVER HERE
     // on Meteor client, findOne returns resource,
-    // on server, returns promis
+    // on server, returns promise
     const wat = this.collections.Context.findOne({ _id: "@id" });
     if (wat instanceof Promise) {
       wat.then((context) => {
