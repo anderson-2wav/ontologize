@@ -182,9 +182,10 @@ export class Ontologize {
       }
     }
 
-    if (resource["@id"]) {
+    const _id = resource._id ? "_id" : "@id";
+    if (resource[_id]) {
       // Try to extract a readable name from the ID
-      const id = resource["@id"];
+      const id = resource[_id];
       const parts = id.split(/[#/:]/);
       return parts[parts.length - 1];
     }
