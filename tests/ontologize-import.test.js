@@ -316,7 +316,7 @@ describe("OntologizeServer Import", function () {
   describe("real file import", function () {
     it("should import actual ontology.json file", async function () {
       const cwd = process.cwd();
-      const filePath = "./tests/data/bootstrap/ontology.json";
+      const filePath = "./tests/data/ontology.json";
 
       // Test loading the file
       let fileData;
@@ -358,16 +358,16 @@ describe("OntologizeServer Import", function () {
       // Check that ontology resources were imported
       assert.isTrue(ontologyData.length > 0);
 
-      // Check for specific CTB ontology resources, now bold:
-      // and these are kinda obsolete...
-      const ctbClasses = ontologyData.filter(r =>
-        r._id && r._id.startsWith("bold:") &&
-        (r["@type"] === "rdfs:Class" || (Array.isArray(r["@type"]) && r["@type"].includes("rdfs:Class")))
-      );
-      assert.isTrue(ctbClasses.length > 0);
+      // bold resources have been moved into bold.jsonld
+      // so this is obsolete
+      // const ctbClasses = ontologyData.filter(r =>
+      //   r._id && r._id.startsWith("bold:") &&
+      //   (r["@type"] === "rdfs:Class" || (Array.isArray(r["@type"]) && r["@type"].includes("rdfs:Class")))
+      // );
+      // assert.isTrue(ctbClasses.length > 0);
 
       console.log(`Imported ${result.processedResources} resources from ${result.totalResources} total`);
-      console.log(`Found ${ctbClasses.length} CTB classes`);
+      // console.log(`Found ${ctbClasses.length} CTB classes`);
     });
   });
 
@@ -640,7 +640,7 @@ describe("OntologizeServer Import", function () {
   describe("BOLD Resource Normalization", function () {
     it("should ensure @type is array after import", async function () {
 
-      // Test with actual CTB ontology if available
+      // Test with actual ontology if available
       const filePath = "../../private/data/bootstrap/ontology.json";
 
       let fileData;
@@ -845,7 +845,7 @@ describe("OntologizeServer Import", function () {
 
     it("should import FOAF ontology with TBox resources going to Ontology collection", async function () {
 
-      const filePath = "./tests/data/bootstrap/foaf.jsonld";
+      const filePath = "./tests/data/foaf.jsonld";
 
       // Test import of FOAF ontology
       const result = await ontologizeServer.importOntologyFromFile(
@@ -918,7 +918,7 @@ describe("OntologizeServer Import", function () {
       ontologyData.push({ _id: "test:ExistingClass", "@type": ["rdfs:Class"] });
       foafData.push({ _id: "test:ExistingFoafResource", "@type": ["foaf:Person"] });
 
-      const filePath = "./tests/data/bootstrap/foaf.jsonld";
+      const filePath = "./tests/data/foaf.jsonld";
 
       const result = await ontologizeServer.importOntologyFromFile(
         filePath,
