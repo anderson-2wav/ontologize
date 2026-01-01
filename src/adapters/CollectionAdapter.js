@@ -42,4 +42,14 @@ export class CollectionAdapter {
   async count(query, options = {}) {
     throw new Error("count must be implemented by subclass");
   }
+
+  /**
+   * Delete many documents matching the query
+   * @param {object} query - MongoDB-style query object
+   * @param {object} [options] - Delete options
+   * @returns {Promise<object>} Result with deletedCount
+   */
+  async deleteMany(query, options = {}) {
+    throw new Error("deleteMany must be implemented by subclass");
+  }
 }

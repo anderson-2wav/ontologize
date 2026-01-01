@@ -71,6 +71,11 @@ describe("OntologizeServer Bootstrap", function () {
         }
         return { modifiedCount: doc ? 1 : 0 };
       },
+      deleteMany: async () => {
+        const count = insertedOntologyResources.length;
+        insertedOntologyResources = [];
+        return { deletedCount: count };
+      },
       count: () => insertedOntologyResources.length
     };
 
@@ -346,7 +351,7 @@ describe("OntologizeServer Bootstrap", function () {
   describe("bootstrapReasoner with BFO data", function () {
     it("should import and bootstrap BFO ontology", async function () {
       // First import BFO data
-      const bfoPath = path.join(__dirname, "data", "bootstrap", "bold-bfo.jsonld");
+      const bfoPath = path.join(__dirname, "data", "bold-bfo.jsonld");
       const importResult = await ontologizeServer.importOntologyFromFile(
         bfoPath,
         mockOntologyCollection,
@@ -367,6 +372,137 @@ describe("OntologizeServer Bootstrap", function () {
       assert.isObject(bootstrapResult);
       assert.equal(bootstrapResult.resourcesLoaded, insertedOntologyResources.length);
       assert.isAbove(bootstrapResult.triplesGenerated, bootstrapResult.resourcesLoaded);
+    });
+  });
+
+  describe("bootstrap() method", function () {
+    it("should have bootstrap method", function () {
+      assert.isFunction(ontologizeServer.bootstrap);
+    });
+
+    it("should throw error when no bootstrap files configured", async function () {
+      try {
+        await ontologizeServer.bootstrap();
+        assert.fail("Should have thrown error");
+      }
+      catch (error) {
+        assert.include(error.message, "No bootstrap files configured");
+      }
+    });
+
+    it("should bootstrap from constructor opts.bootstrapFiles", async function () {
+      // Create a new instance with bootstrapFiles
+      const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "Ontology");
+      const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "Context");
+      const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "Statements");
+
+      const serverWithFiles = new OntologizeServer(ontologyAdapter, contextAdapter, statementsAdapter, {
+        bootstrapFiles: ["bold-bfo.jsonld", "ontology.json"],
+        bootstrapPath: path.join(__dirname, "data")
+      });
+
+      const result = await serverWithFiles.bootstrap();
+
+      assert.isObject(result);
+      assert.equal(result.filesProcessed, 2);
+      assert.isArray(result.results);
+      assert.equal(result.results.length, 2);
+
+      // First file should succeed
+      assert.property(result.results[0], "processedResources");
+      assert.isAbove(result.results[0].processedResources, 0);
+
+      // Second file should also succeed
+      assert.property(result.results[1], "processedResources");
+    });
+
+    it("should bootstrap from opts.files parameter", async function () {
+      const result = await ontologizeServer.bootstrap({
+        files: ["bold-bfo.jsonld"],
+        basePath: path.join(__dirname, "data")
+      });
+
+      assert.isObject(result);
+      assert.equal(result.filesProcessed, 1);
+      assert.isAbove(result.results[0].processedResources, 0);
+    });
+
+    it("should handle absolute file paths", async function () {
+      const absolutePath = path.join(__dirname, "data", "bold-bfo.jsonld");
+
+      const result = await ontologizeServer.bootstrap({
+        files: [absolutePath]
+      });
+
+      assert.isObject(result);
+      assert.equal(result.filesProcessed, 1);
+      assert.isAbove(result.results[0].processedResources, 0);
+    });
+
+    it("should fail on first file error but continue on subsequent file errors", async function () {
+      // First file missing should throw
+      try {
+        await ontologizeServer.bootstrap({
+          files: ["nonexistent.jsonld"],
+          basePath: path.join(__dirname, "data")
+        });
+        assert.fail("Should have thrown error");
+      }
+      catch (error) {
+        assert.include(error.message, "Failed to load required file");
+      }
+
+      // Second file missing should be skipped
+      const result = await ontologizeServer.bootstrap({
+        files: ["bold-bfo.jsonld", "nonexistent.jsonld"],
+        basePath: path.join(__dirname, "data")
+      });
+
+      assert.equal(result.filesProcessed, 2);
+      assert.isAbove(result.results[0].processedResources, 0);
+      assert.equal(result.results[1].skipped, true);
+      assert.property(result.results[1], "error");
+    });
+
+    it("should clear collection only on first file when clearFirst=true", async function () {
+      // Pre-populate with a resource
+      await mockOntologyCollection.insertOne({
+        _id: "test:existing",
+        "@type": ["owl:Class"]
+      });
+
+      const initialCount = insertedOntologyResources.length;
+      assert.equal(initialCount, 1);
+
+      // Bootstrap with clearFirst=true (default)
+      const result = await ontologizeServer.bootstrap({
+        files: ["bold-bfo.jsonld"],
+        basePath: path.join(__dirname, "data"),
+        clearFirst: true
+      });
+
+      // The pre-existing resource should be gone (collection was cleared)
+      const existingResource = insertedOntologyResources.find(r => r._id === "test:existing");
+      assert.isUndefined(existingResource);
+    });
+
+    it("should preserve existing resources when clearFirst=false", async function () {
+      // Pre-populate with a resource
+      await mockOntologyCollection.insertOne({
+        _id: "test:existing",
+        "@type": ["owl:Class"]
+      });
+
+      // Bootstrap with clearFirst=false
+      const result = await ontologizeServer.bootstrap({
+        files: ["bold-bfo.jsonld"],
+        basePath: path.join(__dirname, "data"),
+        clearFirst: false
+      });
+
+      // The pre-existing resource should still be there
+      const existingResource = insertedOntologyResources.find(r => r._id === "test:existing");
+      assert.isDefined(existingResource);
     });
   });
 });

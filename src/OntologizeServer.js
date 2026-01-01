@@ -24,9 +24,97 @@ export class OntologizeServer extends Ontologize {
    * @param {object} contextCollection
    * @param {object} statementsCollection
    * @param {object} [opts] - Configuration options (same as Ontologize)
+   * @param {string[]} [opts.bootstrapFiles] - Array of file paths for bootstrap ontologies
+   * @param {string} [opts.bootstrapPath] - Base path for relative bootstrap file paths
    */
   constructor(ontologyCollection, contextCollection, statementsCollection, opts = {}) {
     super(ontologyCollection, contextCollection, statementsCollection, opts);
+    this.bootstrapFiles = opts.bootstrapFiles || [];
+    this.bootstrapPath = opts.bootstrapPath || process.cwd();
+  }
+
+  /**
+   * Bootstrap ontology data from configured files.
+   * Imports all files specified in opts.bootstrapFiles, clearing the collection
+   * on the first file and merging subsequent files.
+   *
+   * @param {object} [opts] - Bootstrap options
+   * @param {string[]} [opts.files] - Override bootstrapFiles from constructor
+   * @param {string} [opts.basePath] - Override bootstrapPath from constructor
+   * @param {boolean} [opts.clearFirst=true] - Clear ontology collection before first import
+   * @returns {Promise<object>} Summary of import results
+   */
+  async bootstrap(opts = {}) {
+    const files = opts.files || this.bootstrapFiles;
+    const basePath = opts.basePath || this.bootstrapPath;
+    const clearFirst = opts.clearFirst !== false;
+
+    if (!Array.isArray(files) || files.length === 0) {
+      throw new Error("No bootstrap files configured. Pass opts.bootstrapFiles to constructor or opts.files to bootstrap()");
+    }
+
+    console.log("======== BOOTSTRAP START ========");
+    const results = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const filePath = files[i];
+
+      // Resolve path: absolute paths used as-is, relative paths relative to basePath
+      const resolvedPath = path.isAbsolute(filePath)
+        ? filePath
+        : path.join(basePath, filePath);
+
+      try {
+        console.log(`Loading ontology data from ${resolvedPath}...`);
+
+        // Clear collection only on first file import (if clearFirst is true)
+        const result = await this.importOntologyFromFile(resolvedPath, this.collections.Ontology, {
+          clearCollection: clearFirst && i === 0,
+          normalize: true,
+          ontologize: true,
+          shareTBox: false
+        });
+
+        const summary = {
+          file: filePath,
+          totalResources: result.totalResources,
+          processedResources: result.processedResources,
+          tboxResources: result.tboxResources,
+          aboxResources: result.aboxResources,
+          contextImported: result.contextImported,
+          errors: result.errors.length
+        };
+
+        console.log(`Import results for ${filePath}:`, summary);
+
+        if (result.errors.length > 0) {
+          console.warn(`Import errors for ${filePath}:`, result.errors);
+          summary.errorDetails = result.errors;
+        }
+
+        results.push(summary);
+      }
+      catch (fileError) {
+        // First file is required, subsequent files are optional
+        if (i === 0) {
+          throw new Error(`Failed to load required file ${filePath}: ${fileError.message}`);
+        }
+        console.warn(`Failed to load ${resolvedPath}:`, fileError.message);
+        console.warn("Continuing with remaining files...");
+        results.push({
+          file: filePath,
+          error: fileError.message,
+          skipped: true
+        });
+      }
+    }
+
+    console.log("======== BOOTSTRAP COMPLETE ========");
+
+    return {
+      filesProcessed: results.length,
+      results
+    };
   }
 
   /**

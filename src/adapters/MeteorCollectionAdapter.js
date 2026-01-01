@@ -150,4 +150,20 @@ export class MeteorCollectionAdapter extends CollectionAdapter {
       throw new Error(`Error in ${this.name}.updateOne: ${error.message}`);
     }
   }
+
+  /**
+   * Delete many documents matching the query
+   * @param {object} query - MongoDB-style query object
+   * @param {object} [options] - Delete options
+   * @returns {Promise<object>} Result with deletedCount
+   */
+  async deleteMany(query, options = {}) {
+    try {
+      const result = await this.collection.deleteMany(query, options);
+      return result;
+    }
+    catch (error) {
+      throw new Error(`Error in ${this.name}.deleteMany: ${error.message}`);
+    }
+  }
 }
