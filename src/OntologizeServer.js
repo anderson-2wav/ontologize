@@ -31,6 +31,7 @@ export class OntologizeServer extends Ontologize {
     super(ontologyCollection, contextCollection, statementsCollection, opts);
     this.bootstrapFiles = opts.bootstrapFiles || [];
     this.bootstrapPath = opts.bootstrapPath || process.cwd();
+    this.opts = opts;
   }
 
   /**

@@ -152,21 +152,27 @@ export class Ontologize {
   }
 
   /**
-   * Get the label for a resource, checking properties in order of preference.
+   * Get the label for a resource, or a property of a resource, checking properties in order of preference.
    * Property order can be overridden by bui:schema.labelProperties on the resource's class,
    * otherwise uses opts.labelProperties (default: dcterms:title, foaf:name, rdfs:label)
    *
    * @param {object} resource - The resource
+   * @param {string} [property]
    * @param {string} [fallback] - Fallback if no label found
    * @returns {Promise<string>} The label or fallback
    */
-  async getLabel(resource, fallback) {
+  async getLabel(resource, property, fallback) {
     check(resource, Object);
+    check(property, Match.Optional(String));
     check(fallback, Match.Optional(String));
 
-    // Get the assembled class schema to check for labelProperties override
-    const classSchema = await this.getSchema(undefined, resource);
-    const labelProperties = classSchema?.labelProperties || this.opts.labelProperties;
+    // Get the assembled schema to check for label or labelProperties override
+    const schema = await this.getSchema(property, resource);
+    // if there is a direct label override, use it
+    if (schema.label) {
+      return schema.label;
+    }
+    const labelProperties = schema?.labelProperties || this.opts.labelProperties;
 
     // Check label properties in order of preference
     for (const prop of labelProperties) {
