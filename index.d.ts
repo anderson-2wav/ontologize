@@ -64,9 +64,11 @@ export declare class Ontologize {
   isStatementResource(resource: Resource): boolean;
 
   /**
-   * Get the label for a resource, preferring rdfs:label
+   * Get the label for a resource, checking properties in order of preference.
+   * Property order can be overridden by bui:schema.labelProperties on the resource's class,
+   * otherwise uses opts.labelProperties (default: dcterms:title, foaf:name, rdfs:label)
    */
-  getLabel(resource: Resource, fallback?: string): string;
+  getLabel(resource: Resource, property?: string, fallback?: string): Promise<string>;
 
   /**
    * Get context for compaction from provided context, Context collection, or default
