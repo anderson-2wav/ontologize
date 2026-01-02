@@ -89,6 +89,37 @@ export class Ontologize {
   }
 
   /**
+   * Lookup an ontology resource by _id, using cache if provided.
+   * This helper reduces repeated Ontology.findOne() calls when processing
+   * multiple resources that reference the same ontology classes/properties.
+   *
+   * @param {string} id - The _id of the ontology resource to lookup
+   * @param {Map} [cache] - Optional Map to cache lookups (key: _id, value: resource or null)
+   * @returns {Promise<Object|null>} The proxied ontology resource, or null if not found
+   * @private
+   */
+  async _cachedOntologyLookup(id, cache) {
+    if (!id) return null;
+
+    // Check cache first
+    if (cache && cache.has(id)) {
+      console.log(`Using cached ${id}`);
+      return cache.get(id);
+    }
+
+    // Perform lookup
+    const raw = await this.collections.Ontology.findOne({ _id: id });
+    const resource = raw ? this.ld().proxy(raw) : null;
+
+    // Store in cache (including null for not-found)
+    if (cache) {
+      cache.set(id, resource);
+    }
+
+    return resource;
+  }
+
+  /**
    * Validate that a resource is a valid ontology resource
    *
    * @param {object} resource - The resource to validate
@@ -159,16 +190,31 @@ export class Ontologize {
    *
    * @param {object} resource - The resource
    * @param {string} [property]
-   * @param {string} [fallback] - Fallback if no label found
+   * @param {string|object} [fallbackOrOpts] - Fallback string if no label found, or opts object
+   * @param {object} [opts] - Options
+   * @param {Map} [opts.ontologyCache] - Cache Map for ontology lookups (key: _id, value: resource)
    * @returns {Promise<string>} The label or fallback
    */
-  async getLabel(resource, property, fallback) {
+  async getLabel(resource, property, fallbackOrOpts, opts) {
     check(resource, Object);
     check(property, Match.Optional(String));
+
+    // Handle flexible argument pattern: (resource, property, fallback) or (resource, property, opts)
+    let fallback;
+    if (typeof fallbackOrOpts === "object" && fallbackOrOpts !== null) {
+      opts = fallbackOrOpts;
+      fallback = undefined;
+    }
+    else {
+      fallback = fallbackOrOpts;
+    }
+    opts = opts || {};
+    const cache = opts.ontologyCache;
+
     check(fallback, Match.Optional(String));
 
     // Get the assembled schema to check for label or labelProperties override
-    const schema = await this.getSchema(property, resource);
+    const schema = await this.getSchema(property, resource, opts);
     // if there is a direct label override, use it
     if (schema.label) {
       return schema.label;
@@ -179,7 +225,7 @@ export class Ontologize {
     let examineResource = resource;
     // if property was provided, then we want the property resource, not the resource
     if (property) {
-      examineResource = await this.collections.Ontology.findOne({_id: property});
+      examineResource = await this._cachedOntologyLookup(property, cache);
     }
 
     if (examineResource) {
@@ -825,15 +871,19 @@ export class Ontologize {
    *
    * @param {string} [property] - The property name (e.g., "foo"). If omitted, returns class schema.
    * @param {Object} [resource] - The resource context (used to determine @types and instance schema)
+   * @param {Object} [opts] - Options
+   * @param {Map} [opts.ontologyCache] - Cache Map for ontology lookups (key: _id, value: resource)
    * @returns {Promise<Object>} The merged bui:schema object, or empty object if none found
    */
-  async getSchema(property, resource) {
+  async getSchema(property, resource, opts) {
     check(property, Match.Optional(String));
     check(resource, Match.Optional(Object));
+    opts = opts || {};
+    const cache = opts.ontologyCache;
 
     // Class schema mode: no property provided, but resource is
     if (!property && resource) {
-      return this._getClassSchema(resource);
+      return this._getClassSchema(resource, cache);
     }
 
     // Property schema mode (original behavior)
@@ -841,7 +891,7 @@ export class Ontologize {
       return {};
     }
 
-    const schemas = await this._findSchemasWithProperty(resource, property, "bui:schema");
+    const schemas = await this._findSchemasWithProperty(resource, property, "bui:schema", cache);
     let mergedSchema = {};
 
     // Iterate from least to most specific (reverse order)
@@ -884,10 +934,11 @@ export class Ontologize {
    * Traverses @types from least to most specific, merging bui:schema from each.
    *
    * @param {Object} resource - The resource to get class schema for
+   * @param {Map} [cache] - Optional cache Map for ontology lookups
    * @returns {Promise<Object>} The merged class schema, or empty object if none found
    * @private
    */
-  async _getClassSchema(resource) {
+  async _getClassSchema(resource, cache) {
     check(resource, Object);
 
     let mergedSchema = {};
@@ -908,8 +959,7 @@ export class Ontologize {
       }
       exploredTypes.add(typeId);
 
-      const rawClassResource = await this.collections.Ontology.findOne({ _id: typeId });
-      const classResource = rawClassResource ? this.ld().proxy(rawClassResource) : null;
+      const classResource = await this._cachedOntologyLookup(typeId, cache);
 
       if (classResource) {
         classesWithDepth.push({ resource: classResource, depth });
@@ -960,10 +1010,11 @@ export class Ontologize {
    * @param {Object} [resource] - The resource to find schemas for
    * @param {string} property - The property name to look up
    * @param {string} ontologyProperty - The ontology property to search for (e.g., "bui:schema")
+   * @param {Map} [cache] - Optional cache Map for ontology lookups
    * @returns {Promise<Object[]>} Array of ontology resources with the specified property
    * @private
    */
-  async _findSchemasWithProperty(resource, property, ontologyProperty) {
+  async _findSchemasWithProperty(resource, property, ontologyProperty, cache) {
     check(resource, Match.Optional(Object));
     check(property, String);
     check(ontologyProperty, String);
@@ -972,8 +1023,7 @@ export class Ontologize {
     const exploredTypes = new Set();
 
     // First, check if the property itself has the ontology property
-    const rawPropertyDef = await this.collections.Ontology.findOne({ _id: property });
-    const propertyDef = rawPropertyDef ? this.ld().proxy(rawPropertyDef) : null;
+    const propertyDef = await this._cachedOntologyLookup(property, cache);
     if (propertyDef && propertyDef[ontologyProperty] !== undefined) {
       foundSchemas.push(propertyDef);
     }
@@ -993,8 +1043,7 @@ export class Ontologize {
       if (exploredTypes.has(typ)) continue;
       exploredTypes.add(typ);
 
-      const rawClassResource = await this.collections.Ontology.findOne({ _id: typ });
-      const classResource = rawClassResource ? this.ld().proxy(rawClassResource) : null;
+      const classResource = await this._cachedOntologyLookup(typ, cache);
       if (classResource && classResource[ontologyProperty] !== undefined) {
         foundSchemas.push(classResource);
       }
@@ -1028,8 +1077,7 @@ export class Ontologize {
             : superClass;
 
           if (superClassId && !exploredTypes.has(superClassId) && !superClassId.startsWith("_:")) {
-            const rawSuperClassResource = await this.collections.Ontology.findOne({ _id: superClassId });
-            const superClassResource = rawSuperClassResource ? this.ld().proxy(rawSuperClassResource) : null;
+            const superClassResource = await this._cachedOntologyLookup(superClassId, cache);
             if (superClassResource) {
               await lookDeep(superClassResource);
             }
@@ -1040,8 +1088,7 @@ export class Ontologize {
 
     // Walk up hierarchy from each resource type
     for (const typ of resourceTypes) {
-      const rawClassResource = await this.collections.Ontology.findOne({ _id: typ });
-      const classResource = rawClassResource ? this.ld().proxy(rawClassResource) : null;
+      const classResource = await this._cachedOntologyLookup(typ, cache);
       if (classResource) {
         await lookDeep(classResource);
       }

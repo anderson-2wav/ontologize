@@ -10,6 +10,15 @@ export interface OntologizeOptions {
   defaultContext?: Record<string, any>;
   /** Enable debug logging */
   debug?: boolean;
+  /** Properties to check for labels (in order of preference) */
+  labelProperties?: string[];
+  /** Properties to check for descriptions (in order of preference) */
+  descriptionProperties?: string[];
+}
+
+export interface GetLabelOptions {
+  /** Cache Map for ontology lookups to reduce repeated findOne calls */
+  ontologyCache?: Map<string, Resource | null>;
 }
 
 export type Resource = Record<string, any>;
@@ -69,6 +78,8 @@ export declare class Ontologize {
    * otherwise uses opts.labelProperties (default: dcterms:title, foaf:name, rdfs:label)
    */
   getLabel(resource: Resource, property?: string, fallback?: string): Promise<string>;
+  getLabel(resource: Resource, property?: string, opts?: GetLabelOptions): Promise<string>;
+  getLabel(resource: Resource, property?: string, fallback?: string, opts?: GetLabelOptions): Promise<string>;
 
   /**
    * Get context for compaction from provided context, Context collection, or default
