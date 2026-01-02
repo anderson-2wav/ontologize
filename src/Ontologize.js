@@ -152,9 +152,10 @@ export class Ontologize {
   }
 
   /**
-   * Get the label for a resource, or a property of a resource, checking properties in order of preference.
-   * Property order can be overridden by bui:schema.labelProperties on the resource's class,
-   * otherwise uses opts.labelProperties (default: dcterms:title, foaf:name, rdfs:label)
+   * Get the label for a resource, or get the label for a property of a resource.
+   * Checks the configured opts.labelProperties (default: dcterms:title, foaf:name, rdfs:label) in order of preference.
+   * Label properties can be overridden by bui:schema.labelProperties on the resource's class.
+   * Or property label can be absolutely set by bui:schema.properties._property_.label
    *
    * @param {object} resource - The resource
    * @param {string} [property]
@@ -174,18 +175,32 @@ export class Ontologize {
     }
     const labelProperties = schema?.labelProperties || this.opts.labelProperties;
 
-    // Check label properties in order of preference
-    for (const prop of labelProperties) {
-      if (resource[prop]) {
-        if (this.ld().isProxy(resource)) {
-          return resource[prop];
-        }
-        else {
-          return Array.isArray(resource[prop]) ?
-            resource[prop][0] :
-            resource[prop];
+    // which thing to examine, the resource or the property resource?
+    let examineResource = resource;
+    // if property was provided, then we want the property resource, not the resource
+    if (property) {
+      examineResource = await this.collections.Ontology.findOne({_id: property});
+    }
+
+    if (examineResource) {
+      // Check label properties in order of preference
+      for (const prop of labelProperties) {
+        if (examineResource[prop]) {
+          if (this.ld().isProxy(examineResource)) {
+            return examineResource[prop];
+          }
+          else {
+            return Array.isArray(examineResource[prop]) ?
+              examineResource[prop][0] :
+              examineResource[prop];
+          }
         }
       }
+    }
+
+    // if we got nothing, and its a property label we're looking for
+    if (property) {
+      return property;
     }
 
     const _id = resource._id ? "_id" : "@id";
@@ -1035,6 +1050,70 @@ export class Ontologize {
     return foundSchemas;
   }
 
+  async _findOntologyForResource(resource, property) {
+    check(resource, Match.Optional(Object));
+    check(property, Match.Optional(String));
+    if (!resource && !property) {
+      return [];
+    }
+    const foundOntology = [];
+    const exploredTypes = new Set();
+
+    // in this implementation "types" refers to the _ids of Ontology schemas.
+    const resourceTypes = resource?.["@type"] || [];
+
+    // Breadth-first search across resource types
+    for (const typ of resourceTypes) {
+      if (exploredTypes.has(typ)) continue;
+      exploredTypes.add(typ);
+
+      const rawClassResource = await this.collections.Ontology.findOne({ _id: typ });
+      const classResource = rawClassResource ? this.ld().proxy(rawClassResource) : null;
+      if (classResource) {
+        foundOntology.push(classResource);
+      }
+
+      // Recursive function to walk up the class hierarchy
+      const lookDeep = async (classResource) => {
+        if (!classResource) return;
+
+        // Check if this class has the ontology property
+        if (classResource[ontologyProperty] !== undefined) {
+          if (!exploredTypes.has(classResource._id)) {
+            foundSchemas.push(classResource);
+          }
+        }
+
+        if (!exploredTypes.has(classResource._id)) {
+          exploredTypes.add(classResource._id);
+        }
+
+        // Walk up rdfs:subClassOf hierarchy
+        if (classResource["rdfs:subClassOf"]) {
+          const superClasses = Array.isArray(classResource["rdfs:subClassOf"])
+            ? classResource["rdfs:subClassOf"]
+            : [classResource["rdfs:subClassOf"]];
+
+          for (const superClass of superClasses) {
+            // Handle both string IDs and object references
+            const superClassId = typeof superClass === "object"
+              ? (superClass["@id"] || superClass._id)
+              : superClass;
+
+            if (superClassId && !exploredTypes.has(superClassId) && !superClassId.startsWith("_:")) {
+              const rawSuperClassResource = await this.collections.Ontology.findOne({ _id: superClassId });
+              const superClassResource = rawSuperClassResource ? this.ld().proxy(rawSuperClassResource) : null;
+              if (superClassResource) {
+                await lookDeep(superClassResource);
+              }
+            }
+          }
+        }
+      };
+
+    }
+
+  }
   /**
    * Check if a resource is a class (rdfs:Class, owl:Class)
    *
