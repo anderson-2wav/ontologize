@@ -21,6 +21,28 @@ export interface GetLabelOptions {
   ontologyCache?: Map<string, Resource | null>;
 }
 
+export interface GetLocationOptions {
+  /** Cache Map for ontology lookups to reduce repeated findOne calls */
+  ontologyCache?: Map<string, Resource | null>;
+}
+
+/**
+ * GeoJSON Point geometry
+ */
+export interface GeoJSONPoint {
+  type: "Point";
+  coordinates: [number, number];  // [longitude, latitude]
+}
+
+/**
+ * GeoJSON Geometry (simplified - can be extended)
+ */
+export type GeoJSONGeometry = GeoJSONPoint | {
+  type: string;
+  coordinates?: any;
+  geometries?: GeoJSONGeometry[];
+};
+
 export type Resource = Record<string, any>;
 export type OntologyResource = Resource & {
   "@id": string;
@@ -80,6 +102,18 @@ export declare class Ontologize {
   getLabel(resource: Resource, property?: string, fallback?: string): Promise<string>;
   getLabel(resource: Resource, property?: string, opts?: GetLabelOptions): Promise<string>;
   getLabel(resource: Resource, property?: string, fallback?: string, opts?: GetLabelOptions): Promise<string>;
+
+  /**
+   * Get the geospatial location for a resource as a GeoJSON object.
+   *
+   * Checks for location data in this order of preference:
+   * 1. `geo:lat` and `geo:long` properties - returns a GeoPoint
+   * 2. Any property with `rdfs:range` of `bold:GeoPoint`
+   * 3. Any property with `rdfs:range` of `bold:GeoJSON`
+   *
+   * @returns GeoJSON object (typically a Point), or null if no location found
+   */
+  getLocation(resource: Resource, opts?: GetLocationOptions): Promise<GeoJSONGeometry | null>;
 
   /**
    * Get context for compaction from provided context, Context collection, or default

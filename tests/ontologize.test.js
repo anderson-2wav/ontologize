@@ -714,6 +714,338 @@ describe("Ontologize", function () {
     });
   });
 
+  describe("getLocation", function () {
+    it("should return null for resource with no location information", async function () {
+      const resource = {
+        "@id": "ex:NoLocationResource",
+        "@type": "ex:Thing",
+        "rdfs:label": "No Location"
+      };
+      const location = await ontologize.getLocation(resource);
+      assert.isNull(location);
+    });
+
+    it("should return GeoPoint for resource with geo:lat and geo:long properties", async function () {
+      const resource = {
+        "@id": "ex:LocatedResource",
+        "@type": "ex:Place",
+        "geo:lat": 34.0598954,
+        "geo:long": -118.4464607
+      };
+      const location = await ontologize.getLocation(resource);
+      assert.isObject(location);
+      assert.equal(location.type, "Point");
+      assert.isArray(location.coordinates);
+      assert.equal(location.coordinates[0], -118.4464607);  // lng first in GeoJSON
+      assert.equal(location.coordinates[1], 34.0598954);    // lat second
+    });
+
+    it("should handle geo:lat and geo:long as JSON-LD @value objects", async function () {
+      const resource = {
+        "@id": "ex:LocatedResource",
+        "@type": "ex:Place",
+        "geo:lat": { "@value": "34.0598954", "@type": "xsd:decimal" },
+        "geo:long": { "@value": "-118.4464607", "@type": "xsd:decimal" }
+      };
+      const location = await ontologize.getLocation(resource);
+      assert.isObject(location);
+      assert.equal(location.type, "Point");
+      assert.closeTo(location.coordinates[0], -118.4464607, 0.0001);
+      assert.closeTo(location.coordinates[1], 34.0598954, 0.0001);
+    });
+
+    it("should handle geo:lat and geo:long as string values", async function () {
+      const resource = {
+        "@id": "ex:LocatedResource",
+        "@type": "ex:Place",
+        "geo:lat": "34.0598954",
+        "geo:long": "-118.4464607"
+      };
+      const location = await ontologize.getLocation(resource);
+      assert.isObject(location);
+      assert.equal(location.type, "Point");
+      assert.closeTo(location.coordinates[0], -118.4464607, 0.0001);
+      assert.closeTo(location.coordinates[1], 34.0598954, 0.0001);
+    });
+
+    it("should return GeoPoint for property with rdfs:range bold:GeoPoint", async function () {
+      // Create mock with property definition
+      const mockOntologyCollection = {
+        findOne: (query) => {
+          if (query._id === "ex:hasLocation") {
+            return Promise.resolve({
+              "_id": "ex:hasLocation",
+              "@type": ["owl:DatatypeProperty"],
+              "rdfs:range": "bold:GeoPoint"
+            });
+          }
+          return Promise.resolve(null);
+        },
+        find: () => ({
+          fetch: () => [],
+          toArray: () => Promise.resolve([])
+        }),
+        count: () => 0
+      };
+
+      const mockContextCollection = {
+        findOne: () => Promise.resolve(null),
+        find: () => ({
+          fetch: () => [],
+          toArray: () => Promise.resolve([])
+        }),
+        count: () => 0
+      };
+      const mockStatementsCollection = createMockStatementsCollection();
+
+      const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "Ontology");
+      const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "Context");
+      const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "Statements");
+      const testOntologize = new Ontologize(ontologyAdapter, contextAdapter, statementsAdapter);
+
+      const resource = {
+        "@id": "ex:LocatedResource",
+        "@type": "ex:Place",
+        "ex:hasLocation": {
+          type: "Point",
+          coordinates: [-118.4464607, 34.0598954]
+        }
+      };
+
+      const location = await testOntologize.getLocation(resource);
+      assert.isObject(location);
+      assert.equal(location.type, "Point");
+      assert.deepEqual(location.coordinates, [-118.4464607, 34.0598954]);
+    });
+
+    it("should return GeoJSON for property with rdfs:range bold:GeoJSON", async function () {
+      // Create mock with property definition
+      const mockOntologyCollection = {
+        findOne: (query) => {
+          if (query._id === "ex:hasGeometry") {
+            return Promise.resolve({
+              "_id": "ex:hasGeometry",
+              "@type": ["owl:DatatypeProperty"],
+              "rdfs:range": "bold:GeoJSON"
+            });
+          }
+          return Promise.resolve(null);
+        },
+        find: () => ({
+          fetch: () => [],
+          toArray: () => Promise.resolve([])
+        }),
+        count: () => 0
+      };
+
+      const mockContextCollection = {
+        findOne: () => Promise.resolve(null),
+        find: () => ({
+          fetch: () => [],
+          toArray: () => Promise.resolve([])
+        }),
+        count: () => 0
+      };
+      const mockStatementsCollection = createMockStatementsCollection();
+
+      const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "Ontology");
+      const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "Context");
+      const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "Statements");
+      const testOntologize = new Ontologize(ontologyAdapter, contextAdapter, statementsAdapter);
+
+      const resource = {
+        "@id": "ex:PolygonResource",
+        "@type": "ex:Area",
+        "ex:hasGeometry": {
+          type: "Polygon",
+          coordinates: [[[-118.5, 34.0], [-118.4, 34.0], [-118.4, 34.1], [-118.5, 34.1], [-118.5, 34.0]]]
+        }
+      };
+
+      const location = await testOntologize.getLocation(resource);
+      assert.isObject(location);
+      assert.equal(location.type, "Polygon");
+      assert.isArray(location.coordinates);
+    });
+
+    it("should handle GeoJSON stored as JSON string", async function () {
+      const mockOntologyCollection = {
+        findOne: (query) => {
+          if (query._id === "ex:hasLocation") {
+            return Promise.resolve({
+              "_id": "ex:hasLocation",
+              "@type": ["owl:DatatypeProperty"],
+              "rdfs:range": "bold:GeoPoint"
+            });
+          }
+          return Promise.resolve(null);
+        },
+        find: () => ({
+          fetch: () => [],
+          toArray: () => Promise.resolve([])
+        }),
+        count: () => 0
+      };
+
+      const mockContextCollection = {
+        findOne: () => Promise.resolve(null),
+        find: () => ({
+          fetch: () => [],
+          toArray: () => Promise.resolve([])
+        }),
+        count: () => 0
+      };
+      const mockStatementsCollection = createMockStatementsCollection();
+
+      const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "Ontology");
+      const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "Context");
+      const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "Statements");
+      const testOntologize = new Ontologize(ontologyAdapter, contextAdapter, statementsAdapter);
+
+      const resource = {
+        "@id": "ex:LocatedResource",
+        "@type": "ex:Place",
+        "ex:hasLocation": JSON.stringify({
+          type: "Point",
+          coordinates: [-118.4464607, 34.0598954]
+        })
+      };
+
+      const location = await testOntologize.getLocation(resource);
+      assert.isObject(location);
+      assert.equal(location.type, "Point");
+      assert.deepEqual(location.coordinates, [-118.4464607, 34.0598954]);
+    });
+
+    it("should handle GeoJSON wrapped in JSON-LD @value", async function () {
+      const mockOntologyCollection = {
+        findOne: (query) => {
+          if (query._id === "ex:hasLocation") {
+            return Promise.resolve({
+              "_id": "ex:hasLocation",
+              "@type": ["owl:DatatypeProperty"],
+              "rdfs:range": "bold:GeoPoint"
+            });
+          }
+          return Promise.resolve(null);
+        },
+        find: () => ({
+          fetch: () => [],
+          toArray: () => Promise.resolve([])
+        }),
+        count: () => 0
+      };
+
+      const mockContextCollection = {
+        findOne: () => Promise.resolve(null),
+        find: () => ({
+          fetch: () => [],
+          toArray: () => Promise.resolve([])
+        }),
+        count: () => 0
+      };
+      const mockStatementsCollection = createMockStatementsCollection();
+
+      const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "Ontology");
+      const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "Context");
+      const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "Statements");
+      const testOntologize = new Ontologize(ontologyAdapter, contextAdapter, statementsAdapter);
+
+      const resource = {
+        "@id": "ex:LocatedResource",
+        "@type": "ex:Place",
+        "ex:hasLocation": {
+          "@value": JSON.stringify({
+            type: "Point",
+            coordinates: [-118.4464607, 34.0598954]
+          }),
+          "@type": "bold:GeoPoint"
+        }
+      };
+
+      const location = await testOntologize.getLocation(resource);
+      assert.isObject(location);
+      assert.equal(location.type, "Point");
+      assert.deepEqual(location.coordinates, [-118.4464607, 34.0598954]);
+    });
+
+    it("should prefer geo:lat/geo:long over properties with rdfs:range", async function () {
+      // Even though ex:hasLocation has rdfs:range bold:GeoPoint, geo:lat/geo:long should take precedence
+      const mockOntologyCollection = {
+        findOne: (query) => {
+          if (query._id === "ex:hasLocation") {
+            return Promise.resolve({
+              "_id": "ex:hasLocation",
+              "@type": ["owl:DatatypeProperty"],
+              "rdfs:range": "bold:GeoPoint"
+            });
+          }
+          return Promise.resolve(null);
+        },
+        find: () => ({
+          fetch: () => [],
+          toArray: () => Promise.resolve([])
+        }),
+        count: () => 0
+      };
+
+      const mockContextCollection = {
+        findOne: () => Promise.resolve(null),
+        find: () => ({
+          fetch: () => [],
+          toArray: () => Promise.resolve([])
+        }),
+        count: () => 0
+      };
+      const mockStatementsCollection = createMockStatementsCollection();
+
+      const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "Ontology");
+      const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "Context");
+      const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "Statements");
+      const testOntologize = new Ontologize(ontologyAdapter, contextAdapter, statementsAdapter);
+
+      const resource = {
+        "@id": "ex:LocatedResource",
+        "@type": "ex:Place",
+        "geo:lat": 40.7128,
+        "geo:long": -74.0060,
+        "ex:hasLocation": {
+          type: "Point",
+          coordinates: [-118.4464607, 34.0598954]
+        }
+      };
+
+      const location = await testOntologize.getLocation(resource);
+      assert.isObject(location);
+      assert.equal(location.type, "Point");
+      // Should use geo:lat/geo:long values, not ex:hasLocation
+      assert.closeTo(location.coordinates[0], -74.0060, 0.0001);
+      assert.closeTo(location.coordinates[1], 40.7128, 0.0001);
+    });
+
+    it("should return null when geo:lat is present but geo:long is missing", async function () {
+      const resource = {
+        "@id": "ex:PartialLocationResource",
+        "@type": "ex:Place",
+        "geo:lat": 34.0598954
+        // geo:long is missing
+      };
+      const location = await ontologize.getLocation(resource);
+      assert.isNull(location);
+    });
+
+    it("should return null when geo:long is present but geo:lat is missing", async function () {
+      const resource = {
+        "@id": "ex:PartialLocationResource",
+        "@type": "ex:Place",
+        "geo:long": -118.4464607
+        // geo:lat is missing
+      };
+      const location = await ontologize.getLocation(resource);
+      assert.isNull(location);
+    });
+  });
+
   describe("isStatementResource", function () {
     it("should return true for resource with @type rdf:Statement", function () {
       const resource = {

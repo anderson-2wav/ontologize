@@ -356,6 +356,158 @@ export class Ontologize {
   }
 
   /**
+   * Get the geospatial location for a resource as a GeoJSON object.
+   *
+   * Checks for location data in this order of preference:
+   * 1. `geo:lat` and `geo:long` properties - returns a GeoPoint
+   * 2. Any property with `rdfs:range` of `bold:GeoPoint`
+   * 3. Any property with `rdfs:range` of `bold:GeoJSON`
+   *
+   * @param {object} resource - The resource to get location for
+   * @param {object} [opts] - Options
+   * @param {Map} [opts.ontologyCache] - Cache Map for ontology lookups
+   * @returns {Promise<object|null>} GeoJSON object (typically a Point), or null if no location found
+   */
+  async getLocation(resource, opts = {}) {
+    check(resource, Object);
+    const cache = opts.ontologyCache;
+
+    // Pattern 1: Check for geo:lat and geo:long properties
+    const lat = this._extractNumericValue(resource["geo:lat"]);
+    const lng = this._extractNumericValue(resource["geo:long"]);
+
+    if (lat !== null && lng !== null && !isNaN(lat) && !isNaN(lng)) {
+      return {
+        type: "Point",
+        coordinates: [lng, lat]  // GeoJSON uses [lng, lat] order
+      };
+    }
+
+    // Pattern 2 & 3: Check for properties with rdfs:range of bold:GeoPoint or bold:GeoJSON
+    // We need to scan resource properties and look up their ontology definitions
+    for (const propertyName of Object.keys(resource)) {
+      // Skip special properties
+      if (propertyName.startsWith("@") || propertyName === "_id") {
+        continue;
+      }
+
+      const propertyValue = resource[propertyName];
+      if (propertyValue === null || propertyValue === undefined) {
+        continue;
+      }
+
+      // Look up property definition in ontology
+      const propertyDef = await this._cachedOntologyLookup(propertyName, cache);
+      if (!propertyDef) {
+        continue;
+      }
+
+      const range = propertyDef["rdfs:range"];
+      if (!range) {
+        continue;
+      }
+
+      // Handle range as string or object with @id
+      const rangeValue = typeof range === "object" ? (range["@id"] || range._id) : range;
+
+      // Pattern 2: bold:GeoPoint
+      if (rangeValue === "bold:GeoPoint") {
+        const geoPoint = this._parseGeoValue(propertyValue);
+        if (geoPoint) {
+          return geoPoint;
+        }
+      }
+
+      // Pattern 3: bold:GeoJSON
+      if (rangeValue === "bold:GeoJSON") {
+        const geoJson = this._parseGeoValue(propertyValue);
+        if (geoJson) {
+          return geoJson;
+        }
+      }
+    }
+
+    // No location found
+    return null;
+  }
+
+  /**
+   * Extract a numeric value from a property value (handles JSON-LD @value wrapper)
+   *
+   * @param {*} value - The value to extract from
+   * @returns {number|null} The numeric value or null
+   * @private
+   */
+  _extractNumericValue(value) {
+    if (value === null || value === undefined) return null;
+    if (typeof value === "number") return value;
+    if (typeof value === "object" && value["@value"] !== undefined) {
+      return parseFloat(value["@value"]);
+    }
+    if (typeof value === "string") {
+      const num = parseFloat(value);
+      return isNaN(num) ? null : num;
+    }
+    // Handle arrays - take first value
+    if (Array.isArray(value) && value.length > 0) {
+      return this._extractNumericValue(value[0]);
+    }
+    return null;
+  }
+
+  /**
+   * Parse a property value as GeoJSON
+   *
+   * @param {*} value - The value to parse
+   * @returns {object|null} GeoJSON object or null
+   * @private
+   */
+  _parseGeoValue(value) {
+    if (!value) return null;
+
+    // Handle arrays - take first value
+    if (Array.isArray(value)) {
+      return this._parseGeoValue(value[0]);
+    }
+
+    // Direct GeoJSON object (has type and coordinates/geometries)
+    if (typeof value === "object" && value.type && (value.coordinates || value.geometries)) {
+      return value;
+    }
+
+    // JSON-LD wrapped value
+    if (typeof value === "object" && value["@value"] !== undefined) {
+      const innerValue = value["@value"];
+      if (typeof innerValue === "string") {
+        try {
+          return JSON.parse(innerValue);
+        }
+        catch (e) {
+          return null;
+        }
+      }
+      if (typeof innerValue === "object" && innerValue.type) {
+        return innerValue;
+      }
+    }
+
+    // String that might be JSON
+    if (typeof value === "string") {
+      try {
+        const parsed = JSON.parse(value);
+        if (parsed && parsed.type) {
+          return parsed;
+        }
+      }
+      catch (e) {
+        return null;
+      }
+    }
+
+    return null;
+  }
+
+  /**
    * Get the label for a resource by looking it up from the ontology collection
    *
    * @param {string} resourceId - The resource ID to look up

@@ -1888,8 +1888,12 @@ INSERT DATA {
   static BUI_JSON_TYPES = [
     "bold:JSON",
     "bui:Schema",
+    "bold:GeoJson",
+    "bold:GeoPoint",
     "https://ontology.2wav.com/bold#JSON",
-    "https://ontology.2wav.com/bold-ui#Schema"
+    "https://ontology.2wav.com/bold-ui#Schema",
+    "https://ontology.2wav.com/bold-ui#GeoJson",
+    "https://ontology.2wav.com/bold-ui#GeoPoint",
   ];
 
   /**
