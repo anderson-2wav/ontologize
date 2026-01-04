@@ -7,7 +7,7 @@ import { check, Match } from "./lib/check.js";
 import jsonPath from "./lib/jsonpath.js";
 import LD from "bold-ld";
 import { format } from "date-fns";
-import { TZDate } from "@date-fns/tz";
+import { TZDate, tzName } from "@date-fns/tz";
 
 /**
  * Ontologize - Utilities for working with ontology data in JSON-LD format
@@ -421,19 +421,49 @@ export class Ontologize {
     try {
       // Create a TZDate for timezone-aware formatting
       const tzDate = new TZDate(dateObj, dateTimeZone);
-      const formatString = includeTime ? dateTimeFormat : dateFormat;
-      return format(tzDate, formatString);
+      let formatString = includeTime ? dateTimeFormat : dateFormat;
+
+      // Handle custom ZZ format for timezone name
+      let appendTzName = false;
+      if (formatString.endsWith("ZZ")) {
+        appendTzName = true;
+        formatString = formatString.slice(0, -2).trim();
+      }
+
+      let result = format(tzDate, formatString);
+
+      if (appendTzName) {
+        const shortTzName = tzName(dateTimeZone, tzDate, "short");
+        result = result + " " + shortTzName;
+      }
+
+      return result;
     }
     catch (error) {
       // Fallback to basic formatting without timezone
       try {
-        const formatString = includeTime ? dateTimeFormat : dateFormat;
+        let formatString = includeTime ? dateTimeFormat : dateFormat;
+        // Strip ZZ in fallback as well
+        if (formatString.endsWith("ZZ")) {
+          formatString = formatString.slice(0, -2).trim();
+        }
         return format(dateObj, formatString);
       }
       catch (e) {
         return "";
       }
     }
+  }
+
+  /**
+   * Format a date value with time for display (shorthand for formatDate with includeTime: true)
+   *
+   * @param {Date|string|number|object} date - The date value to format
+   * @param {object} [opts] - Options to override defaults (same as formatDate)
+   * @returns {string} The formatted date-time string, or empty string if invalid
+   */
+  formatDateTime(date, opts = {}) {
+    return this.formatDate(date, { ...opts, includeTime: true });
   }
 
   /**

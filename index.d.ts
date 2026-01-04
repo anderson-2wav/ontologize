@@ -152,6 +152,15 @@ export declare class Ontologize {
    */
   formatDate(date: Date | string | number | { "@value": string; "@type"?: string } | null | undefined, opts?: FormatDateOptions): string;
 
+  /**
+   * Format a date value with time for display (shorthand for formatDate with includeTime: true)
+   *
+   * @param date - The date to format (Date, string, number, or { "@value": string })
+   * @param opts - Optional format overrides (same as formatDate)
+   * @returns Formatted date-time string, or empty string if invalid
+   */
+  formatDateTime(date: Date | string | number | { "@value": string; "@type"?: string } | null | undefined, opts?: FormatDateOptions): string;
+
   /** Default context with common namespace mappings */
   static DEFAULT_CONTEXT: Record<string, any>;
 }
