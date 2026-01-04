@@ -6,6 +6,8 @@
 import { check, Match } from "./lib/check.js";
 import jsonPath from "./lib/jsonpath.js";
 import LD from "bold-ld";
+import { format } from "date-fns";
+import { TZDate } from "@date-fns/tz";
 
 /**
  * Ontologize - Utilities for working with ontology data in JSON-LD format
@@ -34,6 +36,9 @@ export class Ontologize {
    * @param {boolean} [opts.debug=false] - Enable debug logging
    * @param {string[]} [opts.labelProperties] - Properties to check for labels (in order of preference)
    * @param {string[]} [opts.descriptionProperties] - Properties to check for descriptions (in order of preference)
+   * @param {string} [opts.dateFormat="M/d/yyyy"] - Default format for dates
+   * @param {string} [opts.dateTimeFormat="M/d/yyyy h:mm a"] - Default format for date-times
+   * @param {string} [opts.dateTimeZone="America/Los_Angeles"] - Default timezone for date formatting
    */
   constructor(ontologyCollection, contextCollection, statementsCollection, opts = {}) {
     check(ontologyCollection, Object);
@@ -51,6 +56,9 @@ export class Ontologize {
     this.opts.debug = this.opts.debug || false;
     this.opts.labelProperties = this.opts.labelProperties || Ontologize.DEFAULT_LABEL_PROPERTIES;
     this.opts.descriptionProperties = this.opts.descriptionProperties || Ontologize.DEFAULT_DESCRIPTION_PROPERTIES;
+    this.opts.dateFormat = this.opts.dateFormat || "M/d/yyyy";
+    this.opts.dateTimeFormat = this.opts.dateTimeFormat || "M/d/yyyy h:mm a";
+    this.opts.dateTimeZone = this.opts.dateTimeZone || "America/Los_Angeles";
     if (this.opts.collections) {
       Object.assign(this.collections, this.opts.collections);
     }
@@ -353,6 +361,79 @@ export class Ontologize {
     }
     // the last default descriptionProperties is the most generic
     return fallback || this.opts.descriptionProperties[this.opts.descriptionProperties.length - 1];
+  }
+
+  /**
+   * Format a date value into a human-friendly string.
+   *
+   * Handles various input formats:
+   * - Date objects
+   * - ISO date strings
+   * - Timestamps (numbers)
+   * - JSON-LD typed literals with @value
+   *
+   * @param {Date|string|number|object} date - The date value to format
+   * @param {object} [opts] - Options to override defaults
+   * @param {string} [opts.dateFormat] - Format string for dates (default from constructor opts)
+   * @param {string} [opts.dateTimeFormat] - Format string for date-times (default from constructor opts)
+   * @param {string} [opts.dateTimeZone] - Timezone for formatting (default from constructor opts)
+   * @param {boolean} [opts.includeTime=false] - Whether to include time in output
+   * @returns {string} The formatted date string, or empty string if invalid
+   */
+  formatDate(date, opts = {}) {
+    if (date === null || date === undefined) {
+      return "";
+    }
+
+    // Merge options with defaults
+    const dateFormat = opts.dateFormat || this.opts.dateFormat;
+    const dateTimeFormat = opts.dateTimeFormat || this.opts.dateTimeFormat;
+    const dateTimeZone = opts.dateTimeZone || this.opts.dateTimeZone;
+    const includeTime = opts.includeTime || false;
+
+    // Extract the actual date value
+    let dateValue = date;
+
+    // Handle JSON-LD typed literal with @value
+    if (typeof date === "object" && date !== null && !(date instanceof Date)) {
+      if (date["@value"] !== undefined) {
+        dateValue = date["@value"];
+      }
+    }
+
+    // Convert to Date object if needed
+    let dateObj;
+    if (dateValue instanceof Date) {
+      dateObj = dateValue;
+    }
+    else if (typeof dateValue === "string" || typeof dateValue === "number") {
+      dateObj = new Date(dateValue);
+    }
+    else {
+      return "";
+    }
+
+    // Validate the date
+    if (isNaN(dateObj.getTime())) {
+      return "";
+    }
+
+    try {
+      // Create a TZDate for timezone-aware formatting
+      const tzDate = new TZDate(dateObj, dateTimeZone);
+      const formatString = includeTime ? dateTimeFormat : dateFormat;
+      return format(tzDate, formatString);
+    }
+    catch (error) {
+      // Fallback to basic formatting without timezone
+      try {
+        const formatString = includeTime ? dateTimeFormat : dateFormat;
+        return format(dateObj, formatString);
+      }
+      catch (e) {
+        return "";
+      }
+    }
   }
 
   /**

@@ -14,6 +14,12 @@ export interface OntologizeOptions {
   labelProperties?: string[];
   /** Properties to check for descriptions (in order of preference) */
   descriptionProperties?: string[];
+  /** Date format string (date-fns format). Default: "M/d/yyyy" */
+  dateFormat?: string;
+  /** DateTime format string (date-fns format). Default: "M/d/yyyy h:mm a" */
+  dateTimeFormat?: string;
+  /** Timezone for date formatting. Default: "America/Los_Angeles" */
+  dateTimeZone?: string;
 }
 
 export interface GetLabelOptions {
@@ -24,6 +30,15 @@ export interface GetLabelOptions {
 export interface GetLocationOptions {
   /** Cache Map for ontology lookups to reduce repeated findOne calls */
   ontologyCache?: Map<string, Resource | null>;
+}
+
+export interface FormatDateOptions {
+  /** Override date format string (date-fns format) */
+  dateFormat?: string;
+  /** Override datetime format string (date-fns format) */
+  dateTimeFormat?: string;
+  /** Include time in output (uses dateTimeFormat instead of dateFormat) */
+  includeTime?: boolean;
 }
 
 /**
@@ -124,6 +139,18 @@ export declare class Ontologize {
    * Get module version
    */
   getVersion(): string;
+
+  /**
+   * Format a date value for display.
+   *
+   * Accepts Date objects, ISO strings, timestamps (numbers), or JSON-LD @value wrappers.
+   * Uses configured timezone (opts.dateTimeZone) for consistent formatting.
+   *
+   * @param date - The date to format (Date, string, number, or { "@value": string })
+   * @param opts - Optional format overrides
+   * @returns Formatted date string, or empty string if invalid
+   */
+  formatDate(date: Date | string | number | { "@value": string; "@type"?: string } | null | undefined, opts?: FormatDateOptions): string;
 
   /** Default context with common namespace mappings */
   static DEFAULT_CONTEXT: Record<string, any>;
