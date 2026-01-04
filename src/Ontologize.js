@@ -8,6 +8,7 @@ import jsonPath from "./lib/jsonpath.js";
 import LD from "bold-ld";
 import { format } from "date-fns";
 import { TZDate, tzName } from "@date-fns/tz";
+import { getSunriseSunsetInfo } from "sunrise-sunset-api";
 
 /**
  * Ontologize - Utilities for working with ontology data in JSON-LD format
@@ -464,6 +465,68 @@ export class Ontologize {
    */
   formatDateTime(date, opts = {}) {
     return this.formatDate(date, { ...opts, includeTime: true });
+  }
+
+  /**
+   * Get sunrise and sunset times for a location and date.
+   *
+   * Uses the sunrise-sunset.org API to get solar event times.
+   *
+   * @param {number[]} longLat - Array of [longitude, latitude]
+   * @param {Date|string|number|object} date - The date (accepts same formats as formatDate)
+   * @param {object} [opts] - Options (reserved for future use)
+   * @returns {Promise<object>} Sunrise/sunset info with ISO date strings
+   * @throws {Error} If the API call fails or parameters are invalid
+   */
+  async getSunriseSunset(longLat, date, opts = {}) {
+    // Validate longLat
+    if (!Array.isArray(longLat) || longLat.length !== 2) {
+      throw new Error("longLat must be an array of [longitude, latitude]");
+    }
+    const [longitude, latitude] = longLat;
+    if (typeof longitude !== "number" || typeof latitude !== "number") {
+      throw new Error("longitude and latitude must be numbers");
+    }
+
+    // Extract the date value (same logic as formatDate)
+    let dateValue = date;
+    if (typeof date === "object" && date !== null && !(date instanceof Date)) {
+      if (date["@value"] !== undefined) {
+        dateValue = date["@value"];
+      }
+    }
+
+    // Convert to Date object
+    let dateObj;
+    if (dateValue instanceof Date) {
+      dateObj = dateValue;
+    }
+    else if (typeof dateValue === "string" || typeof dateValue === "number") {
+      dateObj = new Date(dateValue);
+    }
+    else {
+      throw new Error("Invalid date value");
+    }
+
+    if (isNaN(dateObj.getTime())) {
+      throw new Error("Invalid date value");
+    }
+
+    // Format date as YYYY-MM-DD for the API
+    const year = dateObj.getFullYear();
+    const month = String(dateObj.getMonth() + 1).padStart(2, "0");
+    const day = String(dateObj.getDate()).padStart(2, "0");
+    const dateString = `${year}-${month}-${day}`;
+
+    // Call the sunrise-sunset API
+    const response = await getSunriseSunsetInfo({
+      latitude,
+      longitude,
+      date: dateString,
+      formatted: false
+    });
+
+    return response;
   }
 
   /**

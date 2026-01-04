@@ -48,7 +48,8 @@
     "bold-ld": "file:../bold-ld",
     "chai": "^4.3.10",
     "date-fns": "^4.1.0",
-    "lodash": "^4.17.21"
+    "lodash": "^4.17.21",
+    "sunrise-sunset-api": "^0.2.1"
   },
   "devDependencies": {
     "chai": "^4.3.10",

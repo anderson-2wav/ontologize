@@ -41,6 +41,29 @@ export interface FormatDateOptions {
   includeTime?: boolean;
 }
 
+export interface SunriseSunsetResponse {
+  /** Sunrise time as ISO string */
+  sunrise: string;
+  /** Sunset time as ISO string */
+  sunset: string;
+  /** Solar noon time as ISO string */
+  solarNoon: string;
+  /** Day length in seconds */
+  dayLength: number;
+  /** Civil twilight begin time as ISO string */
+  civilTwilightBegin: string;
+  /** Civil twilight end time as ISO string */
+  civilTwilightEnd: string;
+  /** Nautical twilight begin time as ISO string */
+  nauticalTwilightBegin: string;
+  /** Nautical twilight end time as ISO string */
+  nauticalTwilightEnd: string;
+  /** Astronomical twilight begin time as ISO string */
+  astronomicalTwilightBegin: string;
+  /** Astronomical twilight end time as ISO string */
+  astronomicalTwilightEnd: string;
+}
+
 /**
  * GeoJSON Point geometry
  */
@@ -160,6 +183,19 @@ export declare class Ontologize {
    * @returns Formatted date-time string, or empty string if invalid
    */
   formatDateTime(date: Date | string | number | { "@value": string; "@type"?: string } | null | undefined, opts?: FormatDateOptions): string;
+
+  /**
+   * Get sunrise and sunset times for a location and date.
+   *
+   * Uses the sunrise-sunset.org API to get solar event times.
+   *
+   * @param longLat - Array of [longitude, latitude]
+   * @param date - The date (accepts same formats as formatDate)
+   * @param opts - Options (reserved for future use)
+   * @returns Sunrise/sunset info with ISO date strings
+   * @throws Error if the API call fails or parameters are invalid
+   */
+  getSunriseSunset(longLat: [number, number], date: Date | string | number | { "@value": string; "@type"?: string }, opts?: Record<string, any>): Promise<SunriseSunsetResponse>;
 
   /** Default context with common namespace mappings */
   static DEFAULT_CONTEXT: Record<string, any>;
