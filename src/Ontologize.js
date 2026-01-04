@@ -487,6 +487,7 @@ export class Ontologize {
     if (typeof longitude !== "number" || typeof latitude !== "number") {
       throw new Error("longitude and latitude must be numbers");
     }
+    opts.formatted = opts.formatted === true;
 
     // Extract the date value (same logic as formatDate)
     let dateValue = date;
@@ -523,7 +524,7 @@ export class Ontologize {
       latitude,
       longitude,
       date: dateString,
-      formatted: false
+      formatted: opts.formatted
     });
 
     return response;
