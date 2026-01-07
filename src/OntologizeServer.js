@@ -190,7 +190,10 @@ export class OntologizeServer extends Ontologize {
    * @param {boolean} [opts.clearCollection=false] - Clear collections before importing
    * @param {boolean} [opts.ensureArrayProps=true] - Ensure array props including @type
    * @param {boolean} [opts.mergeOntology=true] - Merge TBox resources with existing resources using schema merge strategy
-   * @returns {Promise<object>} Import result with detailed statistics
+   * @param {Function} [opts.beforeSaveFn=null] - Callback to filter/modify resources before saving.
+   *   Called with normalized resource. May be sync or async.
+   *   Return modified resource to save, or falsey (false/null/undefined) to skip.
+   * @returns {Promise<object>} Import result with detailed statistics including skippedResources count
    */
   async importOntologyData(data, collection, opts = {}) {
     check(data, Match.OneOf(Object, Array));
@@ -205,7 +208,8 @@ export class OntologizeServer extends Ontologize {
       shareStatements = false,
       clearCollection = false,
       ensureArrayProps = true,
-      mergeOntology = true
+      mergeOntology = true,
+      beforeSaveFn = null
     } = opts;
 
     try {
@@ -239,6 +243,7 @@ export class OntologizeServer extends Ontologize {
       const stats = {
         totalResources: resources.length,
         processedResources: 0,
+        skippedResources: 0,
         tboxResources: 0,
         aboxResources: 0,
         statementResources: 0,
@@ -256,19 +261,24 @@ export class OntologizeServer extends Ontologize {
             contextToUse,
             collection,
             this.collections.Context,
-            { normalize, ontologize, shareTBox, shareStatements, ensureArrayProps, mergeOntology }
+            { normalize, ontologize, shareTBox, shareStatements, ensureArrayProps, mergeOntology, beforeSaveFn }
           );
 
           if (processed) {
-            stats.processedResources++;
-            if (processed.isStatement) {
-              stats.statementResources++;
-            }
-            else if (processed.isTBox) {
-              stats.tboxResources++;
+            if (processed.skipped) {
+              stats.skippedResources++;
             }
             else {
-              stats.aboxResources++;
+              stats.processedResources++;
+              if (processed.isStatement) {
+                stats.statementResources++;
+              }
+              else if (processed.isTBox) {
+                stats.tboxResources++;
+              }
+              else {
+                stats.aboxResources++;
+              }
             }
           }
         }
@@ -640,7 +650,8 @@ export class OntologizeServer extends Ontologize {
       shareTBox = false,
       shareStatements = false,
       ensureArrayProps = true,
-      mergeOntology = true
+      mergeOntology = true,
+      beforeSaveFn = null
     } = opts;
     const ontologyCollection = this.collections.Ontology;
     const statementsCollection = this.collections.Statements;
@@ -740,6 +751,26 @@ export class OntologizeServer extends Ontologize {
     // Step 5.7: Handle property context updates (@type and @container)
     if (ensureArrayProps && this._isPropertyResource(processedResource)) {
       await this.ensurePropertyContext(processedResource, contextCollection);
+    }
+
+    // Step 5.8: Call beforeSaveFn if provided for filtering/adornment
+    if (beforeSaveFn) {
+      // Support both sync and async beforeSaveFn
+      const modifiedResource = await Promise.resolve(beforeSaveFn(processedResource));
+
+      // If beforeSaveFn returns falsey, skip this resource
+      if (!modifiedResource) {
+        return {
+          success: true,
+          skipped: true,
+          isTBox: isTBoxResource,
+          isStatement: isStatementResource,
+          resource: processedResource
+        };
+      }
+
+      // Use the modified resource for saving
+      processedResource = modifiedResource;
     }
 
     // Step 6: Save to appropriate collection(s)

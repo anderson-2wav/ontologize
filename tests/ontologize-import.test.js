@@ -646,7 +646,8 @@ describe("OntologizeServer Import", function () {
       let fileData;
       try {
         fileData = await ontologizeServer.loadOntologyFromFile(filePath);
-      } catch (error) {
+      }
+      catch (error) {
         this.skip("ontology.json file not found");
         return;
       }
@@ -805,6 +806,286 @@ describe("OntologizeServer Import", function () {
     });
   });
 
+  describe("beforeSaveFn Callback", function () {
+    it("should call beforeSaveFn with normalized resource", async function () {
+      const capturedResources = [];
+
+      const testData = [
+        {
+          "@id": "ex:TestClass",
+          "@type": "rdfs:Class",
+          "rdfs:label": "Test Class"
+        }
+      ];
+
+      const result = await ontologizeServer.importOntologyData(
+        testData,
+        mockOntologyCollection,
+        {
+          beforeSaveFn: (resource) => {
+            capturedResources.push({ ...resource });
+            return resource;
+          }
+        }
+      );
+
+      assert.isTrue(result.success);
+      assert.equal(capturedResources.length, 1);
+      assert.equal(capturedResources[0]._id, "ex:TestClass");
+      assert.isArray(capturedResources[0]["@type"]);
+    });
+
+    it("should allow sync beforeSaveFn to modify resource", async function () {
+      const testData = [
+        {
+          "@id": "ex:TestClass",
+          "@type": "rdfs:Class",
+          "rdfs:label": "Original Label"
+        }
+      ];
+
+      const result = await ontologizeServer.importOntologyData(
+        testData,
+        mockOntologyCollection,
+        {
+          beforeSaveFn: (resource) => {
+            // Add a property to the resource
+            return {
+              ...resource,
+              "ex:addedProperty": "added-value",
+              "rdfs:label": "Modified Label"
+            };
+          }
+        }
+      );
+
+      assert.isTrue(result.success);
+      assert.equal(result.processedResources, 1);
+
+      const savedResource = ontologyData.find(r => r._id === "ex:TestClass");
+      assert.equal(savedResource["ex:addedProperty"], "added-value");
+      assert.equal(savedResource["rdfs:label"], "Modified Label");
+    });
+
+    it("should allow async beforeSaveFn to modify resource", async function () {
+      const testData = [
+        {
+          "@id": "ex:TestClass",
+          "@type": "rdfs:Class",
+          "rdfs:label": "Test Class"
+        }
+      ];
+
+      const result = await ontologizeServer.importOntologyData(
+        testData,
+        mockOntologyCollection,
+        {
+          beforeSaveFn: async (resource) => {
+            // Simulate async operation
+            await new Promise(resolve => setTimeout(resolve, 10));
+            return {
+              ...resource,
+              "ex:asyncProperty": "async-value"
+            };
+          }
+        }
+      );
+
+      assert.isTrue(result.success);
+      assert.equal(result.processedResources, 1);
+
+      const savedResource = ontologyData.find(r => r._id === "ex:TestClass");
+      assert.equal(savedResource["ex:asyncProperty"], "async-value");
+    });
+
+    it("should skip resource when beforeSaveFn returns false", async function () {
+      const testData = [
+        {
+          "@id": "ex:SkippedClass",
+          "@type": "rdfs:Class",
+          "rdfs:label": "Should be skipped"
+        },
+        {
+          "@id": "ex:SavedClass",
+          "@type": "rdfs:Class",
+          "rdfs:label": "Should be saved"
+        }
+      ];
+
+      const result = await ontologizeServer.importOntologyData(
+        testData,
+        mockOntologyCollection,
+        {
+          beforeSaveFn: (resource) => {
+            // Skip resources with "Skipped" in the ID
+            if (resource._id.includes("Skipped")) {
+              return false;
+            }
+            return resource;
+          }
+        }
+      );
+
+      assert.isTrue(result.success);
+      assert.equal(result.processedResources, 1);
+      assert.equal(result.skippedResources, 1);
+      assert.equal(result.totalResources, 2);
+
+      // Verify skipped resource was not saved
+      const skippedResource = ontologyData.find(r => r._id === "ex:SkippedClass");
+      assert.isUndefined(skippedResource);
+
+      // Verify saved resource was saved
+      const savedResource = ontologyData.find(r => r._id === "ex:SavedClass");
+      assert.isObject(savedResource);
+    });
+
+    it("should skip resource when beforeSaveFn returns null", async function () {
+      const testData = [
+        {
+          "@id": "ex:TestClass",
+          "@type": "rdfs:Class"
+        }
+      ];
+
+      const result = await ontologizeServer.importOntologyData(
+        testData,
+        mockOntologyCollection,
+        {
+          beforeSaveFn: () => null
+        }
+      );
+
+      assert.isTrue(result.success);
+      assert.equal(result.processedResources, 0);
+      assert.equal(result.skippedResources, 1);
+      assert.equal(ontologyData.length, 0);
+    });
+
+    it("should skip resource when beforeSaveFn returns undefined", async function () {
+      const testData = [
+        {
+          "@id": "ex:TestClass",
+          "@type": "rdfs:Class"
+        }
+      ];
+
+      const result = await ontologizeServer.importOntologyData(
+        testData,
+        mockOntologyCollection,
+        {
+          beforeSaveFn: () => undefined
+        }
+      );
+
+      assert.isTrue(result.success);
+      assert.equal(result.processedResources, 0);
+      assert.equal(result.skippedResources, 1);
+    });
+
+    it("should filter ABox resources by type using beforeSaveFn", async function () {
+      // Create a mock ABox collection
+      const aboxData = [];
+      const mockAboxCollection = {
+        deleteMany: async () => {
+          aboxData.length = 0;
+          return { deletedCount: 0 };
+        },
+        replaceOne: async (filter, doc) => {
+          const index = aboxData.findIndex(item => item._id === filter._id);
+          if (index >= 0) {
+            aboxData[index] = doc;
+          }
+          else {
+            aboxData.push(doc);
+          }
+          return { acknowledged: true };
+        }
+      };
+
+      const testData = [
+        {
+          "@id": "ex:person1",
+          "@type": "foaf:Person",
+          "foaf:name": "John"
+        },
+        {
+          "@id": "ex:org1",
+          "@type": "org:Organization",
+          "rdfs:label": "ACME"
+        },
+        {
+          "@id": "ex:person2",
+          "@type": "foaf:Person",
+          "foaf:name": "Jane"
+        }
+      ];
+
+      const result = await ontologizeServer.importOntologyData(
+        testData,
+        mockAboxCollection,
+        {
+          beforeSaveFn: (resource) => {
+            // Only save foaf:Person resources
+            const types = Array.isArray(resource["@type"]) ? resource["@type"] : [resource["@type"]];
+            if (types.includes("foaf:Person")) {
+              return resource;
+            }
+            return false;
+          }
+        }
+      );
+
+      assert.isTrue(result.success);
+      assert.equal(result.processedResources, 2);
+      assert.equal(result.skippedResources, 1);
+      assert.equal(aboxData.length, 2);
+      assert.isTrue(aboxData.every(r => r["@type"].includes("foaf:Person")));
+    });
+
+    it("should work with importOntologyFromFile", async function () {
+      const testData = {
+        "@context": {
+          "ex": "http://example.org/",
+          "rdfs": "http://www.w3.org/2000/01/rdf-schema#"
+        },
+        "@graph": [
+          {
+            "@id": "ex:Class1",
+            "@type": "rdfs:Class"
+          },
+          {
+            "@id": "ex:Class2",
+            "@type": "rdfs:Class"
+          }
+        ]
+      };
+
+      ontologizeServer.loadOntologyFromFile = async () => testData;
+
+      const result = await ontologizeServer.importOntologyFromFile(
+        "test.json",
+        mockOntologyCollection,
+        {
+          beforeSaveFn: (resource) => {
+            // Only save Class1
+            return resource._id === "ex:Class1" ? resource : false;
+          }
+        }
+      );
+
+      assert.isTrue(result.success);
+      assert.equal(result.processedResources, 1);
+      assert.equal(result.skippedResources, 1);
+
+      const savedResource = ontologyData.find(r => r._id === "ex:Class1");
+      assert.isObject(savedResource);
+
+      const skippedResource = ontologyData.find(r => r._id === "ex:Class2");
+      assert.isUndefined(skippedResource);
+    });
+  });
+
   describe("FOAF Ontology Import Test Suite", function () {
     let foafData = [];
     let mockFoafCollection;
@@ -856,14 +1137,14 @@ describe("OntologizeServer Import", function () {
       assert.isTrue(result.success);
       assert.isTrue(result.processedResources > 0);
 
-      console.log(`FOAF Import Results:`);
+      console.log("FOAF Import Results:");
       console.log(`- Total resources: ${result.totalResources}`);
       console.log(`- Processed resources: ${result.processedResources}`);
       console.log(`- TBox resources: ${result.tboxResources}`);
       console.log(`- ABox resources: ${result.aboxResources}`);
 
       // All FOAF resources should be TBox resources (Classes, Properties, Ontology)
-      console.log(`- ABox resources:`,foafData);
+      console.log("- ABox resources:",foafData);
       assert.equal(result.aboxResources, 0, "FOAF should contain only TBox resources");
       assert.isTrue(result.tboxResources > 0, "FOAF should contain TBox resources");
 
@@ -872,12 +1153,12 @@ describe("OntologizeServer Import", function () {
       assert.isTrue(ontologyData.length > 0, "TBox resources should be in the Ontology collection");
 
       // Log what ended up in each collection
-      console.log(`\nCollection Distribution:`);
+      console.log("\nCollection Distribution:");
       console.log(`- Ontology collection: ${ontologyData.length} resources`);
       console.log(`- Foaf collection: ${foafData.length} resources`);
 
       if (foafData.length > 0) {
-        console.log(`\nResources in Foaf collection:`);
+        console.log("\nResources in Foaf collection:");
         foafData.forEach(resource => {
           console.log(`  - ${resource._id} (@type: ${JSON.stringify(resource["@type"])})`);
         });
@@ -936,7 +1217,7 @@ describe("OntologizeServer Import", function () {
       assert.ok(ontologyData.some(r => r._id === "test:ExistingClass"), "Test data should be cleared from ontology");
       assert.isFalse(foafData.some(r => r._id === "test:ExistingFoafResource"), "Test data should be cleared from foaf");
 
-      console.log(`\nAfter clearCollection:`);
+      console.log("\nAfter clearCollection:");
       console.log(`- Ontology collection: ${ontologyData.length} FOAF resources`);
       console.log(`- Foaf collection: ${foafData.length} resources (should be 0)`);
     });
@@ -991,7 +1272,7 @@ describe("OntologizeServer Import", function () {
       );
       assert.equal(aboxInFoaf.length, 2, "ABox resources should be in foaf collection");
 
-      console.log(`\nMixed Import Results:`);
+      console.log("\nMixed Import Results:");
       console.log(`- TBox resources in Ontology collection: ${tboxInOntology.map(r => r._id)}`);
       console.log(`- ABox resources in Foaf collection: ${aboxInFoaf.map(r => r._id)}`);
     });
