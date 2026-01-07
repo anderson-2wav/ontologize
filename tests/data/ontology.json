@@ -176,6 +176,12 @@
     }
   },
   {
+    "_id": "dcterms:isPartOf",
+    "@type": "owl:ObjectProperty",
+    "dc:description": "Reference to some entity (like an Ontology) that a resource is part of or associated with.",
+    "rdfs:label": "Is Part Of"
+  },
+  {
     "_id": "foaf:phone",
     "@type": "owl:DatatypeProperty",
     "rdfs:range": "xsd:string",

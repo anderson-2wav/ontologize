@@ -1547,6 +1547,55 @@ export class Ontologize {
   }
 
   /**
+   * Get a resource by _id, searching across all registered collections.
+   * Searches in this order:
+   * 1. Ontology collection
+   * 2. Named collections in opts.collections
+   * 3. Statements collection
+   *
+   * @param {string} id - The _id of the resource to find
+   * @returns {Promise<{collection: string, resource: Object}|null>} Object with collection name and resource, or null if not found
+   */
+  async getResourceForId(id) {
+    check(id, String);
+
+    if (!id) return null;
+
+    // Define search order: Ontology first, then named collections, then Statements
+    const searchOrder = ["Ontology"];
+
+    // Add named collections (excluding Ontology, Context, Statements which are handled specially)
+    const specialCollections = new Set(["Ontology", "Context", "Statements"]);
+    for (const collectionName of Object.keys(this.collections)) {
+      if (!specialCollections.has(collectionName)) {
+        searchOrder.push(collectionName);
+      }
+    }
+
+    // Add Statements last
+    searchOrder.push("Statements");
+
+    // Search each collection in order
+    for (const collectionName of searchOrder) {
+      const collection = this.collections[collectionName];
+      if (!collection) continue;
+
+      try {
+        const raw = await collection.findOne({ _id: id });
+        if (raw) {
+          const resource = this.ld().proxy(raw);
+          return { collection: collectionName, resource };
+        }
+      }
+      catch (error) {
+        console.warn(`getResourceForId: Error searching ${collectionName}:`, error.message);
+      }
+    }
+
+    return null;
+  }
+
+  /**
    * Get module version
    *
    * @returns {string} The module version
