@@ -255,6 +255,7 @@ export class OntologizeServer extends Ontologize {
         // Incoming resources may have properties in a @vocab that conflicts with ours.
         // this would be fixed if we first expand resources with their own context,
         // then compact with ours.
+        // console.log(resource._id || resource["@id"]);
         try {
           const processed = await this._normalizeAndSaveResource(
             resource,
