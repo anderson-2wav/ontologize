@@ -260,10 +260,18 @@ export class Ontologize {
 
     const _id = resource._id ? "_id" : "@id";
     if (resource[_id]) {
+      // find a type name
+      let typeName;
+      if (resource["@type"]?.[0]) {
+        const found = await this.getResourceForId(resource["@type"][0]);
+        if (found) {
+          typeName = await this.getLabel(found.resource);
+        }
+      }
       // Try to extract a readable name from the ID
       const id = resource[_id];
       const parts = id.split(/[#/:]/);
-      return parts[parts.length - 1];
+      return (typeName ? `${typeName} ` : "") + parts[parts.length - 1];
     }
 
     return fallback || "Unknown";
