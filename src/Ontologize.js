@@ -58,7 +58,7 @@ export class Ontologize {
     this.opts.labelProperties = this.opts.labelProperties || Ontologize.DEFAULT_LABEL_PROPERTIES;
     this.opts.descriptionProperties = this.opts.descriptionProperties || Ontologize.DEFAULT_DESCRIPTION_PROPERTIES;
     this.opts.dateFormat = this.opts.dateFormat || "M/d/yyyy";
-    this.opts.dateTimeFormat = this.opts.dateTimeFormat || "M/d/yyyy h:mm a";
+    this.opts.dateTimeFormat = this.opts.dateTimeFormat || "M/d/yyyy h:mm a ZZ";
     this.opts.dateTimeZone = this.opts.dateTimeZone || "America/Los_Angeles";
     if (this.opts.collections) {
       Object.assign(this.collections, this.opts.collections);
