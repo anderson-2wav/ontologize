@@ -1460,9 +1460,9 @@ export class Ontologize {
         if (!classResource) return;
 
         // Check if this class has the ontology property
-        if (classResource[ontologyProperty] !== undefined) {
+        if (classResource[property] !== undefined) {
           if (!exploredTypes.has(classResource._id)) {
-            foundSchemas.push(classResource);
+            foundOntology.push(classResource);
           }
         }
 
