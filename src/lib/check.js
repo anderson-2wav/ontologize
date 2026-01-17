@@ -17,6 +17,7 @@ function check(value, pattern, message) {
     if (pat === String) return typeof val === "string";
     if (pat === Number) return typeof val === "number";
     if (pat === Boolean) return typeof val === "boolean";
+    if (pat === Function) return typeof val === "function";
 
     if (pat && pat._isOneOf) {
       return pat._types.some(type => matches(val, type));

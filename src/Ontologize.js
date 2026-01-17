@@ -1979,6 +1979,114 @@ export class Ontologize {
 
     return ontologies;
   }
+
+  // ============================================================================
+  // Individual Methods (for grouping resources by individual)
+  // ============================================================================
+
+  /**
+   * Default color scheme for individuals.
+   * Based on d3.schemeTableau10 but excludes red (#e15759) and pink (#ff9da7)
+   * to avoid confusion with selection/error states.
+   */
+  static DEFAULT_COLOR_SCHEME = [
+    "#4e79a7", "#f28e2c", "#76b7b2", "#59a14f",
+    "#edc949", "#af7aa1", "#9c755f", "#bab0ab"
+  ];
+
+  /**
+   * Group resources by individual ID.
+   * Pure function - does not use ontologize internals.
+   *
+   * @param {Object[]} resources - Array of resources to group
+   * @param {Function} getIndividualId - Function that takes a resource and returns its individual ID
+   * @returns {Map<string, Object[]>} Map of individual ID to array of resources
+   */
+  groupResourcesByIndividual(resources, getIndividualId) {
+    check(resources, Array);
+    check(getIndividualId, Function);
+
+    const map = new Map();
+    for (const resource of resources) {
+      const id = getIndividualId(resource);
+      if (!id) continue;
+      if (!map.has(id)) map.set(id, []);
+      map.get(id).push(resource);
+    }
+    return map;
+  }
+
+  /**
+   * Assign colors to individual IDs from a color scheme.
+   * Pure function - does not use ontologize internals.
+   *
+   * @param {string[]} ids - Array of individual IDs
+   * @param {string[]} [scheme] - Color scheme array (defaults to Ontologize.DEFAULT_COLOR_SCHEME)
+   * @returns {Map<string, string>} Map of individual ID to hex color
+   */
+  assignIndividualColors(ids, scheme = Ontologize.DEFAULT_COLOR_SCHEME) {
+    check(ids, Array);
+
+    const map = new Map();
+    ids.forEach((id, i) => map.set(id, scheme[i % scheme.length]));
+    return map;
+  }
+
+  /**
+   * Fetch labels for individual IDs by looking up resources in collections.
+   * Uses ontologize internals (getResourceForId, getLabel).
+   *
+   * @param {string[]} ids - Array of individual IDs to fetch labels for
+   * @returns {Promise<Map<string, string>>} Map of individual ID to label string
+   */
+  async fetchIndividualLabels(ids) {
+    check(ids, Array);
+
+    const map = new Map();
+    await Promise.all(ids.map(async (id) => {
+      try {
+        const result = await this.getResourceForId(id);
+        if (result && result.resource) {
+          const label = await this.getLabel(result.resource);
+          map.set(id, label);
+        }
+        else {
+          map.set(id, String(id));
+        }
+      }
+      catch (error) {
+        console.warn(`fetchIndividualLabels: Error fetching label for ${id}:`, error.message);
+        map.set(id, String(id));
+      }
+    }));
+    return map;
+  }
+
+  /**
+   * Build individual options array with _id, label, color, and count.
+   * Convenience method combining groupResourcesByIndividual, assignIndividualColors, and fetchIndividualLabels.
+   *
+   * @param {Object[]} resources - Array of resources to process
+   * @param {Function} getIndividualId - Function that takes a resource and returns its individual ID
+   * @param {string[]} [colorScheme] - Color scheme array (defaults to Ontologize.DEFAULT_COLOR_SCHEME)
+   * @returns {Promise<Object[]>} Array of { _id, label, color, count } objects
+   */
+  async buildIndividualOptions(resources, getIndividualId, colorScheme) {
+    check(resources, Array);
+    check(getIndividualId, Function);
+
+    const map = this.groupResourcesByIndividual(resources, getIndividualId);
+    const ids = [...map.keys()];
+    const colors = this.assignIndividualColors(ids, colorScheme);
+    const labels = await this.fetchIndividualLabels(ids);
+
+    return ids.map(id => ({
+      _id: id,
+      label: labels.get(id),
+      color: colors.get(id),
+      count: map.get(id).length
+    }));
+  }
 }
 
 // Export the class as default
