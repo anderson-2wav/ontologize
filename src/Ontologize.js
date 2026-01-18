@@ -1583,7 +1583,7 @@ export class Ontologize {
           searchOrder.unshift("Animal");
         }
         searchOrder.unshift("Orju");
-        console.log(`Search Order collections for ${prefix}`,searchOrder);
+        // console.log(`Search Order collections for ${prefix}`,searchOrder);
         break;
       case "track":
         if (id.includes("species")) {
@@ -1593,7 +1593,7 @@ export class Ontologize {
           searchOrder.unshift("Animal");
         }
         searchOrder.unshift("Track");
-        console.log(`Search Order collections for ${prefix}`,searchOrder);
+        // console.log(`Search Order collections for ${prefix}`,searchOrder);
         break;
       default:
 
@@ -1609,6 +1609,7 @@ export class Ontologize {
 
     // Add Statements last
     searchOrder.push("Statements");
+    return searchOrder;
   }
 
   /**
@@ -1623,7 +1624,6 @@ export class Ontologize {
    */
   async getResourceForId(id) {
     check(id, String);
-
     if (!id) return null;
 
     // Define search order: Ontology first, then named collections, then Statements
