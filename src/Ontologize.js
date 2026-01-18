@@ -112,7 +112,7 @@ export class Ontologize {
 
     // Check cache first
     if (cache && cache.has(id)) {
-      console.log(`Using cached ${id}`);
+      // console.log(`Using cached ${id}`);
       return cache.get(id);
     }
 
@@ -1555,6 +1555,63 @@ export class Ontologize {
   }
 
   /**
+   * Return a list of collection names to search for id.
+   * The default list is typically Ontology, all named collections, and lastly Statements.
+   *
+   * TODO a future Ontology opt will provide a fn that can modify the collection order based on app-specific conditions.
+   *
+   * For now, we hard-wire this here to demonstrate the concept,
+   * e.g. all species ids in the track namespace follow the pattern "track:species-XXXX",
+   * and species are stored in the Species collection.
+   *
+   * @param {string} id
+   * @returns { string[] } list of collection names
+   */
+  getCollectionsForId(id) {
+    check(id, String);
+    // Define search order: Ontology first, then named collections, then Statements
+    const searchOrder = ["Ontology"];
+
+    // app-specific collection hints will be in a plugin-fn for ontologize that will guess at the best collection based on id
+    const prefix = id.match(/^([^:]+):/)?.[1];
+    switch (prefix) {
+      case "orju":
+        if (id.includes("species")) {
+          searchOrder.unshift("Species");
+        }
+        else if (id.includes("bird")) {
+          searchOrder.unshift("Animal");
+        }
+        searchOrder.unshift("Orju");
+        console.log(`Search Order collections for ${prefix}`,searchOrder);
+        break;
+      case "track":
+        if (id.includes("species")) {
+          searchOrder.unshift("Species");
+        }
+        else if (id.includes("bird")) {
+          searchOrder.unshift("Animal");
+        }
+        searchOrder.unshift("Track");
+        console.log(`Search Order collections for ${prefix}`,searchOrder);
+        break;
+      default:
+
+    }
+
+    // Add named collections (excluding Ontology, Context, Statements which are handled specially)
+    const specialCollections = new Set(["Ontology", "Context", "Statements"]);
+    for (const collectionName of Object.keys(this.collections)) {
+      if (!specialCollections.has(collectionName)  && !searchOrder.includes(collectionName)) {
+        searchOrder.push(collectionName);
+      }
+    }
+
+    // Add Statements last
+    searchOrder.push("Statements");
+  }
+
+  /**
    * Get a resource by _id, searching across all registered collections.
    * Searches in this order:
    * 1. Ontology collection
@@ -1570,18 +1627,7 @@ export class Ontologize {
     if (!id) return null;
 
     // Define search order: Ontology first, then named collections, then Statements
-    const searchOrder = ["Ontology"];
-
-    // Add named collections (excluding Ontology, Context, Statements which are handled specially)
-    const specialCollections = new Set(["Ontology", "Context", "Statements"]);
-    for (const collectionName of Object.keys(this.collections)) {
-      if (!specialCollections.has(collectionName)) {
-        searchOrder.push(collectionName);
-      }
-    }
-
-    // Add Statements last
-    searchOrder.push("Statements");
+    const searchOrder = this.getCollectionsForId(id); // ["Ontology"];
 
     // Search each collection in order
     for (const collectionName of searchOrder) {
@@ -1996,7 +2042,6 @@ export class Ontologize {
 
   /**
    * Group resources by individual ID.
-   * Pure function - does not use ontologize internals.
    *
    * @param {Object[]} resources - Array of resources to group
    * @param {Function} getIndividualId - Function that takes a resource and returns its individual ID
