@@ -13,9 +13,9 @@ function createMockCollections() {
     count: () => 0
   };
   return {
-    ontology: new MeteorCollectionAdapter(mockCollection, "Ontology"),
-    context: new MeteorCollectionAdapter(mockCollection, "Context"),
-    statements: new MeteorCollectionAdapter(mockCollection, "Statements")
+    ontology: new MeteorCollectionAdapter(mockCollection, "ontology"),
+    context: new MeteorCollectionAdapter(mockCollection, "context"),
+    statements: new MeteorCollectionAdapter(mockCollection, "statements")
   };
 }
 
@@ -33,7 +33,7 @@ describe("Ontologize.formatDate", function() {
     });
 
     it("should have default dateTimeFormat", function() {
-      assert.equal(ontologize.opts.dateTimeFormat, "M/d/yyyy h:mm a");
+      assert.equal(ontologize.opts.dateTimeFormat, "M/d/yyyy h:mm a ZZ");
     });
 
     it("should have default dateTimeZone", function() {

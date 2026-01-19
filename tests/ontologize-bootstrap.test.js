@@ -126,9 +126,9 @@ describe("OntologizeServer Bootstrap", function () {
     };
 
     // Create adapters
-    const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "Ontology");
-    const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "Context");
-    const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "Statements");
+    const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "ontology");
+    const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "context");
+    const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "statements");
 
     // Create OntologizeServer instance
     ontologizeServer = new OntologizeServer(ontologyAdapter, contextAdapter, statementsAdapter);
@@ -392,9 +392,9 @@ describe("OntologizeServer Bootstrap", function () {
 
     it("should bootstrap from constructor opts.bootstrapFiles", async function () {
       // Create a new instance with bootstrapFiles
-      const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "Ontology");
-      const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "Context");
-      const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "Statements");
+      const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "ontology");
+      const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "context");
+      const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "statements");
 
       const serverWithFiles = new OntologizeServer(ontologyAdapter, contextAdapter, statementsAdapter, {
         bootstrapFiles: ["bold-bfo.jsonld", "ontology.json"],

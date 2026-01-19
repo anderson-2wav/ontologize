@@ -46,9 +46,9 @@ describe("Collection Adapter Demo", function () {
       const clientStatementsCollection = createMockStatementsCollection();
 
       // Create adapters for client-side Meteor collections
-      const ontologyAdapter = new MeteorCollectionAdapter(clientOntologyCollection, "Ontology");
-      const contextAdapter = new MeteorCollectionAdapter(clientContextCollection, "Context");
-      const statementsAdapter = new MeteorCollectionAdapter(clientStatementsCollection, "Statements");
+      const ontologyAdapter = new MeteorCollectionAdapter(clientOntologyCollection, "ontology");
+      const contextAdapter = new MeteorCollectionAdapter(clientContextCollection, "context");
+      const statementsAdapter = new MeteorCollectionAdapter(clientStatementsCollection, "statements");
 
       // Create Ontologize instance with adapters
       const ontologize = new Ontologize(ontologyAdapter, contextAdapter, statementsAdapter);
@@ -135,9 +135,9 @@ describe("Collection Adapter Demo", function () {
 
       // Client-side: Use adapters with Meteor collections
       const clientOntologize = new Ontologize(
-        new MeteorCollectionAdapter(meteorCollection, "Ontology"),
-        new MeteorCollectionAdapter(meteorContext, "Context"),
-        new MeteorCollectionAdapter(meteorStatements, "Statements")
+        new MeteorCollectionAdapter(meteorCollection, "ontology"),
+        new MeteorCollectionAdapter(meteorContext, "context"),
+        new MeteorCollectionAdapter(meteorStatements, "statements")
       );
 
       // Server-side: Use raw MongoDB collections directly

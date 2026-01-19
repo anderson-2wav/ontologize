@@ -109,7 +109,7 @@ export class OntologizeServer extends Ontologize {
         console.log(`Loading ontology data from ${resolvedPath}...`);
 
         // Clear collection only on first file import (if clearFirst is true)
-        const result = await this.importOntologyFromFile(resolvedPath, this.collections.Ontology, {
+        const result = await this.importOntologyFromFile(resolvedPath, this.collections.ontology, {
           clearCollection: clearFirst && i === 0,
           normalize: true,
           ontologize: true,
@@ -275,7 +275,7 @@ export class OntologizeServer extends Ontologize {
         // and it will be washed out when imported resources are expanded
         const _incomingContext = _.cloneDeep(contextToUse);
         delete _incomingContext["@vocab"];
-        await this._importContext(_incomingContext, this.collections.Context);
+        await this._importContext(_incomingContext, this.collections.context);
         contextImported = true;
       }
 
@@ -301,7 +301,7 @@ export class OntologizeServer extends Ontologize {
             resource,
             contextToUse,
             collection,
-            this.collections.Context,
+            this.collections.context,
             { normalize, ontologize, shareTBox, shareStatements, ensureArrayProps, mergeOntology, beforeSaveFn }
           );
 
@@ -694,8 +694,8 @@ export class OntologizeServer extends Ontologize {
       mergeOntology = true,
       beforeSaveFn = null
     } = opts;
-    const ontologyCollection = this.collections.Ontology;
-    const statementsCollection = this.collections.Statements;
+    const ontologyCollection = this.collections.ontology;
+    const statementsCollection = this.collections.statements;
     let processedResource = { ...resource };
     let isTBoxResource = false;
     let isStatementResource = false;
@@ -1077,7 +1077,7 @@ export class OntologizeServer extends Ontologize {
    */
   async _getAllClassesFromOntology() {
     const classes = {};
-    const cursor = this.collections.Ontology.find({
+    const cursor = this.collections.ontology.find({
       "@type": { $in: ["owl:Class", "rdfs:Class"] }
     });
     const classResources = await cursor.toArray();
@@ -1172,7 +1172,7 @@ export class OntologizeServer extends Ontologize {
    */
   async _getPropertiesByDomain() {
     const domainMap = {};
-    const cursor = this.collections.Ontology.find({
+    const cursor = this.collections.ontology.find({
       "@type": {
         $in: ["owl:ObjectProperty", "owl:DatatypeProperty", "owl:AnnotationProperty", "rdf:Property"]
       }
@@ -1224,7 +1224,7 @@ export class OntologizeServer extends Ontologize {
           for (const prop in resource) {
             if (prop !== "@type" && prop !== "_id") {
               // Get ontology info for this property if available
-              const ontResource = await this.collections.Ontology.findOne({ _id: prop });
+              const ontResource = await this.collections.ontology.findOne({ _id: prop });
               instanceProperties[type][prop] = ontResource || { propertyInfo: "No ontology definition found" };
             }
           }
@@ -1244,7 +1244,7 @@ export class OntologizeServer extends Ontologize {
 
                 for (const prop in embeddedResource) {
                   if (prop !== "@type" && prop !== "_id") {
-                    const ontResource = await this.collections.Ontology.findOne({ _id: prop });
+                    const ontResource = await this.collections.ontology.findOne({ _id: prop });
                     instanceProperties[embeddedType][prop] = ontResource || { propertyInfo: "No ontology definition found" };
                   }
                 }
@@ -1299,7 +1299,7 @@ export class OntologizeServer extends Ontologize {
     };
 
     // Get all property resources from the ontology
-    const cursor = this.collections.Ontology.find({
+    const cursor = this.collections.ontology.find({
       "@type": {
         $in: ["owl:ObjectProperty", "owl:DatatypeProperty", "owl:AnnotationProperty", "rdf:Property"]
       }
@@ -1333,7 +1333,7 @@ export class OntologizeServer extends Ontologize {
    */
   async _getAllOntologies() {
     const ontologies = {};
-    const cursor = this.collections.Ontology.find({
+    const cursor = this.collections.ontology.find({
       "@type": { $in: ["owl:Ontology"] }
     });
     const ontologyResources = await cursor.toArray();
@@ -1750,12 +1750,12 @@ INSERT DATA {
     console.log(`Created ${statements.length} statements from ${facts.length} facts`);
 
     // Filter out existing statements if onlyNew is true
-    if (opts.onlyNew && this.collections.Statements) {
+    if (opts.onlyNew && this.collections.statements) {
       console.log("Filtering out existing statements...");
       const newStatements = [];
 
       for (const statement of statements) {
-        const existing = await this.collections.Statements.findOne({
+        const existing = await this.collections.statements.findOne({
           "rdf:subject": statement["rdf:subject"],
           "rdf:object": statement["rdf:object"],
           "rdf:predicate": statement["rdf:predicate"],
@@ -1996,7 +1996,7 @@ INSERT DATA {
     }
 
     // Look up property definition in Ontology collection
-    const propertyDef = await this.collections.Ontology.findOne({ _id: propertyId });
+    const propertyDef = await this.collections.ontology.findOne({ _id: propertyId });
     if (!propertyDef) {
       this._jsonPropertyCache.set(propertyId, false);
       return false;
@@ -2036,7 +2036,7 @@ INSERT DATA {
     }
 
     // Find properties with bold:JSON or bui:Schema range
-    const cursor = this.collections.Ontology.find({
+    const cursor = this.collections.ontology.find({
       $or: [
         { "rdfs:range": { $in: OntologizeServer.BUI_JSON_TYPES } },
         { "bold:isJsonProperty": true }
@@ -2167,7 +2167,7 @@ INSERT DATA {
       // Lookup from Ontology if resource lacks rdfs:range or bold:container
       let propertyDef = propertyResource;
       if (!propertyResource["rdfs:range"] && !propertyResource["bold:container"]) {
-        const ontologyDef = await this.collections.Ontology.findOne({ _id: propertyResource._id });
+        const ontologyDef = await this.collections.ontology.findOne({ _id: propertyResource._id });
         if (ontologyDef) {
           propertyDef = { ...propertyResource, ...ontologyDef };
         }
@@ -2283,7 +2283,7 @@ INSERT DATA {
 
     // 3. Load all ontology resources
     console.log("Loading ontology resources...");
-    const ontologyResources = await this.collections.Ontology.find({}).toArray();
+    const ontologyResources = await this.collections.ontology.find({}).toArray();
     console.log(`Found ${ontologyResources.length} ontology resources`);
 
     // 4. Convert to triples and insert into HyLAR (only if available)
@@ -2353,7 +2353,7 @@ INSERT DATA {
       console.log(`Created ${statements.length} statements from facts`);
 
       // 9. Persist statements if collection available
-      if (this.collections.Statements && opts.persistStatements && statements.length > 0) {
+      if (this.collections.statements && opts.persistStatements && statements.length > 0) {
         await this._persistStatements(statements);
         console.log(`Persisted ${statements.length} statements to collection`);
       }
@@ -2404,7 +2404,7 @@ INSERT DATA {
     console.log(`Updating resource ${resourceId}...`);
 
     // 1. Load existing resource
-    const resource = await this.collections.Ontology.findOne({ _id: resourceId });
+    const resource = await this.collections.ontology.findOne({ _id: resourceId });
     if (!resource) {
       throw new Error(`Resource not found: ${resourceId}`);
     }
@@ -2503,7 +2503,7 @@ INSERT DATA {
             });
 
             // Persist statements if collection available
-            if (this.collections.Statements && statements.length > 0) {
+            if (this.collections.statements && statements.length > 0) {
               await this._persistStatements(statements);
               console.log(`Persisted ${statements.length} inferred statements`);
             }
@@ -2518,7 +2518,7 @@ INSERT DATA {
       : updatedResource;
 
     // 5. Update the resource in collection
-    const updateResult = await this.collections.Ontology.replaceOne(
+    const updateResult = await this.collections.ontology.replaceOne(
       { _id: resourceId },
       finalResource,
       { upsert: false }
@@ -2599,7 +2599,7 @@ INSERT DATA {
    * @private
    */
   async _persistStatements(statements) {
-    if (!this.collections.Statements || !statements || statements.length === 0) {
+    if (!this.collections.statements || !statements || statements.length === 0) {
       return 0;
     }
 
@@ -2615,7 +2615,7 @@ INSERT DATA {
 
     for (let i = 0; i < statementsWithIds.length; i += batchSize) {
       const batch = statementsWithIds.slice(i, Math.min(i + batchSize, statementsWithIds.length));
-      const result = await this.collections.Statements.insertMany(batch);
+      const result = await this.collections.statements.insertMany(batch);
       insertedCount += result.insertedCount;
     }
 
@@ -2636,7 +2636,7 @@ INSERT DATA {
       }
 
       // Get existing resource
-      const existing = await this.collections.Ontology.findOne({ _id: resourceId });
+      const existing = await this.collections.ontology.findOne({ _id: resourceId });
 
       if (existing) {
         // Merge with existing
@@ -2645,7 +2645,7 @@ INSERT DATA {
         });
 
         // Update in collection
-        await this.collections.Ontology.replaceOne(
+        await this.collections.ontology.replaceOne(
           { _id: resourceId },
           merged,
           { upsert: false }
@@ -2655,7 +2655,7 @@ INSERT DATA {
       else {
         // Insert new resource
         const newResource = { ...assembledResource, _id: resourceId };
-        await this.collections.Ontology.insertOne(newResource);
+        await this.collections.ontology.insertOne(newResource);
         updateCount++;
       }
     }

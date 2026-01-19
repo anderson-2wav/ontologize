@@ -41,9 +41,9 @@ describe("Ontologize", function () {
     const mockStatementsCollection = createMockStatementsCollection();
 
     // Create adapters from mock collections
-    const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "Ontology");
-    const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "Context");
-    const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "Statements");
+    const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "ontology");
+    const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "context");
+    const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "statements");
 
     ontologize = new Ontologize(ontologyAdapter, contextAdapter, statementsAdapter);
   });
@@ -79,15 +79,15 @@ describe("Ontologize", function () {
         defaultContext: { "@vocab": "http://example.org/" },
         debug: true
       };
-      const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "Ontology");
-      const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "Context");
-      const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "Statements");
+      const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "ontology");
+      const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "context");
+      const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "statements");
       const customOntologize = new Ontologize(ontologyAdapter, contextAdapter, statementsAdapter, customOpts);
       assert.equal(customOntologize.opts.debug, true);
       assert.equal(customOntologize.opts.defaultContext["@vocab"], "http://example.org/");
     });
 
-    it("should require Statements collection as third parameter", function () {
+    it("should require statements collection as third parameter", function () {
       const mockOntologyCollection = {
         findOne: () => null,
         find: () => ({
@@ -106,14 +106,14 @@ describe("Ontologize", function () {
       };
       const mockStatementsCollection = createMockStatementsCollection();
 
-      const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "Ontology");
-      const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "Context");
-      const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "Statements");
+      const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "ontology");
+      const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "context");
+      const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "statements");
 
       const ontologizeWithStatements = new Ontologize(ontologyAdapter, contextAdapter, statementsAdapter);
 
-      assert.isObject(ontologizeWithStatements.collections.Statements);
-      assert.equal(ontologizeWithStatements.collections.Statements, statementsAdapter);
+      assert.isObject(ontologizeWithStatements.collections.statements);
+      assert.equal(ontologizeWithStatements.collections.statements, statementsAdapter);
     });
 
     it("should accept multiple collections through opts.collections", function () {
@@ -143,10 +143,10 @@ describe("Ontologize", function () {
         count: () => 0
       };
 
-      const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "Ontology");
-      const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "Context");
-      const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "Statements");
-      const niceAdapter = new MeteorCollectionAdapter(mockNiceCollection, "Nice");
+      const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "ontology");
+      const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "context");
+      const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "statements");
+      const niceAdapter = new MeteorCollectionAdapter(mockNiceCollection, "nice");
 
       const opts = {
         collections: {
@@ -267,9 +267,9 @@ describe("Ontologize", function () {
       };
       const mockStatementsCollection = createMockStatementsCollection();
 
-      const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "Ontology");
-      const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "Context");
-      const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "Statements");
+      const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "ontology");
+      const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "context");
+      const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "statements");
       const testOntologize = new Ontologize(ontologyAdapter, contextAdapter, statementsAdapter);
 
       const label = await testOntologize.getLabelFromId("ex:TestClass");
@@ -357,9 +357,9 @@ describe("Ontologize", function () {
 
       const mockStatementsCollection = createMockStatementsCollection();
 
-      const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "Ontology");
-      const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "Context");
-      const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "Statements");
+      const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "ontology");
+      const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "context");
+      const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "statements");
       const testOntologize = new Ontologize(ontologyAdapter, contextAdapter, statementsAdapter);
 
       const result = await testOntologize.isArrayProperty("test:property");
@@ -395,9 +395,9 @@ describe("Ontologize", function () {
       };
       const mockStatementsCollection = createMockStatementsCollection();
 
-      const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "Ontology");
-      const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "Context");
-      const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "Statements");
+      const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "ontology");
+      const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "context");
+      const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "statements");
       const testOntologize = new Ontologize(ontologyAdapter, contextAdapter, statementsAdapter);
 
       const result = await testOntologize.isArrayProperty("test:property");
@@ -433,9 +433,9 @@ describe("Ontologize", function () {
       };
       const mockStatementsCollection = createMockStatementsCollection();
 
-      const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "Ontology");
-      const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "Context");
-      const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "Statements");
+      const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "ontology");
+      const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "context");
+      const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "statements");
       const testOntologize = new Ontologize(ontologyAdapter, contextAdapter, statementsAdapter);
 
       const result = await testOntologize.isArrayProperty("test:property");
@@ -477,9 +477,9 @@ describe("Ontologize", function () {
       };
       const mockStatementsCollection = createMockStatementsCollection();
 
-      const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "Ontology");
-      const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "Context");
-      const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "Statements");
+      const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "ontology");
+      const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "context");
+      const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "statements");
       const testOntologize = new Ontologize(ontologyAdapter, contextAdapter, statementsAdapter);
 
       // Current context says false, global context says true - should return false
@@ -798,9 +798,9 @@ describe("Ontologize", function () {
       };
       const mockStatementsCollection = createMockStatementsCollection();
 
-      const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "Ontology");
-      const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "Context");
-      const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "Statements");
+      const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "ontology");
+      const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "context");
+      const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "statements");
       const testOntologize = new Ontologize(ontologyAdapter, contextAdapter, statementsAdapter);
 
       const resource = {
@@ -848,9 +848,9 @@ describe("Ontologize", function () {
       };
       const mockStatementsCollection = createMockStatementsCollection();
 
-      const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "Ontology");
-      const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "Context");
-      const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "Statements");
+      const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "ontology");
+      const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "context");
+      const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "statements");
       const testOntologize = new Ontologize(ontologyAdapter, contextAdapter, statementsAdapter);
 
       const resource = {
@@ -897,9 +897,9 @@ describe("Ontologize", function () {
       };
       const mockStatementsCollection = createMockStatementsCollection();
 
-      const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "Ontology");
-      const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "Context");
-      const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "Statements");
+      const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "ontology");
+      const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "context");
+      const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "statements");
       const testOntologize = new Ontologize(ontologyAdapter, contextAdapter, statementsAdapter);
 
       const resource = {
@@ -946,9 +946,9 @@ describe("Ontologize", function () {
       };
       const mockStatementsCollection = createMockStatementsCollection();
 
-      const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "Ontology");
-      const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "Context");
-      const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "Statements");
+      const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "ontology");
+      const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "context");
+      const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "statements");
       const testOntologize = new Ontologize(ontologyAdapter, contextAdapter, statementsAdapter);
 
       const resource = {
@@ -999,9 +999,9 @@ describe("Ontologize", function () {
       };
       const mockStatementsCollection = createMockStatementsCollection();
 
-      const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "Ontology");
-      const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "Context");
-      const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "Statements");
+      const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "ontology");
+      const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "context");
+      const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "statements");
       const testOntologize = new Ontologize(ontologyAdapter, contextAdapter, statementsAdapter);
 
       const resource = {

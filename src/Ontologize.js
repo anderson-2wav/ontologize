@@ -79,9 +79,9 @@ export class Ontologize {
     check(statementsCollection, Object);
 
     this.collections = {
-      Ontology: ontologyCollection,
-      Context: contextCollection,
-      Statements: statementsCollection
+      ontology: ontologyCollection,
+      context: contextCollection,
+      statements: statementsCollection
     };
 
     this.opts = opts;
@@ -102,7 +102,7 @@ export class Ontologize {
     // TODO THERE ARE REAL PROBLEMS WITH CLIENT/SERVER HERE
     // on Meteor client, findOne returns resource,
     // on server, returns promise
-    const wat = this.collections.Context.findOne({ _id: "@id" });
+    const wat = this.collections.context.findOne({ _id: "@id" });
     if (wat instanceof Promise) {
       wat.then((context) => {
         const ld = new LD({ context });
@@ -149,7 +149,7 @@ export class Ontologize {
     }
 
     // Perform lookup
-    const raw = await this.collections.Ontology.findOne({ _id: id });
+    const raw = await this.collections.ontology.findOne({ _id: id });
     const resource = raw ? this.ld().proxy(raw) : null;
 
     // Store in cache (including null for not-found)
@@ -735,7 +735,7 @@ export class Ontologize {
 
     try {
       // Look up the resource from the ontology collection
-      const rawResource = await this.collections.Ontology.findOne({ _id: resourceId });
+      const rawResource = await this.collections.ontology.findOne({ _id: resourceId });
       const resource = rawResource ? this.ld().proxy(rawResource) : null;
 
       if (resource) {
@@ -768,7 +768,7 @@ export class Ontologize {
 
     // Try to get context from Context collection
     try {
-      const contextDoc = await this.collections.Context.findOne({ _id: "@id" });
+      const contextDoc = await this.collections.context.findOne({ _id: "@id" });
       if (contextDoc) {
         // TODO why do we do that? I think _id: "@id" is part of the context
         // Extract context data (excluding _id)
@@ -855,7 +855,7 @@ export class Ontologize {
     // If we don't have the resource object, check ontology collection for bold:container property
     if (!propertyResource) {
       try {
-        const rawResource = await this.collections.Ontology.findOne({ _id: propertyId });
+        const rawResource = await this.collections.ontology.findOne({ _id: propertyId });
         const ontologyResource = rawResource ? this.ld().proxy(rawResource) : null;
         if (ontologyResource && ontologyResource["bold:container"]) {
           const container = ontologyResource["bold:container"];
@@ -1057,7 +1057,7 @@ export class Ontologize {
         classesToFetch.clear();
 
         // Fetch this batch of classes
-        const cursor = this.collections.Ontology.find({
+        const cursor = this.collections.ontology.find({
           _id: { $in: batch }
         });
         const rawResults = await cursor.toArray();
@@ -1481,7 +1481,7 @@ export class Ontologize {
       if (exploredTypes.has(typ)) continue;
       exploredTypes.add(typ);
 
-      const rawClassResource = await this.collections.Ontology.findOne({ _id: typ });
+      const rawClassResource = await this.collections.ontology.findOne({ _id: typ });
       const classResource = rawClassResource ? this.ld().proxy(rawClassResource) : null;
       if (classResource) {
         foundOntology.push(classResource);
@@ -1515,7 +1515,7 @@ export class Ontologize {
               : superClass;
 
             if (superClassId && !exploredTypes.has(superClassId) && !superClassId.startsWith("_:")) {
-              const rawSuperClassResource = await this.collections.Ontology.findOne({ _id: superClassId });
+              const rawSuperClassResource = await this.collections.ontology.findOne({ _id: superClassId });
               const superClassResource = rawSuperClassResource ? this.ld().proxy(rawSuperClassResource) : null;
               if (superClassResource) {
                 await lookDeep(superClassResource);
@@ -1602,29 +1602,29 @@ export class Ontologize {
   getCollectionsForId(id) {
     check(id, String);
     // Define search order: Ontology first, then named collections, then Statements
-    const searchOrder = ["Ontology"];
+    const searchOrder = ["ontology"];
 
     // app-specific collection hints will be in a plugin-fn for ontologize that will guess at the best collection based on id
     const prefix = id.match(/^([^:]+):/)?.[1];
     switch (prefix) {
       case "orju":
         if (id.includes("species")) {
-          searchOrder.unshift("Species");
+          searchOrder.unshift("species");
         }
         else if (id.includes("bird")) {
-          searchOrder.unshift("Animal");
+          searchOrder.unshift("animal");
         }
-        searchOrder.unshift("Orju");
+        searchOrder.unshift("orju");
         // console.log(`Search Order collections for ${prefix}`,searchOrder);
         break;
       case "track":
         if (id.includes("species")) {
-          searchOrder.unshift("Species");
+          searchOrder.unshift("species");
         }
         else if (id.includes("bird")) {
-          searchOrder.unshift("Animal");
+          searchOrder.unshift("animal");
         }
-        searchOrder.unshift("Track");
+        searchOrder.unshift("track");
         // console.log(`Search Order collections for ${prefix}`,searchOrder);
         break;
       default:
@@ -1632,7 +1632,7 @@ export class Ontologize {
     }
 
     // Add named collections (excluding Ontology, Context, Statements which are handled specially)
-    const specialCollections = new Set(["Ontology", "Context", "Statements"]);
+    const specialCollections = new Set(["ontology", "context", "statements"]);
     for (const collectionName of Object.keys(this.collections)) {
       if (!specialCollections.has(collectionName)  && !searchOrder.includes(collectionName)) {
         searchOrder.push(collectionName);
@@ -1640,7 +1640,7 @@ export class Ontologize {
     }
 
     // Add Statements last
-    searchOrder.push("Statements");
+    searchOrder.push("statements");
     return searchOrder;
   }
 
@@ -1659,7 +1659,7 @@ export class Ontologize {
     if (!id) return null;
 
     // Define search order: Ontology first, then named collections, then Statements
-    const searchOrder = this.getCollectionsForId(id); // ["Ontology"];
+    const searchOrder = this.getCollectionsForId(id); // ["ontology"];
 
     // Search each collection in order
     for (const collectionName of searchOrder) {
@@ -1868,7 +1868,7 @@ export class Ontologize {
    */
   async _getAllClassesFromOntology() {
     const classes = {};
-    const cursor = this.collections.Ontology.find({
+    const cursor = this.collections.ontology.find({
       "@type": { $in: ["owl:Class", "rdfs:Class"] }
     });
 
@@ -1965,7 +1965,7 @@ export class Ontologize {
    */
   async _getPropertiesByDomain() {
     const domainMap = {};
-    const cursor = this.collections.Ontology.find({
+    const cursor = this.collections.ontology.find({
       "@type": {
         $in: ["owl:ObjectProperty", "owl:DatatypeProperty", "owl:AnnotationProperty", "rdf:Property"]
       }
@@ -2007,7 +2007,7 @@ export class Ontologize {
       Properties: {}
     };
 
-    const cursor = this.collections.Ontology.find({
+    const cursor = this.collections.ontology.find({
       "@type": {
         $in: ["owl:ObjectProperty", "owl:DatatypeProperty", "owl:AnnotationProperty", "rdf:Property"]
       }
@@ -2043,7 +2043,7 @@ export class Ontologize {
    */
   async _getAllOntologies() {
     const ontologies = {};
-    const cursor = this.collections.Ontology.find({
+    const cursor = this.collections.ontology.find({
       "@type": { $in: ["owl:Ontology"] }
     });
 
