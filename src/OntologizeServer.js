@@ -17,6 +17,38 @@ import path from "path";
  * These methods require Node.js environment and should not be used in browser contexts
  */
 export class OntologizeServer extends Ontologize {
+  // Singleton instance (separate from parent Ontologize._instance)
+  static _instance = null;
+
+  /**
+   * Initialize the singleton OntologizeServer instance.
+   * Must be called before using get().
+   *
+   * @param {object} ontologyCollection - Collection adapter or raw MongoDB collection
+   * @param {object} contextCollection - Collection adapter or raw MongoDB collection
+   * @param {object} statementsCollection - Collection adapter or raw MongoDB collection for Statements
+   * @param {object} [opts] - Configuration options (same as constructor)
+   * @returns {OntologizeServer} The initialized singleton instance
+   */
+  static initialize(ontologyCollection, contextCollection, statementsCollection, opts = {}) {
+    OntologizeServer._instance = new OntologizeServer(ontologyCollection, contextCollection, statementsCollection, opts);
+    return OntologizeServer._instance;
+  }
+
+  /**
+   * Get the singleton OntologizeServer instance.
+   * Throws an error if initialize() has not been called.
+   *
+   * @returns {OntologizeServer} The singleton instance
+   * @throws {Error} If initialize() has not been called
+   */
+  static get() {
+    if (!OntologizeServer._instance) {
+      throw new Error("OntologizeServer has not been initialized. Call OntologizeServer.initialize() first.");
+    }
+    return OntologizeServer._instance;
+  }
+
   /**
    * Create a new OntologizeServer instance
    *
@@ -26,6 +58,14 @@ export class OntologizeServer extends Ontologize {
    * @param {object} [opts] - Configuration options (same as Ontologize)
    * @param {string[]} [opts.bootstrapFiles] - Array of file paths for bootstrap ontologies
    * @param {string} [opts.bootstrapPath] - Base path for relative bootstrap file paths
+   * @param {object} [opts.collections] - (from Ontologize) named collections in addition to ontology, context, and statements
+   * @param {object} [opts.context] - (from Ontologize) Default JSON-LD context
+   * @param {boolean} [opts.debug=false] - (from Ontologize) Enable debug logging
+   * @param {string[]} [opts.labelProperties] - (from Ontologize) Properties to check for labels (in order of preference)
+   * @param {string[]} [opts.descriptionProperties] - (from Ontologize) Properties to check for descriptions (in order of preference)
+   * @param {string} [opts.dateFormat="M/d/yyyy"] - (from Ontologize) Default format for dates
+   * @param {string} [opts.dateTimeFormat="M/d/yyyy h:mm a"] - (from Ontologize) Default format for date-times
+   * @param {string} [opts.dateTimeZone="America/Los_Angeles"] - (from Ontologize) Default timezone for date formatting
    */
   constructor(ontologyCollection, contextCollection, statementsCollection, opts = {}) {
     super(ontologyCollection, contextCollection, statementsCollection, opts);

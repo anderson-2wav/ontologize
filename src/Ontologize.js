@@ -25,6 +25,38 @@ export class Ontologize {
   // Default properties for getDescription (in order of preference)
   static DEFAULT_DESCRIPTION_PROPERTIES = ["dcterms:description", "rdfs:comment"];
 
+  // Singleton instance
+  static _instance = null;
+
+  /**
+   * Initialize the singleton Ontologize instance.
+   * Must be called before using get().
+   *
+   * @param {object} ontologyCollection - Collection adapter or raw MongoDB collection
+   * @param {object} contextCollection - Collection adapter or raw MongoDB collection
+   * @param {object} statementsCollection - Collection adapter or raw MongoDB collection for Statements
+   * @param {object} [opts] - Configuration options (same as constructor)
+   * @returns {Ontologize} The initialized singleton instance
+   */
+  static initialize(ontologyCollection, contextCollection, statementsCollection, opts = {}) {
+    Ontologize._instance = new Ontologize(ontologyCollection, contextCollection, statementsCollection, opts);
+    return Ontologize._instance;
+  }
+
+  /**
+   * Get the singleton Ontologize instance.
+   * Throws an error if initialize() has not been called.
+   *
+   * @returns {Ontologize} The singleton instance
+   * @throws {Error} If initialize() has not been called
+   */
+  static get() {
+    if (!Ontologize._instance) {
+      throw new Error("Ontologize has not been initialized. Call Ontologize.initialize() first.");
+    }
+    return Ontologize._instance;
+  }
+
   /**
    * Create a new Ontologize instance
    *
