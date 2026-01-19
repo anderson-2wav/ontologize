@@ -72,6 +72,7 @@ export class Ontologize {
    * @param {string} [opts.dateFormat="M/d/yyyy"] - Default format for dates
    * @param {string} [opts.dateTimeFormat="M/d/yyyy h:mm a"] - Default format for date-times
    * @param {string} [opts.dateTimeZone="America/Los_Angeles"] - Default timezone for date formatting
+   * @param {object} [opts.idResolvers] - hints to resolve ids to collections for special cases other than namespaces
    */
   constructor(ontologyCollection, contextCollection, statementsCollection, opts = {}) {
     check(ontologyCollection, Object);
@@ -1588,13 +1589,12 @@ export class Ontologize {
 
   /**
    * Return a list of collection names to search for id.
-   * The default list is typically Ontology, all named collections, and lastly Statements.
-   *
-   * TODO a future Ontology opt will provide a fn that can modify the collection order based on app-specific conditions.
-   *
-   * For now, we hard-wire this here to demonstrate the concept,
-   * e.g. all species ids in the track namespace follow the pattern "track:species-XXXX",
-   * and species are stored in the Species collection.
+   * - the returned list typically begins with "ontology"
+   * - if the id has a prefix which is the name of a collection, that follows "ontology"
+   * - if the prefix has idResolvers in ontologize.opts, and if any of those match this id,
+   *   then the collection named in the resolver will precede "ontology"
+   * - then any other named collections are added
+   * - "statements" is added last
    *
    * @param {string} id
    * @returns { string[] } list of collection names
@@ -1606,29 +1606,28 @@ export class Ontologize {
 
     // app-specific collection hints will be in a plugin-fn for ontologize that will guess at the best collection based on id
     const prefix = id.match(/^([^:]+):/)?.[1];
-    switch (prefix) {
-      case "orju":
-        if (id.includes("species")) {
-          searchOrder.unshift("species");
-        }
-        else if (id.includes("bird")) {
-          searchOrder.unshift("animal");
-        }
-        searchOrder.unshift("orju");
-        // console.log(`Search Order collections for ${prefix}`,searchOrder);
-        break;
-      case "track":
-        if (id.includes("species")) {
-          searchOrder.unshift("species");
-        }
-        else if (id.includes("bird")) {
-          searchOrder.unshift("animal");
-        }
-        searchOrder.unshift("track");
-        // console.log(`Search Order collections for ${prefix}`,searchOrder);
-        break;
-      default:
 
+    if (prefix) {
+      // see if prefix has a named collection
+      // (this will be searched after ontology)
+      if (this.collections[prefix]) {
+        searchOrder.push(prefix);
+      }
+      // do we have idResolvers for this prefix in our opts?
+      if (this.opts.idResolvers?.[prefix]) {
+        const resolvers = this.opts.idResolvers[prefix];
+        if (Array.isArray(resolvers)) {
+          for (const resolver of resolvers) {
+            if (resolver.match) {
+              const re = new RegExp(resolver.match);
+              if (id.match(re) && resolver.collection) {
+                // resolver.collection will be the registered name of the collection
+                searchOrder.unshift(resolver.collection);
+              }
+            }
+          }
+        }
+      }
     }
 
     // Add named collections (excluding Ontology, Context, Statements which are handled specially)
