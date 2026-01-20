@@ -25,6 +25,38 @@ export class Ontologize {
   // Default properties for getDescription (in order of preference)
   static DEFAULT_DESCRIPTION_PROPERTIES = ["dcterms:description", "rdfs:comment"];
 
+  // Singleton instance
+  static _instance = null;
+
+  /**
+   * Initialize the singleton Ontologize instance.
+   * Must be called before using get().
+   *
+   * @param {object} ontologyCollection - Collection adapter or raw MongoDB collection
+   * @param {object} contextCollection - Collection adapter or raw MongoDB collection
+   * @param {object} statementsCollection - Collection adapter or raw MongoDB collection for Statements
+   * @param {object} [opts] - Configuration options (same as constructor)
+   * @returns {Ontologize} The initialized singleton instance
+   */
+  static initialize(ontologyCollection, contextCollection, statementsCollection, opts = {}) {
+    Ontologize._instance = new Ontologize(ontologyCollection, contextCollection, statementsCollection, opts);
+    return Ontologize._instance;
+  }
+
+  /**
+   * Get the singleton Ontologize instance.
+   * Throws an error if initialize() has not been called.
+   *
+   * @returns {Ontologize} The singleton instance
+   * @throws {Error} If initialize() has not been called
+   */
+  static get() {
+    if (!Ontologize._instance) {
+      throw new Error("Ontologize has not been initialized. Call Ontologize.initialize() first.");
+    }
+    return Ontologize._instance;
+  }
+
   /**
    * Create a new Ontologize instance
    *
@@ -40,6 +72,7 @@ export class Ontologize {
    * @param {string} [opts.dateFormat="M/d/yyyy"] - Default format for dates
    * @param {string} [opts.dateTimeFormat="M/d/yyyy h:mm a"] - Default format for date-times
    * @param {string} [opts.dateTimeZone="America/Los_Angeles"] - Default timezone for date formatting
+   * @param {object} [opts.idResolvers] - hints to resolve ids to collections for special cases other than namespaces
    */
   constructor(ontologyCollection, contextCollection, statementsCollection, opts = {}) {
     check(ontologyCollection, Object);
@@ -47,9 +80,9 @@ export class Ontologize {
     check(statementsCollection, Object);
 
     this.collections = {
-      Ontology: ontologyCollection,
-      Context: contextCollection,
-      Statements: statementsCollection
+      ontology: ontologyCollection,
+      context: contextCollection,
+      statements: statementsCollection
     };
 
     this.opts = opts;
@@ -70,7 +103,7 @@ export class Ontologize {
     // TODO THERE ARE REAL PROBLEMS WITH CLIENT/SERVER HERE
     // on Meteor client, findOne returns resource,
     // on server, returns promise
-    const wat = this.collections.Context.findOne({ _id: "@id" });
+    const wat = this.collections.context.findOne({ _id: "@id" });
     if (wat instanceof Promise) {
       wat.then((context) => {
         const ld = new LD({ context });
@@ -117,7 +150,7 @@ export class Ontologize {
     }
 
     // Perform lookup
-    const raw = await this.collections.Ontology.findOne({ _id: id });
+    const raw = await this.collections.ontology.findOne({ _id: id });
     const resource = raw ? this.ld().proxy(raw) : null;
 
     // Store in cache (including null for not-found)
@@ -703,7 +736,7 @@ export class Ontologize {
 
     try {
       // Look up the resource from the ontology collection
-      const rawResource = await this.collections.Ontology.findOne({ _id: resourceId });
+      const rawResource = await this.collections.ontology.findOne({ _id: resourceId });
       const resource = rawResource ? this.ld().proxy(rawResource) : null;
 
       if (resource) {
@@ -736,7 +769,7 @@ export class Ontologize {
 
     // Try to get context from Context collection
     try {
-      const contextDoc = await this.collections.Context.findOne({ _id: "@id" });
+      const contextDoc = await this.collections.context.findOne({ _id: "@id" });
       if (contextDoc) {
         // TODO why do we do that? I think _id: "@id" is part of the context
         // Extract context data (excluding _id)
@@ -823,7 +856,7 @@ export class Ontologize {
     // If we don't have the resource object, check ontology collection for bold:container property
     if (!propertyResource) {
       try {
-        const rawResource = await this.collections.Ontology.findOne({ _id: propertyId });
+        const rawResource = await this.collections.ontology.findOne({ _id: propertyId });
         const ontologyResource = rawResource ? this.ld().proxy(rawResource) : null;
         if (ontologyResource && ontologyResource["bold:container"]) {
           const container = ontologyResource["bold:container"];
@@ -1025,7 +1058,7 @@ export class Ontologize {
         classesToFetch.clear();
 
         // Fetch this batch of classes
-        const cursor = this.collections.Ontology.find({
+        const cursor = this.collections.ontology.find({
           _id: { $in: batch }
         });
         const rawResults = await cursor.toArray();
@@ -1449,7 +1482,7 @@ export class Ontologize {
       if (exploredTypes.has(typ)) continue;
       exploredTypes.add(typ);
 
-      const rawClassResource = await this.collections.Ontology.findOne({ _id: typ });
+      const rawClassResource = await this.collections.ontology.findOne({ _id: typ });
       const classResource = rawClassResource ? this.ld().proxy(rawClassResource) : null;
       if (classResource) {
         foundOntology.push(classResource);
@@ -1483,7 +1516,7 @@ export class Ontologize {
               : superClass;
 
             if (superClassId && !exploredTypes.has(superClassId) && !superClassId.startsWith("_:")) {
-              const rawSuperClassResource = await this.collections.Ontology.findOne({ _id: superClassId });
+              const rawSuperClassResource = await this.collections.ontology.findOne({ _id: superClassId });
               const superClassResource = rawSuperClassResource ? this.ld().proxy(rawSuperClassResource) : null;
               if (superClassResource) {
                 await lookDeep(superClassResource);
@@ -1556,13 +1589,12 @@ export class Ontologize {
 
   /**
    * Return a list of collection names to search for id.
-   * The default list is typically Ontology, all named collections, and lastly Statements.
-   *
-   * TODO a future Ontology opt will provide a fn that can modify the collection order based on app-specific conditions.
-   *
-   * For now, we hard-wire this here to demonstrate the concept,
-   * e.g. all species ids in the track namespace follow the pattern "track:species-XXXX",
-   * and species are stored in the Species collection.
+   * - the returned list typically begins with "ontology"
+   * - if the id has a prefix which is the name of a collection, that follows "ontology"
+   * - if the prefix has idResolvers in ontologize.opts, and if any of those match this id,
+   *   then the collection named in the resolver will precede "ontology"
+   * - then any other named collections are added
+   * - "statements" is added last
    *
    * @param {string} id
    * @returns { string[] } list of collection names
@@ -1570,37 +1602,36 @@ export class Ontologize {
   getCollectionsForId(id) {
     check(id, String);
     // Define search order: Ontology first, then named collections, then Statements
-    const searchOrder = ["Ontology"];
+    const searchOrder = ["ontology"];
 
     // app-specific collection hints will be in a plugin-fn for ontologize that will guess at the best collection based on id
     const prefix = id.match(/^([^:]+):/)?.[1];
-    switch (prefix) {
-      case "orju":
-        if (id.includes("species")) {
-          searchOrder.unshift("Species");
-        }
-        else if (id.includes("bird")) {
-          searchOrder.unshift("Animal");
-        }
-        searchOrder.unshift("Orju");
-        // console.log(`Search Order collections for ${prefix}`,searchOrder);
-        break;
-      case "track":
-        if (id.includes("species")) {
-          searchOrder.unshift("Species");
-        }
-        else if (id.includes("bird")) {
-          searchOrder.unshift("Animal");
-        }
-        searchOrder.unshift("Track");
-        // console.log(`Search Order collections for ${prefix}`,searchOrder);
-        break;
-      default:
 
+    if (prefix) {
+      // see if prefix has a named collection
+      // (this will be searched after ontology)
+      if (this.collections[prefix]) {
+        searchOrder.push(prefix);
+      }
+      // do we have idResolvers for this prefix in our opts?
+      if (this.opts.idResolvers?.[prefix]) {
+        const resolvers = this.opts.idResolvers[prefix];
+        if (Array.isArray(resolvers)) {
+          for (const resolver of resolvers) {
+            if (resolver.match) {
+              const re = new RegExp(resolver.match);
+              if (id.match(re) && resolver.collection) {
+                // resolver.collection will be the registered name of the collection
+                searchOrder.unshift(resolver.collection);
+              }
+            }
+          }
+        }
+      }
     }
 
     // Add named collections (excluding Ontology, Context, Statements which are handled specially)
-    const specialCollections = new Set(["Ontology", "Context", "Statements"]);
+    const specialCollections = new Set(["ontology", "context", "statements"]);
     for (const collectionName of Object.keys(this.collections)) {
       if (!specialCollections.has(collectionName)  && !searchOrder.includes(collectionName)) {
         searchOrder.push(collectionName);
@@ -1608,7 +1639,7 @@ export class Ontologize {
     }
 
     // Add Statements last
-    searchOrder.push("Statements");
+    searchOrder.push("statements");
     return searchOrder;
   }
 
@@ -1627,7 +1658,7 @@ export class Ontologize {
     if (!id) return null;
 
     // Define search order: Ontology first, then named collections, then Statements
-    const searchOrder = this.getCollectionsForId(id); // ["Ontology"];
+    const searchOrder = this.getCollectionsForId(id); // ["ontology"];
 
     // Search each collection in order
     for (const collectionName of searchOrder) {
@@ -1836,7 +1867,7 @@ export class Ontologize {
    */
   async _getAllClassesFromOntology() {
     const classes = {};
-    const cursor = this.collections.Ontology.find({
+    const cursor = this.collections.ontology.find({
       "@type": { $in: ["owl:Class", "rdfs:Class"] }
     });
 
@@ -1933,7 +1964,7 @@ export class Ontologize {
    */
   async _getPropertiesByDomain() {
     const domainMap = {};
-    const cursor = this.collections.Ontology.find({
+    const cursor = this.collections.ontology.find({
       "@type": {
         $in: ["owl:ObjectProperty", "owl:DatatypeProperty", "owl:AnnotationProperty", "rdf:Property"]
       }
@@ -1975,7 +2006,7 @@ export class Ontologize {
       Properties: {}
     };
 
-    const cursor = this.collections.Ontology.find({
+    const cursor = this.collections.ontology.find({
       "@type": {
         $in: ["owl:ObjectProperty", "owl:DatatypeProperty", "owl:AnnotationProperty", "rdf:Property"]
       }
@@ -2011,7 +2042,7 @@ export class Ontologize {
    */
   async _getAllOntologies() {
     const ontologies = {};
-    const cursor = this.collections.Ontology.find({
+    const cursor = this.collections.ontology.find({
       "@type": { $in: ["owl:Ontology"] }
     });
 

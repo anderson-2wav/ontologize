@@ -141,9 +141,9 @@ describe("OntologizeServer updateOne", function () {
     };
 
     // Create adapters
-    const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "Ontology");
-    const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "Context");
-    const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "Statements");
+    const ontologyAdapter = new MeteorCollectionAdapter(mockOntologyCollection, "ontology");
+    const contextAdapter = new MeteorCollectionAdapter(mockContextCollection, "context");
+    const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "statements");
 
     // Create OntologizeServer instance
     ontologizeServer = new OntologizeServer(ontologyAdapter, contextAdapter, statementsAdapter);
