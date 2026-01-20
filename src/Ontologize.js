@@ -258,13 +258,16 @@ export class Ontologize {
 
     check(fallback, Match.Optional(String));
 
+    const labelProperties = this.opts.labelProperties;
     // Get the assembled schema to check for label or labelProperties override
     const schema = await this.getSchema(property, resource, opts);
     // if there is a direct label override, use it
     if (schema.label) {
       return schema.label;
     }
-    const labelProperties = schema?.labelProperties || this.opts.labelProperties;
+    if (schema.labelProperties) {
+      labelProperties.unshift(...schema.labelProperties);
+    }
 
     // which thing to examine, the resource or the property resource?
     let examineResource = resource;
