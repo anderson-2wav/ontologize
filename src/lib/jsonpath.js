@@ -1,8 +1,3 @@
-/**
- * @license MIT
- * @copyright 2025 2wav inc, Anderson Wiese
- */
-
 /* eslint-disable */
 /* JSONPath 0.8.5 - XPath for JSON
  *
