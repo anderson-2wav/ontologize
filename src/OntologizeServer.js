@@ -221,7 +221,7 @@ export class OntologizeServer extends Ontologize {
    * Handles multiple JSON-LD formats and uses LD.compact for proper normalization
    *
    * @param {object|Array} data - Parsed JSON-LD object or array of resources
-   * @param {object} collection - MongoDB Ontology collection instance
+   * @param {object} [collection] - MongoDB collection instance for Abox resources (this is overridden by opts.useNamespaceCollections)
    * @param {object} [opts] - Import options
    * @param {object} [opts.context] - JSON-LD context to use for compaction
    * @param {boolean} [opts.normalize=true] - Use LD.compact for BOLD resource normalization
@@ -231,14 +231,15 @@ export class OntologizeServer extends Ontologize {
    * @param {boolean} [opts.ensureArrayProps=true] - Ensure array props including @type
    * @param {boolean} [opts.mergeOntology=true] - Merge TBox resources with existing resources using schema merge strategy
    * @param {Function} [opts.beforeSaveFn=null] - Callback to filter/modify resources before saving.
+   * @param {boolean} [opts.useNamespaceCollections=true] - use named collections by uri prefix (instead of collection param)
    *   Called with normalized resource. May be sync or async.
    *   Return modified resource to save, or falsey (false/null/undefined) to skip.
    * @returns {Promise<object>} Import result with detailed statistics including skippedResources count
    */
   async importOntologyData(data, collection, opts = {}) {
     check(data, Match.OneOf(Object, Array));
-    check(collection, Object);
-    check(opts, Object);
+    check(collection, Match.Optional(Object));
+    check(opts, Match.Optional(Object));
 
     const {
       context = null,
@@ -692,10 +693,12 @@ export class OntologizeServer extends Ontologize {
       shareStatements = false,
       ensureArrayProps = true,
       mergeOntology = true,
-      beforeSaveFn = null
+      beforeSaveFn = null,
+      useNamespaceCollections = true
     } = opts;
     const ontologyCollection = this.collections.ontology;
     const statementsCollection = this.collections.statements;
+
     let processedResource = { ...resource };
     let isTBoxResource = false;
     let isStatementResource = false;
@@ -815,6 +818,42 @@ export class OntologizeServer extends Ontologize {
     }
 
     // Step 6: Save to appropriate collection(s)
+
+    // if this is destined for an ABox collection,
+    // check if we should use a namespace collection from ontologize.collections (also this.opts.idResolvers)
+    if (useNamespaceCollections && (!isTBoxResource || shareTBox)) {
+      let _collection;
+      const prefix = processedResource._id.match(/^([^:]+):/)?.[1];
+      if (prefix) {
+        // do we have idResolvers for this prefix in our opts?
+        if (this.opts.idResolvers?.[prefix]) {
+          const resolvers = this.opts.idResolvers[prefix];
+          if (Array.isArray(resolvers)) {
+            for (const resolver of resolvers) {
+              if (resolver.match) {
+                const re = new RegExp(resolver.match);
+                if (processedResource._id.match(re) && resolver.collection) {
+                  // resolver.collection will be the registered name of the collection
+                  if (this.collections[resolver.collection]) {
+                    _collection = this.collections[resolver.collection];
+                  }
+                }
+              }
+            }
+          }
+        }
+        if (!_collection) {
+          const namespaceCollection = this.collections[prefix];
+          if (namespaceCollection) {
+            _collection = namespaceCollection;
+          }
+        }
+      }
+      if (_collection) {
+        collection = _collection;
+      }
+    }
+
     if (isStatementResource && statementsCollection) {
       // Statement resource - save to Statements collection with merge strategy
       await this._saveResourceWithMerge(processedResource, statementsCollection, { mergeOntology });
