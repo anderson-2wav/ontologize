@@ -1496,15 +1496,23 @@ export class OntologizeServer extends Ontologize {
       return "# No triples to insert";
     }
 
-    // Build basic SPARQL prefixes - for now, use common prefixes
-    // In a full implementation, this could be extracted from the context
-    let sparql = `PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-PREFIX owl: <http://www.w3.org/2002/07/owl#>
-PREFIX bfo: <https://ontology.2wav.com/bfo#>
-PREFIX bold: <https://ontology.2wav.com/bold#>
-PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+    // Get context and build complete SPARQL prefixes from it
+    const context = await this.getContext(opts.context);
 
+    // Build SPARQL PREFIX declarations from context
+    let prefixes = "";
+    for (const [key, value] of Object.entries(context)) {
+      // Skip JSON-LD keywords and non-string values (complex term definitions)
+      if (key.startsWith("@") || key === "_id" || typeof value !== "string") {
+        continue;
+      }
+      // Only include if the value looks like a namespace URI
+      if (value.startsWith("http://") || value.startsWith("https://")) {
+        prefixes += `PREFIX ${key}: <${value}>\n`;
+      }
+    }
+
+    let sparql = `${prefixes}
 INSERT DATA {
 `;
 
