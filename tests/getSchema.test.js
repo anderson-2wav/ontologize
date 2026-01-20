@@ -1,8 +1,11 @@
 /**
- * Tests for Ontologize.getSchema
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  *
- * @license MIT
- * @copyright 2025 2wav inc, Anderson Wiese
+ * Copyright (c) 2026 2wav, Inc.
+ *
+ * Tests for Ontologize.getSchema
  */
 
 import { assert } from "chai";
