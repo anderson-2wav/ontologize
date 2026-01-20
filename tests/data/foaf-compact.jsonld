@@ -1,8 +1,6 @@
 {
   "@context": {
     "@vocab": "https://ontology.2wav.com#",
-    "2do": "https://ontology.2wav.com/display#",
-    "2wav": "https://ontology.2wav.com#",
     "acrt": "https://privatealpha.com/ontology/certification/1#",
     "bfo": "https://ontology.2wav.com/bfo#",
     "bold": "https://ontology.2wav.com/bold#",

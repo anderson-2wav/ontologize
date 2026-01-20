@@ -1704,8 +1704,6 @@ export class Ontologize {
     "uo" : "http://purl.obolibrary.org/obo/uo.owl",
     "xbfo" : "http://purl.obolibrary.org/obo/bfo.owl",
     "obo" : "http://purl.obolibrary.org/obo/",
-    "2wav" : "https://ontology.2wav.com#",
-    "2do" : "https://ontology.2wav.com/display#",
     "bfo" : "https://ontology.2wav.com/bfo#",
     "ctb" : "https://ontology.2wav.com/bridge#",
     "ctl" : "https://ontology.2wav.com/800-53#",
