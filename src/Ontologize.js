@@ -900,11 +900,12 @@ export class Ontologize {
       // Only one resource, return it (optionally compacted)
       const resource = resources[0];
       if (opts.compact !== false) {
-        const LD = await import("bold-ld").then(m => m.LD);
-        const ld = new LD();
+        // const LD = await import("bold-ld").then(m => m.LD);
+        const ld = this.ld();
         const context = opts.context || await this.getContext();
         return await ld.compact(resource, context, {
           ensureArrayProps: opts.ensureArrayProps !== false,
+          showContext: false,
           proxy: false
         });
       }
@@ -981,8 +982,8 @@ export class Ontologize {
 
     // Compact the merged resource if requested
     if (opts.compact !== false) {
-      const LD = await import("bold-ld").then(m => m.LD);
-      const ld = new LD();
+      // const LD = await import("bold-ld").then(m => m.LD);
+      const ld = this.ld();
       const context = opts.context || await this.getContext();
 
       // Use isArrayProperty to determine which properties should be arrays
