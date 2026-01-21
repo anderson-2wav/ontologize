@@ -1557,8 +1557,9 @@ INSERT DATA {
       return `"${term}"`;
     }
 
-    // If it looks like a full URI (starts with http), wrap in <>
-    if (term.indexOf("http") === 0) {
+    // Check if it's a valid full URI - must be a proper URI without spaces or invalid characters
+    // URI pattern: scheme://authority/path (no spaces, must end before whitespace)
+    if (/^https?:\/\/[^\s<>"{}|\\^`[\]]+$/.test(term)) {
       return `<${term}>`;
     }
 
@@ -1567,8 +1568,14 @@ INSERT DATA {
       return term;
     }
 
-    // Otherwise, treat as a literal and quote it (escape any quotes inside)
-    const escapedTerm = term.replace(/"/g, '\\"');
+    // Otherwise, treat as a literal and quote it
+    // Escape backslashes first, then quotes, then whitespace characters
+    const escapedTerm = term
+      .replace(/\\/g, "\\\\")
+      .replace(/"/g, '\\"')
+      .replace(/\n/g, "\\n")
+      .replace(/\r/g, "\\r")
+      .replace(/\t/g, "\\t");
     return `"${escapedTerm}"`;
   }
 
