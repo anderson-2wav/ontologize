@@ -885,6 +885,7 @@ export class Ontologize {
    * @param {Object} [opts] - Options
    * @param {Object} [opts.context] - JSON-LD context for compaction
    * @param {boolean} [opts.compact=true] - Whether to compact the merged resource
+   * @param {boolean} [opts.showContext=false] - Whether to include context in compacted resource
    * @param {boolean} [opts.ensureArrayProps=true] - Whether to ensure array properties are arrays
    * @returns {Promise<Object>} The merged resource
    */
@@ -1000,6 +1001,7 @@ export class Ontologize {
 
       return await ld.compact(merged, context, {
         ensureArrayProps: opts.ensureArrayProps !== false,
+        showContext: !!opts.showContext,
         proxy: false
       });
     }
@@ -1830,19 +1832,22 @@ export class Ontologize {
     // Step 1: Get all classes from the ontology
     const allClasses = await this._getAllClassesFromOntology();
 
-    // Step 2: Order classes by specificity (least to most specific)
+    // Step 2: Get direct superclasses (filters out redundant ancestors from reasoning)
+    const directSuperclassMap = this._getDirectSuperclasses(allClasses);
+
+    // Step 3: Order classes by specificity (least to most specific)
     const orderedClasses = await this._orderClassesBySpecificity(allClasses);
 
-    // Step 3: For each class, get properties with this class as rdfs:domain
+    // Step 4: For each class, get properties with this class as rdfs:domain
     const domainProperties = await this._getPropertiesByDomain();
 
-    // Step 4: Get all properties grouped by type
+    // Step 5: Get all properties grouped by type
     const allProperties = await this._getAllPropertiesGroupedByType();
 
-    // Step 5: Get all ontology resources
+    // Step 6: Get all ontology resources
     const allOntologies = await this._getAllOntologies();
 
-    // Step 6: Build the explorer map
+    // Step 7: Build the explorer map
     const ontMap = {};
     ontMap.README = "This is a JSON map of the ontology structure. Classes are ordered from least to most specific, showing domain properties. Properties are grouped by ObjectProperties, DatatypeProperties, and general Properties. Ontologies shows loaded ontology definitions.";
 
@@ -1853,6 +1858,7 @@ export class Ontologize {
 
       ontMap.Classes[className] = {
         classInfo: classInfo,
+        directSuperclasses: directSuperclassMap[className] || [],
         domainProperties: domainProperties[className] || {}
       };
     }
@@ -1887,32 +1893,76 @@ export class Ontologize {
   }
 
   /**
+   * Get direct (most specific) superclasses for each class, filtering out redundant ancestors.
+   * After reasoning, rdfs:subClassOf contains the full transitive closure. This method
+   * filters to only keep superclasses that are not themselves superclasses of other superclasses.
+   * @param {Object} allClasses - Map of class ID to class resource
+   * @returns {Object} Map of class ID to array of direct superclass IDs
+   * @private
+   */
+  _getDirectSuperclasses(allClasses) {
+    const directSuperclassMap = {};
+
+    // First, build a map of all superclasses for each class
+    const allSuperclassesMap = {};
+    for (const className of Object.keys(allClasses)) {
+      const classResource = allClasses[className];
+      const subClassOf = classResource["rdfs:subClassOf"];
+      if (subClassOf) {
+        const parents = Array.isArray(subClassOf) ? subClassOf : [subClassOf];
+        allSuperclassesMap[className] = parents.map(parent =>
+          typeof parent === "object" ? parent["@id"] || parent._id : parent
+        ).filter(parent => parent && !this._isBlankNodeId(parent));
+      }
+      else {
+        allSuperclassesMap[className] = [];
+      }
+    }
+
+    // For each class, filter to only direct superclasses
+    for (const className of Object.keys(allClasses)) {
+      const superclasses = allSuperclassesMap[className] || [];
+
+      // A superclass S is direct if no other superclass T in the list has S as its superclass
+      const directSuperclasses = superclasses.filter(superclass => {
+        // Check if any other superclass in the list is a subclass of this one
+        for (const otherSuperclass of superclasses) {
+          if (otherSuperclass === superclass) continue;
+          // If otherSuperclass has 'superclass' in its superclasses, then 'superclass' is not direct
+          const otherAncestors = allSuperclassesMap[otherSuperclass] || [];
+          if (otherAncestors.includes(superclass)) {
+            return false; // This superclass is redundant
+          }
+        }
+        return true;
+      });
+
+      directSuperclassMap[className] = directSuperclasses;
+    }
+
+    return directSuperclassMap;
+  }
+
+  /**
    * Order classes by specificity using rdfs:subClassOf relationships.
    * Returns array of class names ordered from least to most specific, with blank nodes at the end.
    * @private
    */
   async _orderClassesBySpecificity(allClasses) {
     const classNames = Object.keys(allClasses);
-    const subClassMap = {};
 
     // Separate blank nodes from named classes
     const namedClasses = classNames.filter(name => !this._isBlankNodeId(name));
     const blankNodes = classNames.filter(name => this._isBlankNodeId(name));
 
-    // Build subclass relationships for named classes only
-    for (const className of namedClasses) {
-      const classResource = allClasses[className];
-      const subClassOf = classResource["rdfs:subClassOf"];
+    // Get direct superclasses (filters out redundant ancestors from reasoning)
+    const directSuperclassMap = this._getDirectSuperclasses(allClasses);
 
-      if (subClassOf) {
-        const parents = Array.isArray(subClassOf) ? subClassOf : [subClassOf];
-        subClassMap[className] = parents.map(parent =>
-          typeof parent === "object" ? parent["@id"] || parent._id : parent
-        ).filter(parent => parent && namedClasses.includes(parent));
-      }
-      else {
-        subClassMap[className] = [];
-      }
+    // Build subclass relationships for named classes only
+    const subClassMap = {};
+    for (const className of namedClasses) {
+      const directParents = directSuperclassMap[className] || [];
+      subClassMap[className] = directParents.filter(parent => namedClasses.includes(parent));
     }
 
     // Topological sort to order by specificity (least to most specific)
