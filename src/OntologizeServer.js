@@ -524,7 +524,7 @@ export class OntologizeServer extends Ontologize {
     if (normalize) {
       try {
         const contextForCompaction = await this.getContext(context);
-        const ld = new LD();
+        const ld = this.ld();
 
         // Use expand first if we want full URIs, then compact
         if (expandUris) {
@@ -709,7 +709,7 @@ export class OntologizeServer extends Ontologize {
 
     // Step 1: Normalize resource using LD.compact if requested
     if (normalize) {
-      const ld = new LD();
+      const ld = this.ld();
 
       // Step 1-a: Stringify bold:JSON/bui:Schema property values before JSON-LD processing
       // This prevents the JSON-LD processor from altering nested POJO structure
@@ -1432,7 +1432,7 @@ export class OntologizeServer extends Ontologize {
     // Get the context from the Context collection (which should have _id: "@id" mapping)
     const contextForExpansion = await this.getContext(opts.context);
 
-    const ld = new LD();
+    const ld = this.ld();
     const expanded = await ld.expand(resources, contextForExpansion, { flatten: true });
     expanded.forEach((resource) => {
       for (const key in resource) {
@@ -1643,7 +1643,7 @@ INSERT DATA {
       console.log(`🗜️ Compacting ${Object.keys(resources).length} resources...`);
       const compactedResources = {};
 
-      const ld = new LD();
+      const ld = this.ld();
       const compactPromises = Object.values(resources).map(resource =>
         ld.compact(resource, context, {
           showContext: false,
@@ -1696,7 +1696,7 @@ INSERT DATA {
     let processedCount = 0;
 
     // Create an LD instance for URI compaction
-    const ld = new LD();
+    const ld = this.ld();
 
     for (const fact of facts) {
       if (processedCount % 1000 === 0 && processedCount > 0) {
@@ -2274,13 +2274,21 @@ INSERT DATA {
   }
 
   /**
-   * Bootstrap the reasoner with ontology data and capture inferences
+   * Bootstrap the reasoner with ontology data and capture inferences.
+   *
+   * The reasoner needs to be bootstrapped every time it starts,
+   * so that it has inferred Facts in its triplestore for subsequent reasoning.
+   *
+   * However, the inferred Facts from the reasoner only need to be persisted to the collections once.
+   * Use opts.persist the first time that reasoner is bootstrapped from a newly bootstrapped ontology.
+   *
    *
    * @param {object} [opts] - Configuration options
    * @param {string} [opts.hylarUrl="http://localhost:4000"] - HyLAR server URL
    * @param {number} [opts.hylarPort=4000] - Port for HyLAR server if starting
    * @param {boolean} [opts.startHylar=false] - Start HyLAR child process
    * @param {boolean} [opts.classify=true] - Run classification after loading
+   * @param {boolean} [opts.persist=true] - shorthand for opts.updateResources and opts.persistStatements
    * @param {boolean} [opts.updateResources=true] - Update resources with inferences
    * @param {boolean} [opts.persistStatements=true] - Persist statements to collection
    * @param {number} [opts.batchSize=1000] - Number of triples to insert per batch
@@ -2290,8 +2298,9 @@ INSERT DATA {
     // Default options
     opts.hylarUrl = opts.hylarUrl || "http://localhost:4000";
     opts.classify = opts.classify !== false;
-    opts.updateResources = opts.updateResources !== false;
-    opts.persistStatements = opts.persistStatements !== false;
+    opts.persist = opts.persist !== false;
+    opts.updateResources = opts.updateResources === false ? false : opts.persist;
+    opts.persistStatements = opts.persistStatements === false ? false : opts.persist;
     opts.batchSize = opts.batchSize || 1000;
 
     console.log("🚀 Starting bootstrapReasoner...");
@@ -2457,6 +2466,7 @@ INSERT DATA {
    * @param {boolean} [opts.persistToHylar=false] - Persist to HyLAR triplestore
    * @param {string} [opts.userId] - User ID for provenance
    * @param {boolean} [opts.includeStatements=false] - Include statements in response
+   * @param {string} [opts.collection] collection name, otherwise getResourceForId will search for one.
    * @returns {Promise<object>} Update result with resource and metadata
    */
   async updateOne(resourceId, update, opts = {}) {
@@ -2471,8 +2481,23 @@ INSERT DATA {
 
     console.log(`Updating resource ${resourceId}...`);
 
+    let collection;
+    let resource;
     // 1. Load existing resource
-    const resource = await this.collections.ontology.findOne({ _id: resourceId });
+    if (opts.collection) {
+      collection = this.collections[opts.collection];
+      if (collection) {
+        resource = await collection.findOne({_id: resourceId});
+      }
+    }
+    else {
+      const foundIt = await this.getResourceForId(resourceId);
+      if (foundIt) {
+        collection = this.collections[foundIt.collection];
+        resource = foundIt.resource;
+      }
+    }
+
     if (!resource) {
       throw new Error(`Resource not found: ${resourceId}`);
     }
@@ -2529,27 +2554,30 @@ INSERT DATA {
         });
       }
       catch (error) {
-        // Fall back to /query endpoint
-        console.log("Falling back to /query endpoint");
-        response = await fetch(queryUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: sparqlInsert })
-        });
+        throw error;
+        // // Fall back to /query endpoint
+        // console.log("Falling back to /query endpoint");
+        // response = await fetch(queryUrl, {
+        //   method: "POST",
+        //   headers: { "Content-Type": "application/json" },
+        //   body: JSON.stringify({ query: sparqlInsert })
+        // });
       }
 
       if (response.ok) {
         const responseData = await response.json();
 
         // Get derivations if available
-        if (responseData.derivations && responseData.derivations.additions) {
-          const facts = this._derivationsToFacts(responseData.derivations.additions);
+        // it looks like /query and /update return different formats, fix this?
+        const derivations = responseData.derivations ?? responseData;
+        if (derivations.additions) {
+          const facts = this._derivationsToFacts(derivations.additions);
 
           // Filter facts for this resource only
+          const context = await this.getContext();
+          const expandedResourceId = this.ld().expandQName(resourceId,context);
           const resourceFacts = facts.filter(f =>
-            f.subject === resourceId ||
-            f.subject === `https://ontology.2wav.com/bold#${resourceId}` ||
-            (f.subject && f.subject.includes(resourceId))
+            f.subject === expandedResourceId
           );
 
           if (resourceFacts.length > 0) {
@@ -2586,13 +2614,13 @@ INSERT DATA {
       : updatedResource;
 
     // 5. Update the resource in collection
-    const updateResult = await this.collections.ontology.replaceOne(
+    const updateResult = await collection.replaceOne(
       { _id: resourceId },
       finalResource,
       { upsert: false }
     );
 
-    console.log(`✅ Resource ${resourceId} updated successfully`);
+    console.log(`✅ Resource ${resourceId} updated successfully`, finalResource);
 
     return {
       resource: finalResource,
@@ -2603,10 +2631,24 @@ INSERT DATA {
   }
 
   /**
-   * Start HyLAR child process
+   * Start HyLAR child process if not already running
+   * @param {number} port - Port to start HyLAR on
+   * @returns {Promise<ChildProcess|null>} The child process, or null if HyLAR was already running
    * @private
    */
   async _startHylarProcess(port = 4000) {
+    // First check if HyLAR is already responding on this port
+    try {
+      const response = await fetch(`http://localhost:${port}/`);
+      if (response.ok) {
+        console.log(`HyLAR is already running on port ${port}`);
+        return null;
+      }
+    }
+    catch (error) {
+      // HyLAR not responding, proceed to start it
+    }
+
     const hylarPath = path.join(process.cwd(), "modules/hylar-reasoner");
 
     console.log(`Starting HyLAR server on port ${port}...`);

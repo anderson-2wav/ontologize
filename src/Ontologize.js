@@ -109,12 +109,12 @@ export class Ontologize {
     const wat = this.collections.context.findOne({ _id: "@id" });
     if (wat instanceof Promise) {
       wat.then((context) => {
-        const ld = new LD({ context });
+        const ld = new LD({ context, sortTypesFn: this.sortTypesFn.bind(this) });
         this._ld = ld;
       });
     }
     else if (wat) {
-      const ld = new LD({ context: wat });
+      const ld = new LD({ context: wat, sortTypesFn: this.sortTypesFn.bind(this) });
       this._ld = ld;
     }
   }
@@ -901,7 +901,6 @@ export class Ontologize {
       // Only one resource, return it (optionally compacted)
       const resource = resources[0];
       if (opts.compact !== false) {
-        // const LD = await import("bold-ld").then(m => m.LD);
         const ld = this.ld();
         const context = opts.context || await this.getContext();
         return await ld.compact(resource, context, {
@@ -949,6 +948,7 @@ export class Ontologize {
           const newValue = value;
 
           // Convert both to arrays for merging
+          const isArray = Array.isArray(existingValue) || Array.isArray(newValue);
           const existingArray = Array.isArray(existingValue) ? existingValue : [existingValue];
           const newArray = Array.isArray(newValue) ? newValue : [newValue];
 
@@ -975,8 +975,8 @@ export class Ontologize {
             }
           }
 
-          // Store as array if multiple values, single value if only one
-          merged[property] = mergedArray.length === 1 ? mergedArray[0] : mergedArray;
+          // Store as array if either input value was array
+          merged[property] = isArray ? mergedArray: mergedArray[0];
         }
       }
     }
