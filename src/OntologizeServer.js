@@ -35,6 +35,8 @@ export class OntologizeServer extends Ontologize {
    * @returns {OntologizeServer} The initialized singleton instance
    */
   static initialize(ontologyCollection, contextCollection, statementsCollection, opts = {}) {
+    console.log("OntologizeServer.initialize with opts and stack", opts, new Error("stack").stack);
+
     OntologizeServer._instance = new OntologizeServer(ontologyCollection, contextCollection, statementsCollection, opts);
     return OntologizeServer._instance;
   }
