@@ -14,6 +14,7 @@ import _ from "lodash";
 import jsonPath from "./lib/jsonpath.js";
 import { spawn } from "child_process";
 import path from "path";
+import * as fs from "node:fs";
 
 /**
  * Server-only extension of the Ontologize class
@@ -34,6 +35,8 @@ export class OntologizeServer extends Ontologize {
    * @returns {OntologizeServer} The initialized singleton instance
    */
   static initialize(ontologyCollection, contextCollection, statementsCollection, opts = {}) {
+    console.log("OntologizeServer.initialize with opts", opts);
+
     OntologizeServer._instance = new OntologizeServer(ontologyCollection, contextCollection, statementsCollection, opts);
     return OntologizeServer._instance;
   }
@@ -73,7 +76,7 @@ export class OntologizeServer extends Ontologize {
   constructor(ontologyCollection, contextCollection, statementsCollection, opts = {}) {
     super(ontologyCollection, contextCollection, statementsCollection, opts);
     this.bootstrapFiles = opts.bootstrapFiles || [];
-    this.bootstrapPath = opts.bootstrapPath || process.cwd();
+    this.bootstrapPath = opts.bootstrapPath || path.join((process.env.APP_DIR || process.cwd()),"private/data/bootstrap");
     this.opts = opts;
   }
 
@@ -523,7 +526,7 @@ export class OntologizeServer extends Ontologize {
     if (normalize) {
       try {
         const contextForCompaction = await this.getContext(context);
-        const ld = new LD();
+        const ld = this.ld();
 
         // Use expand first if we want full URIs, then compact
         if (expandUris) {
@@ -708,7 +711,7 @@ export class OntologizeServer extends Ontologize {
 
     // Step 1: Normalize resource using LD.compact if requested
     if (normalize) {
-      const ld = new LD();
+      const ld = this.ld();
 
       // Step 1-a: Stringify bold:JSON/bui:Schema property values before JSON-LD processing
       // This prevents the JSON-LD processor from altering nested POJO structure
@@ -1431,7 +1434,7 @@ export class OntologizeServer extends Ontologize {
     // Get the context from the Context collection (which should have _id: "@id" mapping)
     const contextForExpansion = await this.getContext(opts.context);
 
-    const ld = new LD();
+    const ld = this.ld();
     const expanded = await ld.expand(resources, contextForExpansion, { flatten: true });
     expanded.forEach((resource) => {
       for (const key in resource) {
@@ -1496,15 +1499,23 @@ export class OntologizeServer extends Ontologize {
       return "# No triples to insert";
     }
 
-    // Build basic SPARQL prefixes - for now, use common prefixes
-    // In a full implementation, this could be extracted from the context
-    let sparql = `PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-PREFIX owl: <http://www.w3.org/2002/07/owl#>
-PREFIX bfo: <https://ontology.2wav.com/bfo#>
-PREFIX bold: <https://ontology.2wav.com/bold#>
-PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+    // Get context and build complete SPARQL prefixes from it
+    const context = await this.getContext(opts.context);
 
+    // Build SPARQL PREFIX declarations from context
+    let prefixes = "";
+    for (const [key, value] of Object.entries(context)) {
+      // Skip JSON-LD keywords and non-string values (complex term definitions)
+      if (key.startsWith("@") || key === "_id" || typeof value !== "string") {
+        continue;
+      }
+      // Only include if the value looks like a namespace URI
+      if (value.startsWith("http://") || value.startsWith("https://")) {
+        prefixes += `PREFIX ${key}: <${value}>\n`;
+      }
+    }
+
+    let sparql = `${prefixes}
 INSERT DATA {
 `;
 
@@ -1549,8 +1560,9 @@ INSERT DATA {
       return `"${term}"`;
     }
 
-    // If it looks like a full URI (starts with http), wrap in <>
-    if (term.indexOf("http") === 0) {
+    // Check if it's a valid full URI - must be a proper URI without spaces or invalid characters
+    // URI pattern: scheme://authority/path (no spaces, must end before whitespace)
+    if (/^https?:\/\/[^\s<>"{}|\\^`[\]]+$/.test(term)) {
       return `<${term}>`;
     }
 
@@ -1559,8 +1571,14 @@ INSERT DATA {
       return term;
     }
 
-    // Otherwise, treat as a literal and quote it (escape any quotes inside)
-    const escapedTerm = term.replace(/"/g, '\\"');
+    // Otherwise, treat as a literal and quote it
+    // Escape backslashes first, then quotes, then whitespace characters
+    const escapedTerm = term
+      .replace(/\\/g, "\\\\")
+      .replace(/"/g, '\\"')
+      .replace(/\n/g, "\\n")
+      .replace(/\r/g, "\\r")
+      .replace(/\t/g, "\\t");
     return `"${escapedTerm}"`;
   }
 
@@ -1627,7 +1645,7 @@ INSERT DATA {
       console.log(`🗜️ Compacting ${Object.keys(resources).length} resources...`);
       const compactedResources = {};
 
-      const ld = new LD();
+      const ld = this.ld();
       const compactPromises = Object.values(resources).map(resource =>
         ld.compact(resource, context, {
           showContext: false,
@@ -1680,7 +1698,7 @@ INSERT DATA {
     let processedCount = 0;
 
     // Create an LD instance for URI compaction
-    const ld = new LD();
+    const ld = this.ld();
 
     for (const fact of facts) {
       if (processedCount % 1000 === 0 && processedCount > 0) {
@@ -1701,92 +1719,79 @@ INSERT DATA {
         }
       }
 
-      // Skip invalid facts
-      const tripleStr = fact.asString;
-      if (tripleStr === "IFALSE") {
-        console.error("INCONSISTENT FACT:", fact);
-        continue;
+      try {
+        // Skip invalid facts
+        const tripleStr = fact.asString;
+        if (!tripleStr) {
+          console.error("What kind of fact doesn't have asString?",fact.subject,fact.predicate,fact.object);
+          continue;
+        }
+        if (tripleStr === "IFALSE") {
+          console.error("INCONSISTENT FACT:", fact);
+          continue;
+        }
+        if (tripleStr.match(/^[IE]\("/)) {
+          // Skip weird string subjects from HyLAR
+          continue;
+        }
+
+        // Parse the fact string to extract components
+        const rr = tripleStr.match(/^(I|E)\((\S+), ?(\S+), ?([\s\S]*)\)/m);
+        if (!rr) {
+          console.error("Skip HyLAR result parse error:", tripleStr);
+          continue;
+        }
+
+        const inferred = rr[1] === "I";
+        const sUri = rr[2];
+        const pUri = rr[3];
+        let oUri = rr[4];
+
+        // Convert literals like "RA-8"^^<http://www.w3.org/2001/XMLSchema#string>
+        oUri = this._convertLiteral(oUri);
+
+        // Create statement metadata
+        const allPreds = opts.metaPropsByPredicate["*"] || {};
+        const statement = {
+          "@type": ["rdf:Statement"],
+          "rdf:subject": ld.compactUri(sUri, context),
+          "rdf:predicate": ld.compactUri(pUri, context),
+          "rdf:object": ld.compactUri(oUri, context),
+          "bold:when": allPreds["bold:when"] || new Date().toISOString(),
+          "bold:scope": allPreds["bold:scope"] || "bold:system"
+        };
+
+        // Add optional metadata
+        if (allPreds["rdfs:comment"]) {
+          statement["rdfs:comment"] = allPreds["rdfs:comment"];
+        }
+        if (allPreds["bold:createdBy"]) {
+          statement["bold:createdBy"] = allPreds["bold:createdBy"];
+        }
+
+        // Add predicate-specific metadata
+        const predProps = opts.metaPropsByPredicate[statement["rdf:predicate"]];
+        if (predProps) {
+          Object.keys(predProps).forEach((metaPred) => {
+            statement[metaPred] = predProps[metaPred];
+          });
+        }
+
+        // Generate unique ID
+        const randomKey = Math.random().toString(36).substring(2, 8);
+        const statementId = ld.kebabCase(`${statement["rdf:subject"]}-${statement["rdf:predicate"]}-${statement["rdf:object"]}-${randomKey}`);
+        statement._id = `bold:${statementId}`;
+
+        if (!fact.explicit && fact.rule) {
+          statement["bold:inferredFrom"] = [fact.rule.object, fact.rule.predicate, fact.rule.subject, fact.rule.axiom, "bold:reasoner"];
+          statement["bold:explanation"] = `Inferred by reasoner, based on ${fact.rule.subject} ${fact.rule.predicate} ${fact.rule.object}`;
+          statement._details = fact.rule.details;
+        }
+        statements.push(statement);
       }
-      if (tripleStr.match(/^[IE]\("/)) {
-        // Skip weird string subjects from HyLAR
-        continue;
+      catch (err) {
+        console.error(err);
       }
-
-      // Parse the fact string to extract components
-      const rr = tripleStr.match(/^(I|E)\((\S+), ?(\S+), ?([\s\S]*)\)/m);
-      if (!rr) {
-        console.log("Skip HyLAR result parse error:", tripleStr);
-        continue;
-      }
-
-      const inferred = rr[1] === "I";
-      const sUri = rr[2];
-      const pUri = rr[3];
-      let oUri = rr[4];
-
-      // Convert literals like "RA-8"^^<http://www.w3.org/2001/XMLSchema#string>
-      oUri = this._convertLiteral(oUri);
-
-      // Create statement metadata
-      const allPreds = opts.metaPropsByPredicate["*"] || {};
-      const statement = {
-        "@type": ["rdf:Statement"],
-        "rdf:subject": ld.compactUri(sUri, context),
-        "rdf:predicate": ld.compactUri(pUri, context),
-        "rdf:object": ld.compactUri(oUri, context),
-        "bold:when": allPreds["bold:when"] || new Date().toISOString(),
-        "bold:scope": allPreds["bold:scope"] || "bold:system"
-      };
-
-      // Add optional metadata
-      if (allPreds["rdfs:comment"]) {
-        statement["rdfs:comment"] = allPreds["rdfs:comment"];
-      }
-      if (allPreds["bold:createdBy"]) {
-        statement["bold:createdBy"] = allPreds["bold:createdBy"];
-      }
-
-      // Add predicate-specific metadata
-      const predProps = opts.metaPropsByPredicate[statement["rdf:predicate"]];
-      if (predProps) {
-        Object.keys(predProps).forEach((metaPred) => {
-          statement[metaPred] = predProps[metaPred];
-        });
-      }
-
-      // Generate unique ID
-      const randomKey = Math.random().toString(36).substring(2, 8);
-      const statementId = ld.kebabCase(`${statement["rdf:subject"]}-${statement["rdf:predicate"]}-${statement["rdf:object"]}-${randomKey}`);
-      statement._id = `bold:${statementId}`;
-
-      // Handle inference metadata for inferred facts
-      // this old ctb code applied to direct Fact objects, instead of serialized API
-      // if (!fact.explicit && fact.rule?.causes?.length) {
-      //   const cause = fact.rule.causes[0]; // Use first cause as most relevant
-      //   const getMappedTerm = (causeTerm) => {
-      //     if (causeTerm[0] === "?") {
-      //       // Variable - look up in fact mapping
-      //       return ld.compactUri(fact.mapping?.[causeTerm], context);
-      //     }
-      //     else {
-      //       return ld.compactUri(causeTerm, context);
-      //     }
-      //   };
-      //
-      //   const origin = getMappedTerm(cause.subject);
-      //   const originPredicate = getMappedTerm(cause.predicate);
-      //   const originObject = getMappedTerm(cause.object);
-      //
-      //   statement["bold:inferredFrom"] = [originObject, originPredicate, origin, fact.rule?.name, "bold:reasoner"];
-      //   statement["bold:explanation"] = `Inferred by reasoner, based on ${origin} ${originPredicate} ${originObject}`;
-      // }
-      // new version based on API
-      if (!fact.explicit && fact.rule) {
-        statement["bold:inferredFrom"] = [fact.rule.object, fact.rule.predicate, fact.rule.subject, fact.rule.axiom, "bold:reasoner"];
-        statement["bold:explanation"] = `Inferred by reasoner, based on ${fact.rule.subject} ${fact.rule.predicate} ${fact.rule.object}`;
-        statement._details = fact.rule.details;
-      }
-      statements.push(statement);
     }
 
     console.log(`Created ${statements.length} statements from ${facts.length} facts`);
@@ -1825,22 +1830,27 @@ INSERT DATA {
   _convertLiteral(literal) {
     if (!literal) return literal;
 
-    // Handle typed literals like "RA-8"^^<http://www.w3.org/2001/XMLSchema#string>
-    const typedMatch = literal.match(/^"(.*)"\^\^<(.*)>$/);
-    if (typedMatch) {
-      return typedMatch[1]; // Return just the value for now
+    try {
+      // Handle typed literals like "RA-8"^^<http://www.w3.org/2001/XMLSchema#string>
+      const typedMatch = literal.match(/^"(.*)"\^\^<(.*)>$/);
+      if (typedMatch) {
+        return typedMatch[1]; // Return just the value for now
+      }
+      // Handle language tagged literals like "pertenece a la clasificación"@es
+      const langMatch = literal.match(/^"(.*)"@(.*)$/);
+      if (langMatch) {
+        return langMatch[1]; // Return just the value for now
+      }
+
+      // Handle quoted strings
+      if (literal.startsWith('"') && literal.endsWith('"')) {
+        return literal.slice(1, -1);
+      }
+    }
+    catch (e) {
+      console.error("_convertLiteral error",e);
     }
 
-    // Handle language tagged literals like "pertenece a la clasificación"@es
-    const langMatch = literal.match(/^"(.*)"@(.*)$/);
-    if (langMatch) {
-      return langMatch[1]; // Return just the value for now
-    }
-
-    // Handle quoted strings
-    if (literal.startsWith('"') && literal.endsWith('"')) {
-      return literal.slice(1, -1);
-    }
 
     return literal;
   }
@@ -2266,23 +2276,34 @@ INSERT DATA {
   }
 
   /**
-   * Bootstrap the reasoner with ontology data and capture inferences
+   * Bootstrap the reasoner with ontology data and capture inferences.
+   *
+   * The reasoner needs to be bootstrapped every time it starts,
+   * so that it has inferred Facts in its triplestore for subsequent reasoning.
+   *
+   * However, the inferred Facts from the reasoner only need to be persisted to the collections once.
+   * Use opts.persist the first time that reasoner is bootstrapped from a newly bootstrapped ontology.
+   *
    *
    * @param {object} [opts] - Configuration options
    * @param {string} [opts.hylarUrl="http://localhost:4000"] - HyLAR server URL
    * @param {number} [opts.hylarPort=4000] - Port for HyLAR server if starting
    * @param {boolean} [opts.startHylar=false] - Start HyLAR child process
    * @param {boolean} [opts.classify=true] - Run classification after loading
+   * @param {boolean} [opts.persist=true] - shorthand for opts.updateResources and opts.persistStatements
    * @param {boolean} [opts.updateResources=true] - Update resources with inferences
    * @param {boolean} [opts.persistStatements=true] - Persist statements to collection
+   * @param {number} [opts.batchSize=1000] - Number of triples to insert per batch
    * @returns {Promise<object>} Result summary with counts
    */
   async bootstrapReasoner(opts = {}) {
     // Default options
     opts.hylarUrl = opts.hylarUrl || "http://localhost:4000";
     opts.classify = opts.classify !== false;
-    opts.updateResources = opts.updateResources !== false;
-    opts.persistStatements = opts.persistStatements !== false;
+    opts.persist = opts.persist !== false;
+    opts.updateResources = opts.updateResources === false ? false : opts.persist;
+    opts.persistStatements = opts.persistStatements === false ? false : opts.persist;
+    opts.batchSize = opts.batchSize || 1000;
 
     console.log("🚀 Starting bootstrapReasoner...");
     const startTime = Date.now();
@@ -2337,18 +2358,34 @@ INSERT DATA {
     console.log(`Generated ${triples.length} triples`);
 
     if (hylarAvailable) {
-      const sparqlInsert = await this.createSparqlInsert(triples);
-      console.log("Inserting triples into HyLAR...");
+      // Insert triples in batches to avoid stack overflow in HyLAR
+      const totalBatches = Math.ceil(triples.length / opts.batchSize);
+      console.log(`Inserting ${triples.length} triples into HyLAR in ${totalBatches} batches of ${opts.batchSize}...`);
+      for (let i = 0; i < triples.length; i += opts.batchSize) {
+        const batch = triples.slice(i, i + opts.batchSize);
+        const batchNum = Math.floor(i / opts.batchSize) + 1;
+        console.log(`  Batch ${batchNum}/${totalBatches}: inserting ${batch.length} triples...`);
 
-      const insertResponse = await fetch(`${opts.hylarUrl}/query`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: sparqlInsert })
-      });
+        const sparqlInsert = await this.createSparqlInsert(batch);
+        fs.writeFileSync("/tmp/insert.sparql", sparqlInsert);
+        try {
+          const body = JSON.stringify({ query: sparqlInsert });
+          const insertResponse = await fetch(`${opts.hylarUrl}/query`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body
+          });
 
-      if (!insertResponse.ok) {
-        throw new Error(`Failed to insert triples: ${insertResponse.statusText}`);
+          if (!insertResponse.ok) {
+            throw new Error(`Failed to insert triples (batch ${batchNum}): ${insertResponse.statusText}`);
+          }
+        }
+        catch (error) {
+          console.log("HyLAR insert failed:", error);
+          throw error;
+        }
       }
+      console.log(`Successfully inserted all ${triples.length} triples`);
     }
 
     let facts = [];
@@ -2431,6 +2468,7 @@ INSERT DATA {
    * @param {boolean} [opts.persistToHylar=false] - Persist to HyLAR triplestore
    * @param {string} [opts.userId] - User ID for provenance
    * @param {boolean} [opts.includeStatements=false] - Include statements in response
+   * @param {string} [opts.collection] collection name, otherwise getResourceForId will search for one.
    * @returns {Promise<object>} Update result with resource and metadata
    */
   async updateOne(resourceId, update, opts = {}) {
@@ -2445,8 +2483,23 @@ INSERT DATA {
 
     console.log(`Updating resource ${resourceId}...`);
 
+    let collection;
+    let resource;
     // 1. Load existing resource
-    const resource = await this.collections.ontology.findOne({ _id: resourceId });
+    if (opts.collection) {
+      collection = this.collections[opts.collection];
+      if (collection) {
+        resource = await collection.findOne({_id: resourceId});
+      }
+    }
+    else {
+      const foundIt = await this.getResourceForId(resourceId);
+      if (foundIt) {
+        collection = this.collections[foundIt.collection];
+        resource = foundIt.resource;
+      }
+    }
+
     if (!resource) {
       throw new Error(`Resource not found: ${resourceId}`);
     }
@@ -2503,27 +2556,30 @@ INSERT DATA {
         });
       }
       catch (error) {
-        // Fall back to /query endpoint
-        console.log("Falling back to /query endpoint");
-        response = await fetch(queryUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: sparqlInsert })
-        });
+        throw error;
+        // // Fall back to /query endpoint
+        // console.log("Falling back to /query endpoint");
+        // response = await fetch(queryUrl, {
+        //   method: "POST",
+        //   headers: { "Content-Type": "application/json" },
+        //   body: JSON.stringify({ query: sparqlInsert })
+        // });
       }
 
       if (response.ok) {
         const responseData = await response.json();
 
         // Get derivations if available
-        if (responseData.derivations && responseData.derivations.additions) {
-          const facts = this._derivationsToFacts(responseData.derivations.additions);
+        // it looks like /query and /update return different formats, fix this?
+        const derivations = responseData.derivations ?? responseData;
+        if (derivations.additions) {
+          const facts = this._derivationsToFacts(derivations.additions);
 
           // Filter facts for this resource only
+          const context = await this.getContext();
+          const expandedResourceId = this.ld().expandQName(resourceId,context);
           const resourceFacts = facts.filter(f =>
-            f.subject === resourceId ||
-            f.subject === `https://ontology.2wav.com/bold#${resourceId}` ||
-            (f.subject && f.subject.includes(resourceId))
+            f.subject === expandedResourceId
           );
 
           if (resourceFacts.length > 0) {
@@ -2560,13 +2616,13 @@ INSERT DATA {
       : updatedResource;
 
     // 5. Update the resource in collection
-    const updateResult = await this.collections.ontology.replaceOne(
+    const updateResult = await collection.replaceOne(
       { _id: resourceId },
       finalResource,
       { upsert: false }
     );
 
-    console.log(`✅ Resource ${resourceId} updated successfully`);
+    console.log(`✅ Resource ${resourceId} updated successfully`, finalResource);
 
     return {
       resource: finalResource,
@@ -2577,10 +2633,24 @@ INSERT DATA {
   }
 
   /**
-   * Start HyLAR child process
+   * Start HyLAR child process if not already running
+   * @param {number} port - Port to start HyLAR on
+   * @returns {Promise<ChildProcess|null>} The child process, or null if HyLAR was already running
    * @private
    */
   async _startHylarProcess(port = 4000) {
+    // First check if HyLAR is already responding on this port
+    try {
+      const response = await fetch(`http://localhost:${port}/`);
+      if (response.ok) {
+        console.log(`HyLAR is already running on port ${port}`);
+        return null;
+      }
+    }
+    catch (error) {
+      // HyLAR not responding, proceed to start it
+    }
+
     const hylarPath = path.join(process.cwd(), "modules/hylar-reasoner");
 
     console.log(`Starting HyLAR server on port ${port}...`);
@@ -2632,7 +2702,8 @@ INSERT DATA {
       object: d.object,
       explicit: d.explicit === true,
       rule: d.rule,
-      causes: d.causes
+      causes: d.causes,
+      asString: d.asString
     }));
   }
 
