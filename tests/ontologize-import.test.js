@@ -178,7 +178,7 @@ describe("OntologizeServer Import", function () {
       ];
 
       // Mock file loading
-      ontologizeServer.loadOntologyFromFile = async (filePath) => testData;
+      ontologizeServer.loadJsonFile = async (filePath) => testData;
 
       const result = await ontologizeServer.importOntologyFromFile(
         "test.json",
@@ -219,7 +219,7 @@ describe("OntologizeServer Import", function () {
         ]
       };
 
-      ontologizeServer.loadOntologyFromFile = async (filePath) => testData;
+      ontologizeServer.loadJsonFile = async (filePath) => testData;
 
       const result = await ontologizeServer.importOntologyFromFile(
         "test.json",
@@ -251,7 +251,7 @@ describe("OntologizeServer Import", function () {
         }
       ];
 
-      ontologizeServer.loadOntologyFromFile = async (filePath) => testData;
+      ontologizeServer.loadJsonFile = async (filePath) => testData;
 
       const result = await ontologizeServer.importOntologyFromFile(
         "test.json",
@@ -329,7 +329,7 @@ describe("OntologizeServer Import", function () {
       // Test loading the file
       let fileData;
       try {
-        fileData = await ontologizeServer.loadOntologyFromFile(filePath);
+        fileData = await ontologizeServer.loadJsonFile(filePath);
       }
       catch (error) {
         // Skip test if file doesn't exist
@@ -540,7 +540,7 @@ describe("OntologizeServer Import", function () {
         }
       ];
 
-      ontologizeServer.loadOntologyFromFile = async (filePath) => firstData;
+      ontologizeServer.loadJsonFile = async (filePath) => firstData;
       await ontologizeServer.importOntologyFromFile("first.json", mockOntologyCollection);
 
       // Second import with additional context
@@ -554,7 +554,7 @@ describe("OntologizeServer Import", function () {
         }
       ];
 
-      ontologizeServer.loadOntologyFromFile = async (filePath) => secondData;
+      ontologizeServer.loadJsonFile = async (filePath) => secondData;
       await ontologizeServer.importOntologyFromFile("second.json", mockOntologyCollection);
 
       // Check that both contexts were merged
@@ -589,7 +589,7 @@ describe("OntologizeServer Import", function () {
         }
       ];
 
-      ontologizeServer.loadOntologyFromFile = async (filePath) => multiContextData;
+      ontologizeServer.loadJsonFile = async (filePath) => multiContextData;
       const result = await ontologizeServer.importOntologyFromFile("multi.json", mockOntologyCollection);
 
       assert.isTrue(result.success);
@@ -623,7 +623,7 @@ describe("OntologizeServer Import", function () {
         }
       ];
 
-      ontologizeServer.loadOntologyFromFile = async (filePath) => testData;
+      ontologizeServer.loadJsonFile = async (filePath) => testData;
       await ontologizeServer.importOntologyFromFile("test.json", mockOntologyCollection);
 
       // Check that keys are properly sorted (excluding _id)
@@ -653,7 +653,7 @@ describe("OntologizeServer Import", function () {
 
       let fileData;
       try {
-        fileData = await ontologizeServer.loadOntologyFromFile(filePath);
+        fileData = await ontologizeServer.loadJsonFile(filePath);
       }
       catch (error) {
         this.skip("ontology.json file not found");
@@ -1069,7 +1069,7 @@ describe("OntologizeServer Import", function () {
         ]
       };
 
-      ontologizeServer.loadOntologyFromFile = async () => testData;
+      ontologizeServer.loadJsonFile = async () => testData;
 
       const result = await ontologizeServer.importOntologyFromFile(
         "test.json",

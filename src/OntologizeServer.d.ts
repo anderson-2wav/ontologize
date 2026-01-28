@@ -78,9 +78,9 @@ export declare class OntologizeServer extends Ontologize {
   constructor(ontologyCollection: MongoCollection, contextCollection: MongoCollection, statementsCollection: MongoCollection, opts?: OntologizeOptions);
 
   /**
-   * Load ontology data from a file
+   * Load JSON-LD data from a file
    */
-  loadOntologyFromFile(filePath: string): Promise<Resource | Resource[]>;
+  loadJsonFile(filePath: string): Promise<Resource | Resource[]>;
 
   /**
    * Import ontology from file path with BOLD resource normalization

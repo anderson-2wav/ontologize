@@ -165,12 +165,12 @@ export class OntologizeServer extends Ontologize {
   }
 
   /**
-   * Load ontology data from a file
+   * Load JSON-LD data from a file
    *
    * @param {string} filePath - Path to the ontology file
    * @returns {Promise<object>} Parsed ontology data
    */
-  async loadOntologyFromFile(filePath) {
+  async loadJsonFile(filePath) {
     check(filePath, String);
 
     try {
@@ -205,7 +205,7 @@ export class OntologizeServer extends Ontologize {
 
     try {
       // Load JSON-LD file
-      const jsonldData = await this.loadOntologyFromFile(filePath);
+      const jsonldData = await this.loadJsonFile(filePath);
 
       // Import the loaded data using the Context collection from this.collections
       const result = await this.importOntologyData(jsonldData, collection, opts);
