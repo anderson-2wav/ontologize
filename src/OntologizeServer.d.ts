@@ -96,7 +96,7 @@ export declare class OntologizeServer extends Ontologize {
    * Import ontology from parsed JSON-LD data with BOLD resource normalization
    * Handles multiple JSON-LD formats and uses LD.compact for proper normalization
    */
-  importOntologyData(
+  importData(
     data: Resource | Resource[],
     collection: MongoCollection,
     opts?: ImportOptions

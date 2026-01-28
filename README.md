@@ -92,7 +92,7 @@ const data = {
   ]
 };
 
-await ontologize.importOntologyData(data, null, { ontologize: true });
+await ontologize.importData(data, null, { ontologize: true });
 ```
 
 ### Filtering Imports
@@ -100,7 +100,7 @@ await ontologize.importOntologyData(data, null, { ontologize: true });
 Use `beforeSaveFn` to filter or modify resources during import:
 
 ```javascript
-await ontologize.importOntologyData(data, null, {
+await ontologize.importData(data, null, {
   ontologize: true,
   beforeSaveFn: (resource) => {
     // Add provenance to all imported resources
@@ -283,7 +283,7 @@ Retrieve the global @context from the Context collection.
 #### `importFromFile(filePath, collection?, opts?): Promise<ImportResult>`
 Import a JSON-LD file into collections.
 
-#### `importOntologyData(data, collection?, opts?): Promise<ImportResult>`
+#### `importData(data, collection?, opts?): Promise<ImportResult>`
 Import parsed JSON-LD data into collections.
 
 **Options:**

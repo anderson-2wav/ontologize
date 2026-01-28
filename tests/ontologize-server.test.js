@@ -56,7 +56,7 @@ describe("OntologizeServer", function () {
       // Should have new server-only methods
       assert.isFunction(ontologizeServer.loadJsonFile);
       assert.isFunction(ontologizeServer.importFromFile);
-      assert.isFunction(ontologizeServer.importOntologyData);
+      assert.isFunction(ontologizeServer.importData);
     });
 
     it("should have same version as parent class", function () {
@@ -85,8 +85,8 @@ describe("OntologizeServer", function () {
       assert.isFunction(ontologizeServer.importFromFile);
     });
 
-    it("should have importOntologyData method", function () {
-      assert.isFunction(ontologizeServer.importOntologyData);
+    it("should have importData method", function () {
+      assert.isFunction(ontologizeServer.importData);
     });
 
     it("should have exportToFile method", function () {
