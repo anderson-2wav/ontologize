@@ -74,7 +74,7 @@ import { OntologizeServer } from "ontologize/server";
 const ontologize = OntologizeServer.get();
 
 // Import from file
-const result = await ontologize.importOntologyFromFile(
+const result = await ontologize.importFromFile(
   "/path/to/ontology.jsonld",
   null,  // collection (optional, uses namespace collections)
   { ontologize: true }  // merge TBox resources into ontology collection
@@ -280,7 +280,7 @@ Retrieve the global @context from the Context collection.
 
 ### OntologizeServer Methods (Server Only)
 
-#### `importOntologyFromFile(filePath, collection?, opts?): Promise<ImportResult>`
+#### `importFromFile(filePath, collection?, opts?): Promise<ImportResult>`
 Import a JSON-LD file into collections.
 
 #### `importOntologyData(data, collection?, opts?): Promise<ImportResult>`

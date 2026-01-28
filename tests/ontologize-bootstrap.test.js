@@ -355,7 +355,7 @@ describe("OntologizeServer Bootstrap", function () {
     it("should import and bootstrap BFO ontology", async function () {
       // First import BFO data
       const bfoPath = path.join(__dirname, "data", "bold-bfo.jsonld");
-      const importResult = await ontologizeServer.importOntologyFromFile(
+      const importResult = await ontologizeServer.importFromFile(
         bfoPath,
         mockOntologyCollection,
         { ontologize: true } // Merge TBox resources to ontology collection

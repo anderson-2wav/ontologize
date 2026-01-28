@@ -55,7 +55,7 @@ describe("OntologizeServer", function () {
 
       // Should have new server-only methods
       assert.isFunction(ontologizeServer.loadJsonFile);
-      assert.isFunction(ontologizeServer.importOntologyFromFile);
+      assert.isFunction(ontologizeServer.importFromFile);
       assert.isFunction(ontologizeServer.importOntologyData);
     });
 
@@ -81,8 +81,8 @@ describe("OntologizeServer", function () {
       assert.isFunction(ontologizeServer.loadJsonFile);
     });
 
-    it("should have importOntologyFromFile method", function () {
-      assert.isFunction(ontologizeServer.importOntologyFromFile);
+    it("should have importFromFile method", function () {
+      assert.isFunction(ontologizeServer.importFromFile);
     });
 
     it("should have importOntologyData method", function () {
@@ -269,7 +269,7 @@ describe("OntologizeServer", function () {
       const bfoPath = path.resolve(process.cwd(), "../../private/data/bootstrap/bfo-core.jsonld");
 
       try {
-        const importResult = await ontologizeServer.importOntologyFromFile(
+        const importResult = await ontologizeServer.importFromFile(
           bfoPath,
           testCollection,
           {

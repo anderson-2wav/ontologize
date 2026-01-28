@@ -86,7 +86,7 @@ export declare class OntologizeServer extends Ontologize {
    * Import ontology from file path with BOLD resource normalization
    * Loads JSON-LD file and imports with proper normalization using LD.compact
    */
-  importOntologyFromFile(
+  importFromFile(
     filePath: string,
     collection: MongoCollection,
     opts?: ImportOptions
