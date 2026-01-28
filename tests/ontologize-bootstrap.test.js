@@ -467,7 +467,7 @@ describe("OntologizeServer Bootstrap", function () {
       assert.property(result.results[1], "error");
     });
 
-    it("should clear collection only on first file when clearFirst=true", async function () {
+    it("should clear collection only on first file when removeAll=true", async function () {
       // Pre-populate with a resource
       await mockOntologyCollection.insertOne({
         _id: "test:existing",
@@ -477,11 +477,11 @@ describe("OntologizeServer Bootstrap", function () {
       const initialCount = insertedOntologyResources.length;
       assert.equal(initialCount, 1);
 
-      // Bootstrap with clearFirst=true (default)
+      // Bootstrap with removeAll=true (default)
       const result = await ontologizeServer.bootstrap({
         files: ["bold-bfo.jsonld"],
         basePath: path.join(__dirname, "data"),
-        clearFirst: true
+        removeAll: true
       });
 
       // The pre-existing resource should be gone (collection was cleared)
@@ -489,18 +489,18 @@ describe("OntologizeServer Bootstrap", function () {
       assert.isUndefined(existingResource);
     });
 
-    it("should preserve existing resources when clearFirst=false", async function () {
+    it("should preserve existing resources when removeAll=false", async function () {
       // Pre-populate with a resource
       await mockOntologyCollection.insertOne({
         _id: "test:existing",
         "@type": ["owl:Class"]
       });
 
-      // Bootstrap with clearFirst=false
+      // Bootstrap with removeAll=false
       const result = await ontologizeServer.bootstrap({
         files: ["bold-bfo.jsonld"],
         basePath: path.join(__dirname, "data"),
-        clearFirst: false
+        removeAll: false
       });
 
       // The pre-existing resource should still be there

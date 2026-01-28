@@ -273,7 +273,6 @@ describe("OntologizeServer", function () {
           bfoPath,
           testCollection,
           {
-            clearCollection: true,
             normalize: true,
             ontologize: true,
             shareTBox: false

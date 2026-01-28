@@ -19,8 +19,6 @@ export interface ImportOptions {
   shareTBox?: boolean;
   /** Store Statement resources in both Statements collection and target collection (default: false) */
   shareStatements?: boolean;
-  /** Clear collections before importing */
-  clearCollection?: boolean;
   /** Ensure array props including @type */
   ensureArrayProps?: boolean;
   /** Merge TBox resources with existing resources using schema merge strategy */

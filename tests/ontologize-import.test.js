@@ -232,7 +232,8 @@ describe("OntologizeServer Import", function () {
       assert.equal(contextData["ex"], "http://example.org/");
     });
 
-    it("should handle clearCollection option", async function () {
+    // OBSOLETE--since import may affect multiple collections
+    it.skip("should handle clearCollection option", async function () {
       // Pre-populate collections
       ontologyData.push({ _id: "existing", data: "old" });
       contextData = { _id: "@id" };
@@ -439,7 +440,8 @@ describe("OntologizeServer Import", function () {
       assert.equal(savedResource["@type"][0], "rdfs:Class");
     });
 
-    it("should handle clearCollection option", async function () {
+    // OBSOLETE--since import may affect multiple collections
+    it.skip("should handle clearCollection option", async function () {
       // Pre-populate collections
       ontologyData.push({ _id: "existing", data: "old" });
       contextData = { _id: "@id" };
@@ -666,8 +668,7 @@ describe("OntologizeServer Import", function () {
         mockOntologyCollection,
         {
           normalize: true,
-          ensureArrayTypes: true,
-          clearCollection: true
+          ensureArrayTypes: true
         }
       );
 
@@ -1202,7 +1203,8 @@ describe("OntologizeServer Import", function () {
       );
     });
 
-    it("should handle FOAF ontology with clearCollection option", async function () {
+    // OBSOLETE--since import may affect multiple collections
+    it.skip("should handle FOAF ontology with clearCollection option", async function () {
       // Pre-populate collections with test data
       ontologyData.push({ _id: "test:ExistingClass", "@type": ["rdfs:Class"] });
       foafData.push({ _id: "test:ExistingFoafResource", "@type": ["foaf:Person"] });
@@ -1212,7 +1214,7 @@ describe("OntologizeServer Import", function () {
       const result = await ontologizeServer.importFromFile(
         filePath,
         mockFoafCollection,
-        { clearCollection: true }
+        { }
       );
 
       assert.isTrue(result.success);

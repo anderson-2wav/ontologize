@@ -88,18 +88,29 @@ export class OntologizeServer extends Ontologize {
    * @param {object} [opts] - Bootstrap options
    * @param {string[]} [opts.files] - Override bootstrapFiles from constructor
    * @param {string} [opts.basePath] - Override bootstrapPath from constructor
-   * @param {boolean} [opts.clearFirst=true] - Clear ontology collection before first import
+   * @param {boolean} [opts.removeAll=true] - Clear all collections before first import
    * @returns {Promise<object>} Summary of import results
    */
   async bootstrap(opts = {}) {
     const files = opts.files || this.bootstrapFiles;
     const basePath = opts.basePath || this.bootstrapPath;
-    const clearFirst = opts.clearFirst !== false;
+    const removeAll = opts.removeAll !== false;
 
     if (!Array.isArray(files) || files.length === 0) {
       throw new Error("No bootstrap files configured. Pass opts.bootstrapFiles to constructor or opts.files to bootstrap()");
     }
 
+    if (removeAll) {
+      console.log("======== BOOTSTRAP REMOVE ALL ========");
+      // from all known collections
+      for await (const colName of Object.keys(this.collections)) {
+        const collection = this.collections[colName];
+        if (collection) {
+          const result = await collection.deleteMany({});
+          console.log(`removed from ${colName} collection`,result);
+        }
+      }
+    }
     console.log("======== BOOTSTRAP START ========");
     const results = [];
 
@@ -113,10 +124,7 @@ export class OntologizeServer extends Ontologize {
 
       try {
         console.log(`Loading ontology data from ${resolvedPath}...`);
-
-        // Clear collection only on first file import (if clearFirst is true)
-        const result = await this.importOntologyFromFile(resolvedPath, this.collections.ontology, {
-          clearCollection: clearFirst && i === 0,
+        const result = await this.importFromFile(resolvedPath, this.collections.ontology, {
           normalize: true,
           ontologize: true,
           shareTBox: false
@@ -183,7 +191,7 @@ export class OntologizeServer extends Ontologize {
   }
 
   /**
-   * Import ontology from file path with BOLD resource normalization
+   * Import data from file path with BOLD resource normalization
    * Loads JSON-LD file and imports with proper normalization using LD.compact
    *
    * @param {string} filePath - Path to JSON-LD ontology file
@@ -193,12 +201,11 @@ export class OntologizeServer extends Ontologize {
    * @param {boolean} [opts.normalize=true] - Use LD.compact for BOLD resource normalization
    * @param {boolean} [opts.ontologize=true] - Classify resources as TBox/ABox
    * @param {boolean} [opts.shareTBox=false] - Store TBox resources in both collections
-   * @param {boolean} [opts.clearCollection=false] - Clear collections before importing
    * @param {boolean} [opts.ensureArrayProps=true] - Ensure array props including @type
    * @param {boolean} [opts.mergeOntology=true] - Merge TBox resources with existing resources using schema merge strategy
    * @returns {Promise<object>} Import result with detailed statistics
    */
-  async importOntologyFromFile(filePath, collection, opts = {}) {
+  async importFromFile(filePath, collection, opts = {}) {
     check(filePath, String);
     check(collection, Object);
     check(opts, Object);
@@ -208,7 +215,7 @@ export class OntologizeServer extends Ontologize {
       const jsonldData = await this.loadJsonFile(filePath);
 
       // Import the loaded data using the Context collection from this.collections
-      const result = await this.importOntologyData(jsonldData, collection, opts);
+      const result = await this.importData(jsonldData, collection, opts);
 
       // Add file path information to result
       return {
@@ -223,7 +230,9 @@ export class OntologizeServer extends Ontologize {
   }
 
   /**
-   * Import ontology from parsed JSON-LD data with BOLD resource normalization
+   * Import parsed JSON-LD data with BOLD resource normalization into appropriate collections,
+   * including context, TBox and ABox data as per namespace collections.
+   *
    * Handles multiple JSON-LD formats and uses LD.compact for proper normalization
    *
    * @param {object|Array} data - Parsed JSON-LD object or array of resources
@@ -233,7 +242,6 @@ export class OntologizeServer extends Ontologize {
    * @param {boolean} [opts.normalize=true] - Use LD.compact for BOLD resource normalization
    * @param {boolean} [opts.ontologize=true] - Classify resources as TBox/ABox
    * @param {boolean} [opts.shareTBox=false] - Store TBox resources in both collections
-   * @param {boolean} [opts.clearCollection=false] - Clear collections before importing
    * @param {boolean} [opts.ensureArrayProps=true] - Ensure array props including @type
    * @param {boolean} [opts.mergeOntology=true] - Merge TBox resources with existing resources using schema merge strategy
    * @param {Function} [opts.beforeSaveFn=null] - Callback to filter/modify resources before saving.
@@ -242,7 +250,7 @@ export class OntologizeServer extends Ontologize {
    *   Return modified resource to save, or falsey (false/null/undefined) to skip.
    * @returns {Promise<object>} Import result with detailed statistics including skippedResources count
    */
-  async importOntologyData(data, collection, opts = {}) {
+  async importData(data, collection, opts = {}) {
     check(data, Match.OneOf(Object, Array));
     check(collection, Match.Optional(Object));
     check(opts, Match.Optional(Object));
@@ -253,7 +261,6 @@ export class OntologizeServer extends Ontologize {
       ontologize = true,
       shareTBox = false,
       shareStatements = false,
-      clearCollection = false,
       ensureArrayProps = true,
       mergeOntology = true,
       beforeSaveFn = null
@@ -264,13 +271,7 @@ export class OntologizeServer extends Ontologize {
       const { extractedContext: incomingContext, resources } = this._extractContextAndResources(data);
 
       // Step 2: Clear collections if requested
-      if (clearCollection) {
-        await Promise.all([
-          collection.deleteMany({}),
-          // we don't want to empty the contextCollection here
-          // contextCollection.deleteMany({})
-        ]);
-      }
+      // OBSOLETE
 
       // Step 3: Import context
       let contextImported = false;
