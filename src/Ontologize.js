@@ -1622,6 +1622,8 @@ export class Ontologize {
       if (this.collections[prefix]) {
         searchOrder.push(prefix);
       }
+      // TODO what about typeCollections?
+
       // do we have idResolvers for this prefix in our opts?
       if (this.opts.idResolvers?.[prefix]) {
         const resolvers = this.opts.idResolvers[prefix];

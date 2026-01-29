@@ -196,13 +196,8 @@ export class OntologizeServer extends Ontologize {
    *
    * @param {string} filePath - Path to JSON-LD ontology file
    * @param {object} collection - MongoDB collection to import into
-   * @param {object} [opts] - Import options
-   * @param {object} [opts.context] - JSON-LD context to use for compaction
-   * @param {boolean} [opts.normalize=true] - Use LD.compact for BOLD resource normalization
-   * @param {boolean} [opts.ontologize=true] - Classify resources as TBox/ABox
-   * @param {boolean} [opts.shareTBox=false] - Store TBox resources in both collections
-   * @param {boolean} [opts.ensureArrayProps=true] - Ensure array props including @type
-   * @param {boolean} [opts.mergeOntology=true] - Merge TBox resources with existing resources using schema merge strategy
+   * @param {object} [opts] - Import options {@see importData}
+   *
    * @returns {Promise<object>} Import result with detailed statistics
    */
   async importFromFile(filePath, collection, opts = {}) {
@@ -244,10 +239,11 @@ export class OntologizeServer extends Ontologize {
    * @param {boolean} [opts.shareTBox=false] - Store TBox resources in both collections
    * @param {boolean} [opts.ensureArrayProps=true] - Ensure array props including @type
    * @param {boolean} [opts.mergeOntology=true] - Merge TBox resources with existing resources using schema merge strategy
-   * @param {Function} [opts.beforeSaveFn=null] - Callback to filter/modify resources before saving.
+   * @param {Function} [opts.beforeSaveFn=null] - Callback to filter/modify resources before saving. Called with normalized resource. May be sync or async.
+   Return modified resource to save, or falsey (false/null/undefined) to skip.
    * @param {boolean} [opts.useNamespaceCollections=true] - use named collections by uri prefix (instead of collection param)
-   *   Called with normalized resource. May be sync or async.
-   *   Return modified resource to save, or falsey (false/null/undefined) to skip.
+   * @param {object} [opts.typeCollections] - { type: collection } indication of special collection for types
+   *
    * @returns {Promise<object>} Import result with detailed statistics including skippedResources count
    */
   async importData(data, collection, opts = {}) {
@@ -263,7 +259,8 @@ export class OntologizeServer extends Ontologize {
       shareStatements = false,
       ensureArrayProps = true,
       mergeOntology = true,
-      beforeSaveFn = null
+      beforeSaveFn = null,
+      typeCollections = null
     } = opts;
 
     try {
@@ -310,7 +307,7 @@ export class OntologizeServer extends Ontologize {
             contextToUse,
             collection,
             this.collections.context,
-            { normalize, ontologize, shareTBox, shareStatements, ensureArrayProps, mergeOntology, beforeSaveFn }
+            { normalize, ontologize, shareTBox, shareStatements, ensureArrayProps, mergeOntology, beforeSaveFn, typeCollections }
           );
 
           if (processed) {
@@ -849,10 +846,37 @@ export class OntologizeServer extends Ontologize {
             }
           }
         }
+        if (this.opts.typeCollections) {
+          /*
+          const example = {
+            "typeCollections": {
+              "bold:Animal": "animal",
+              "orju:Bird": "animal"
+            }
+          }
+          */
+          for (const typ of (processedResource["@type"] ?? [])) {
+            if (typ === "bold:Species") {
+              console.log("this.opts.typeCollections",this.opts.typeCollections);
+              console.log(`this.opts.typeCollections[${typ}]`,this.opts.typeCollections[typ]);
+            }
+            const colName = this.opts.typeCollections[typ];
+            if (colName) {
+              _collection = this.collections[colName];
+              if (_collection) {
+                console.log(`using typeCollection "${colName}" for ${processedResource._id} @type: ${typ}`);
+              }
+              else {
+                console.error(`Unknown typeCollection "${typ}"`);
+              }
+            }
+          }
+        }
         if (!_collection) {
           const namespaceCollection = this.collections[prefix];
           if (namespaceCollection) {
             _collection = namespaceCollection;
+            console.log(`using namespaceCollection "${prefix}" for ${processedResource._id}`);
           }
         }
       }
