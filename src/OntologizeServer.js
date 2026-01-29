@@ -963,7 +963,7 @@ export class OntologizeServer extends Ontologize {
       // If both are objects, merge them recursively
       if (_.isObject(objValue) && _.isObject(srcValue)) {
         const merged = _.mergeWith(objValue, srcValue, this._schemaMergeCustomizer);
-        console.warn(`Context conflict for ${key}, merging objects. old=${JSON.stringify(objValue)} new=${JSON.stringify(srcValue)} result=${JSON.stringify(merged)}`);
+        console.info(`Context resolution for ${key}, merging objects. old=${JSON.stringify(objValue)} new=${JSON.stringify(srcValue)} result=${JSON.stringify(merged)}`);
         return merged;
       }
 
