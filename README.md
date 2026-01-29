@@ -76,7 +76,6 @@ const ontologize = OntologizeServer.get();
 // Import from file
 const result = await ontologize.importFromFile(
   "/path/to/ontology.jsonld",
-  null,  // collection (optional, uses namespace collections)
   { ontologize: true }  // merge TBox resources into ontology collection
 );
 
@@ -92,7 +91,7 @@ const data = {
   ]
 };
 
-await ontologize.importData(data, null, { ontologize: true });
+await ontologize.importData(data, { ontologize: true });
 ```
 
 ### Filtering Imports
@@ -100,7 +99,7 @@ await ontologize.importData(data, null, { ontologize: true });
 Use `beforeSaveFn` to filter or modify resources during import:
 
 ```javascript
-await ontologize.importData(data, null, {
+await ontologize.importData(data, {
   ontologize: true,
   beforeSaveFn: (resource) => {
     // Add provenance to all imported resources
@@ -280,15 +279,16 @@ Retrieve the global @context from the Context collection.
 
 ### OntologizeServer Methods (Server Only)
 
-#### `importFromFile(filePath, collection?, opts?): Promise<ImportResult>`
+#### `importFromFile(filePath, opts?): Promise<ImportResult>`
 Import a JSON-LD file into collections.
 
-#### `importData(data, collection?, opts?): Promise<ImportResult>`
+#### `importData(data, opts?): Promise<ImportResult>`
 Import parsed JSON-LD data into collections.
 
 **Options:**
 - `ontologize: boolean` - Merge TBox resources into ontology collection
 - `beforeSaveFn: (resource) => resource | null` - Filter/modify resources before save
+- see JSDoc for other options
 
 ## TypeScript Support
 

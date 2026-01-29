@@ -271,8 +271,8 @@ describe("OntologizeServer", function () {
       try {
         const importResult = await ontologizeServer.importFromFile(
           bfoPath,
-          testCollection,
           {
+            collection: testCollection,
             normalize: true,
             ontologize: true,
             shareTBox: false

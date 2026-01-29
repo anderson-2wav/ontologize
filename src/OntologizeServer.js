@@ -124,7 +124,7 @@ export class OntologizeServer extends Ontologize {
 
       try {
         console.log(`Loading ontology data from ${resolvedPath}...`);
-        const result = await this.importFromFile(resolvedPath, this.collections.ontology, {
+        const result = await this.importFromFile(resolvedPath, /* this.collections.ontology, */ {
           normalize: true,
           ontologize: true,
           shareTBox: false
@@ -195,22 +195,20 @@ export class OntologizeServer extends Ontologize {
    * Loads JSON-LD file and imports with proper normalization using LD.compact
    *
    * @param {string} filePath - Path to JSON-LD ontology file
-   * @param {object} collection - MongoDB collection to import into
    * @param {object} [opts] - Import options {@see importData}
    *
    * @returns {Promise<object>} Import result with detailed statistics
    */
-  async importFromFile(filePath, collection, opts = {}) {
+  async importFromFile(filePath, opts = {}) {
     check(filePath, String);
-    check(collection, Object);
     check(opts, Object);
 
     try {
       // Load JSON-LD file
       const jsonldData = await this.loadJsonFile(filePath);
 
-      // Import the loaded data using the Context collection from this.collections
-      const result = await this.importData(jsonldData, collection, opts);
+      // Import the loaded data
+      const result = await this.importData(jsonldData, opts);
 
       // Add file path information to result
       return {
@@ -231,9 +229,9 @@ export class OntologizeServer extends Ontologize {
    * Handles multiple JSON-LD formats and uses LD.compact for proper normalization
    *
    * @param {object|Array} data - Parsed JSON-LD object or array of resources
-   * @param {object} [collection] - MongoDB collection instance for Abox resources (this is overridden by opts.useNamespaceCollections)
    * @param {object} [opts] - Import options
    * @param {object} [opts.context] - JSON-LD context to use for compaction
+   * @param {object} [opts.collection] - optional default ABox collection (used if namespace and typed collections aren't found)
    * @param {boolean} [opts.normalize=true] - Use LD.compact for BOLD resource normalization
    * @param {boolean} [opts.ontologize=true] - Classify resources as TBox/ABox
    * @param {boolean} [opts.shareTBox=false] - Store TBox resources in both collections
@@ -246,13 +244,14 @@ export class OntologizeServer extends Ontologize {
    *
    * @returns {Promise<object>} Import result with detailed statistics including skippedResources count
    */
-  async importData(data, collection, opts = {}) {
+  async importData(data, opts = {}) {
     check(data, Match.OneOf(Object, Array));
-    check(collection, Match.Optional(Object));
+    // check(collection, Match.Optional(Object));
     check(opts, Match.Optional(Object));
 
     const {
       context = null,
+      collection = null,
       normalize = true,
       ontologize = true,
       shareTBox = false,
@@ -295,12 +294,15 @@ export class OntologizeServer extends Ontologize {
         errors: []
       };
 
-      for (const resource of resources) {
+      for await (const resource of resources) {
         // thinking through current problem.
         // Incoming resources may have properties in a @vocab that conflicts with ours.
         // this would be fixed if we first expand resources with their own context,
         // then compact with ours.
-        // console.log(resource._id || resource["@id"]);
+        console.log(resource._id || resource["@id"]);
+        if ((resource._id || resource["@id"]) === "bfo:preceded-by") {
+          debugger;
+        }
         try {
           const processed = await this._normalizeAndSaveResource(
             resource,
@@ -577,6 +579,10 @@ export class OntologizeServer extends Ontologize {
    * @private
    */
   _isTBoxResource(resource) {
+    // due to JSON-LD idiosyncrasy we can't give @type a @type, so it needs a special case:
+    if (resource._id === "@type") {
+      return true;
+    }
     if (!resource["@type"]) {
       return false;
     }
@@ -587,6 +593,7 @@ export class OntologizeServer extends Ontologize {
     const ontologyTypes = [
       "owl:Class", "http://www.w3.org/2002/07/owl#Class",
       "rdfs:Class", "http://www.w3.org/2000/01/rdf-schema#Class",
+      "rdfs:Datatype", "http://www.w3.org/2000/01/rdf-schema#Datatype",
       "owl:ObjectProperty", "http://www.w3.org/2002/07/owl#ObjectProperty",
       "owl:DatatypeProperty", "http://www.w3.org/2002/07/owl#DatatypeProperty",
       "owl:AnnotationProperty", "http://www.w3.org/2002/07/owl#AnnotationProperty",
@@ -876,7 +883,6 @@ export class OntologizeServer extends Ontologize {
           const namespaceCollection = this.collections[prefix];
           if (namespaceCollection) {
             _collection = namespaceCollection;
-            console.log(`using namespaceCollection "${prefix}" for ${processedResource._id}`);
           }
         }
       }
@@ -915,6 +921,10 @@ export class OntologizeServer extends Ontologize {
     }
     else {
       // ABox resource - save to main collection
+      if (!collection) {
+        console.log(`no collection found for ${processedResource._id} with @type ${JSON.stringify(processedResource["@type"])}. Using ontology.`);
+        collection = ontologyCollection;
+      }
       await collection.replaceOne(
         { _id: processedResource._id },
         processedResource,

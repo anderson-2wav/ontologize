@@ -11,6 +11,8 @@ import { Ontologize, OntologizeOptions, Resource, MongoCollection } from "../ind
 export interface ImportOptions {
   /** JSON-LD context to use for compaction */
   context?: Record<string, any>;
+  /** default ABox collection */
+  collection?: MongoCollection,
   /** Use LD.compact for BOLD resource normalization */
   normalize?: boolean;
   /** Classify resources as TBox/ABox */
@@ -86,7 +88,6 @@ export declare class OntologizeServer extends Ontologize {
    */
   importFromFile(
     filePath: string,
-    collection: MongoCollection,
     opts?: ImportOptions
   ): Promise<ImportResult>;
 
@@ -96,7 +97,6 @@ export declare class OntologizeServer extends Ontologize {
    */
   importData(
     data: Resource | Resource[],
-    collection: MongoCollection,
     opts?: ImportOptions
   ): Promise<ImportResult>;
 
