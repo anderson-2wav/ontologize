@@ -575,12 +575,19 @@ export class OntologizeServer extends Ontologize {
    * Determine if a resource is a TBox (ontology) resource
    * @private
    */
-  _isTBoxResource(resource) {
+  async _isTBoxResource(resource) {
     // due to JSON-LD idiosyncrasy we can't give @type a @type, so it needs a special case:
     if (resource._id === "@type") {
       return true;
     }
+
     if (!resource["@type"]) {
+      // if resource doesn't have a type, it might be a partial resource (an update to merge)
+      // check if it exists in the ontology
+      const existing = await this.collections.ontology.findOne({_id: resource._id});
+      if (existing) {
+        return true;
+      }
       return false;
     }
 
@@ -772,7 +779,7 @@ export class OntologizeServer extends Ontologize {
 
     // Step 5: Classify as TBox/ABox resource
     if (ontologize) {
-      isTBoxResource = this._isTBoxResource(processedResource);
+      isTBoxResource = await this._isTBoxResource(processedResource);
     }
 
     // Step 5.5: Detect Statement resources
@@ -2771,12 +2778,14 @@ INSERT DATA {
    * Merge and update resources with inferred properties
    * @private
    */
-  async _mergeAndUpdateResources(assembledResources) {
+  async _mergeAndUpdateResources(assembledResources, opts = {}) {
     let updateCount = 0;
+    // TODO impl this opt up the line
+    const includeBlankNodes = opts.includeBlankNodes !== false;
 
     for (const [resourceId, assembledResource] of Object.entries(assembledResources)) {
       // Skip blank nodes
-      if (resourceId.startsWith("_:")) {
+      if (!includeBlankNodes && resourceId.startsWith("_:")) {
         continue;
       }
 
