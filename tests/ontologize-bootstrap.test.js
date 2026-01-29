@@ -43,12 +43,36 @@ describe("OntologizeServer Bootstrap", function () {
       find: (query) => ({
         toArray: async () => {
           // Return inserted ontology resources for bootstrapping
-          if (Object.keys(query || {}).length === 0) {
+          if (!query || Object.keys(query).length === 0) {
             return insertedOntologyResources;
+          }
+          // Handle _id: { $in: [...] } queries
+          if (query._id && query._id.$in) {
+            const ids = query._id.$in;
+            return insertedOntologyResources.filter(r => ids.includes(r._id));
+          }
+          // Handle simple _id queries
+          if (query._id && typeof query._id === "string") {
+            return insertedOntologyResources.filter(r => r._id === query._id);
           }
           return [];
         },
-        fetch: () => insertedOntologyResources
+        fetch: function() {
+          // Return inserted ontology resources for bootstrapping
+          if (!query || Object.keys(query).length === 0) {
+            return insertedOntologyResources;
+          }
+          // Handle _id: { $in: [...] } queries
+          if (query._id && query._id.$in) {
+            const ids = query._id.$in;
+            return insertedOntologyResources.filter(r => ids.includes(r._id));
+          }
+          // Handle simple _id queries
+          if (query._id && typeof query._id === "string") {
+            return insertedOntologyResources.filter(r => r._id === query._id);
+          }
+          return [];
+        }
       }),
       insertOne: async (doc) => {
         insertedOntologyResources.push(doc);
@@ -104,6 +128,7 @@ describe("OntologizeServer Bootstrap", function () {
       }),
       updateOne: async () => ({ modifiedCount: 0 }),
       replaceOne: async () => ({ modifiedCount: 1 }),
+      deleteMany: async () => ({ deletedCount: 0 }),
       count: () => 0
     };
 
@@ -357,10 +382,9 @@ describe("OntologizeServer Bootstrap", function () {
       const bfoPath = path.join(__dirname, "data", "bold-bfo.jsonld");
       const importResult = await ontologizeServer.importFromFile(
         bfoPath,
-        mockOntologyCollection,
+        // mockOntologyCollection,
         { ontologize: true } // Merge TBox resources to ontology collection
       );
-
       assert.isObject(importResult);
       assert.isAbove(importResult.processedResources, 0);
       console.log(`Imported ${importResult.processedResources} BFO resources`);

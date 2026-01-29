@@ -1035,6 +1035,7 @@ describe("OntologizeServer Import", function () {
         testData,
         // mockAboxCollection,
         {
+          collection: mockAboxCollection,
           beforeSaveFn: (resource) => {
             // Only save foaf:Person resources
             const types = Array.isArray(resource["@type"]) ? resource["@type"] : [resource["@type"]];
@@ -1267,7 +1268,9 @@ describe("OntologizeServer Import", function () {
 
       const result = await ontologizeServer.importData(
         mixedData,
-        // mockFoafCollection
+        {
+          collection: mockFoafCollection
+        }
       );
 
       assert.isTrue(result.success);

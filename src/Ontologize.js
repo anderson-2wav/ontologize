@@ -974,9 +974,14 @@ export class Ontologize {
               mergedArray.push(item);
             }
           }
-
-          // Store as array if either input value was array
-          merged[property] = isArray ? mergedArray: mergedArray[0];
+          if (!isArray) {
+            // the expected result is a single value, then the last value in mergedArray is
+            // the last (most recent) update value
+            merged[property] = mergedArray[mergedArray.length - 1];
+          }
+          else {
+            merged[property] = mergedArray;
+          }
         }
       }
     }
