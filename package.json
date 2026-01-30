@@ -14,6 +14,9 @@
     "./server": {
       "import": "./src/OntologizeServer.js",
       "types": "./src/OntologizeServer.d.ts"
+    },
+    "./readme": {
+      "import": "./readme.js"
     }
   },
   "files": [
