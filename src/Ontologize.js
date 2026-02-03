@@ -103,9 +103,9 @@ export class Ontologize {
 
     // Initialize singleton LD instance for this Ontologize instance
     this._ld = null;
-    // TODO THERE ARE REAL PROBLEMS WITH CLIENT/SERVER HERE
-    // on Meteor client, findOne returns resource,
-    // on server, returns promise
+    // TODO THERE WERE CLIENT/SERVER PROBLEMS HERE...
+    // that derive from using Meteor collections instead of MeteorCollectionAdapter
+    // if we're doing it the right way I don't think this promise stuff is needed any more
     const wat = this.collections.context.findOne({ _id: "@id" });
     if (wat instanceof Promise) {
       wat.then((context) => {
@@ -777,10 +777,6 @@ export class Ontologize {
     try {
       const contextDoc = await this.collections.context.findOne({ _id: "@id" });
       if (contextDoc) {
-        // TODO why do we do that? I think _id: "@id" is part of the context
-        // Extract context data (excluding _id)
-        // const { _id, ...contextData } = contextDoc;
-
         // Only use context from collection if it has meaningful data
         if (Object.keys(contextDoc).length > 0) {
           return contextDoc;
