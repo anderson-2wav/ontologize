@@ -1764,7 +1764,8 @@ export class Ontologize {
       "@type" : "@id"
     },
     "rdfs:subClassOf" : {
-      "@type" : "@id"
+      "@type" : "@id",
+      "@container": "@set"
     },
     "dc:description" : {
       "@type" : "http://www.w3.org/2001/XMLSchema#string"
