@@ -241,6 +241,8 @@ export class OntologizeServer extends Ontologize {
    Return modified resource to save, or falsey (false/null/undefined) to skip.
    * @param {boolean} [opts.useNamespaceCollections=true] - use named collections by uri prefix (instead of collection param)
    * @param {object} [opts.typeCollections] - { type: collection } indication of special collection for types
+   * @param {boolean} [opts.addIsPartOf=true] - Add dcterms:isPartOf to resources indicating which owl:Ontology resources they derive from.
+   *   Only ontologies at the beginning of the import are included; stops collecting when first non-ontology is encountered.
    *
    * @returns {Promise<object>} Import result with detailed statistics including skippedResources count
    */
@@ -259,7 +261,8 @@ export class OntologizeServer extends Ontologize {
       ensureArrayProps = true,
       mergeResources = true,
       beforeSaveFn = null,
-      typeCollections = null
+      typeCollections = null,
+      addIsPartOf = true
     } = opts;
 
     try {
@@ -283,7 +286,26 @@ export class OntologizeServer extends Ontologize {
         contextImported = true;
       }
 
-      // Step 4: Process and normalize resources
+      // Step 4: Detect leading owl:Ontology resources for dcterms:isPartOf
+      // If addIsPartOf is enabled, collect ontology IDs from resources at the beginning
+      // Stop collecting when a non-ontology resource is encountered
+      let leadingOntologyIds = [];
+      if (addIsPartOf) {
+        for (const resource of resources) {
+          if (this._isOntologyResource(resource)) {
+            const id = resource._id || resource["@id"];
+            if (id) {
+              leadingOntologyIds.push(id);
+            }
+          }
+          else {
+            // Stop collecting once we hit a non-ontology resource
+            break;
+          }
+        }
+      }
+
+      // Step 5: Process and normalize resources
       const stats = {
         totalResources: resources.length,
         processedResources: 0,
@@ -306,7 +328,7 @@ export class OntologizeServer extends Ontologize {
             contextToUse,
             collection,
             this.collections.context,
-            { normalize, ontologize, shareTBox, shareStatements, ensureArrayProps, mergeResources, beforeSaveFn, typeCollections }
+            { normalize, ontologize, shareTBox, shareStatements, ensureArrayProps, mergeResources, beforeSaveFn, typeCollections, addIsPartOf, leadingOntologyIds }
           );
 
           if (processed) {
@@ -612,6 +634,26 @@ export class OntologizeServer extends Ontologize {
   }
 
   /**
+   * Determine if a resource is an owl:Ontology resource
+   * Used for dcterms:isPartOf detection in importData
+   * @private
+   */
+  _isOntologyResource(resource) {
+    if (!resource["@type"]) {
+      return false;
+    }
+
+    const types = Array.isArray(resource["@type"]) ? resource["@type"] : [resource["@type"]];
+
+    // Support both compacted and expanded forms
+    const ontologyTypes = [
+      "owl:Ontology", "http://www.w3.org/2002/07/owl#Ontology"
+    ];
+
+    return types.some(type => ontologyTypes.includes(type));
+  }
+
+  /**
    * Extract context and resources from JSON-LD input
    * Handles both @graph format and array format
    * Merges all contexts found in array items like CTB Ontology.importContext
@@ -709,7 +751,9 @@ export class OntologizeServer extends Ontologize {
       ensureArrayProps = true,
       mergeResources = true,
       beforeSaveFn = null,
-      useNamespaceCollections = true
+      useNamespaceCollections = true,
+      addIsPartOf = true,
+      leadingOntologyIds = []
     } = opts;
     const ontologyCollection = this.collections.ontology;
     const statementsCollection = this.collections.statements;
@@ -810,6 +854,23 @@ export class OntologizeServer extends Ontologize {
     // Step 5.7: Handle property context updates (@type and @container)
     if (ensureArrayProps && this._isPropertyResource(processedResource)) {
       await this.ensurePropertyContext(processedResource, contextCollection);
+    }
+
+    // Step 5.75: Add dcterms:isPartOf for non-ontology resources
+    // This indicates which owl:Ontology resources the resource is part of
+    if (addIsPartOf && leadingOntologyIds.length > 0 && !this._isOntologyResource(processedResource)) {
+      // Get existing isPartOf values (if any) and merge with leading ontology IDs
+      let existingIsPartOf = processedResource["dcterms:isPartOf"];
+      if (existingIsPartOf) {
+        if (!Array.isArray(existingIsPartOf)) {
+          existingIsPartOf = [existingIsPartOf];
+        }
+      }
+      else {
+        existingIsPartOf = [];
+      }
+      // Merge using union to avoid duplicates
+      processedResource["dcterms:isPartOf"] = _.union(existingIsPartOf, leadingOntologyIds);
     }
 
     // Step 5.8: Call beforeSaveFn if provided for filtering/adornment

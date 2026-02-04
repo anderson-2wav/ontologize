@@ -267,58 +267,58 @@ describe("OntologizeServer Import", function () {
   });
 
   describe("_isTBoxResource", function () {
-    it("should identify owl:Class as TBox resource", function () {
+    it("should identify owl:Class as TBox resource", async function () {
       const resource = {
         "_id": "ex:TestClass",
         "@type": "owl:Class"
       };
 
-      assert.isTrue(ontologizeServer._isTBoxResource(resource));
+      assert.isTrue(await ontologizeServer._isTBoxResource(resource));
     });
 
-    it("should identify rdfs:Class as TBox resource", function () {
+    it("should identify rdfs:Class as TBox resource", async function () {
       const resource = {
         "_id": "ex:TestClass",
         "@type": "rdfs:Class"
       };
 
-      assert.isTrue(ontologizeServer._isTBoxResource(resource));
+      assert.isTrue(await ontologizeServer._isTBoxResource(resource));
     });
 
-    it("should identify owl:ObjectProperty as TBox resource", function () {
+    it("should identify owl:ObjectProperty as TBox resource", async function () {
       const resource = {
         "_id": "ex:testProperty",
         "@type": "owl:ObjectProperty"
       };
 
-      assert.isTrue(ontologizeServer._isTBoxResource(resource));
+      assert.isTrue(await ontologizeServer._isTBoxResource(resource));
     });
 
-    it("should identify multiple types including TBox", function () {
+    it("should identify multiple types including TBox", async function () {
       const resource = {
         "_id": "ex:TestClass",
         "@type": ["owl:Class", "ex:SpecialClass"]
       };
 
-      assert.isTrue(ontologizeServer._isTBoxResource(resource));
+      assert.isTrue(await ontologizeServer._isTBoxResource(resource));
     });
 
-    it("should not identify regular resources as TBox", function () {
+    it("should not identify regular resources as TBox", async function () {
       const resource = {
         "_id": "ex:instance",
         "@type": "ex:Person"
       };
 
-      assert.isFalse(ontologizeServer._isTBoxResource(resource));
+      assert.isFalse(await ontologizeServer._isTBoxResource(resource));
     });
 
-    it("should handle resources without @type", function () {
+    it("should handle resources without @type", async function () {
       const resource = {
         "_id": "ex:instance",
         "rdfs:label": "Test"
       };
 
-      assert.isFalse(ontologizeServer._isTBoxResource(resource));
+      assert.isFalse(await ontologizeServer._isTBoxResource(resource));
     });
   });
 
@@ -781,7 +781,7 @@ describe("OntologizeServer Import", function () {
       assert.isTrue(finalResource["rdfs:seeAlso"].includes("ex:RelatedClass3"));
     });
 
-    it("should respect mergeOntology=false option", async function () {
+    it("should respect mergeResources=false option", async function () {
       // First import
       const firstData = [
         {
@@ -794,7 +794,7 @@ describe("OntologizeServer Import", function () {
 
       await ontologizeServer.importData(firstData /* , mockOntologyCollection */);
 
-      // Second import with mergeOntology=false
+      // Second import with mergeResources=false
       const secondData = [
         {
           "@id": "ex:TestClass",
@@ -806,7 +806,7 @@ describe("OntologizeServer Import", function () {
       await ontologizeServer.importData(
         secondData,
         // mockOntologyCollection,
-        { mergeOntology: false }
+        { mergeResources: false }
       );
 
       // Check that resource was replaced, not merged
@@ -1294,6 +1294,236 @@ describe("OntologizeServer Import", function () {
       console.log("\nMixed Import Results:");
       console.log(`- TBox resources in Ontology collection: ${tboxInOntology.map(r => r._id)}`);
       console.log(`- ABox resources in Foaf collection: ${aboxInFoaf.map(r => r._id)}`);
+    });
+  });
+
+  describe("addIsPartOf (dcterms:isPartOf)", function () {
+    it("should add dcterms:isPartOf to resources after leading ontologies", async function () {
+      const data = [
+        {
+          "@id": "ex:myOntology",
+          "@type": "owl:Ontology",
+          "rdfs:label": "My Ontology"
+        },
+        {
+          "@id": "ex:MyClass",
+          "@type": "rdfs:Class",
+          "rdfs:label": "My Class"
+        },
+        {
+          "@id": "ex:myProperty",
+          "@type": "owl:ObjectProperty",
+          "rdfs:label": "My Property"
+        }
+      ];
+
+      const result = await ontologizeServer.importData(data);
+
+      assert.isTrue(result.success);
+      assert.equal(result.processedResources, 3);
+
+      // The ontology resource itself should NOT have dcterms:isPartOf
+      const ontologyResource = ontologyData.find(r => r._id === "ex:myOntology");
+      assert.isObject(ontologyResource);
+      assert.isUndefined(ontologyResource["dcterms:isPartOf"]);
+
+      // Non-ontology resources should have dcterms:isPartOf
+      const classResource = ontologyData.find(r => r._id === "ex:MyClass");
+      assert.isObject(classResource);
+      assert.isArray(classResource["dcterms:isPartOf"]);
+      assert.include(classResource["dcterms:isPartOf"], "ex:myOntology");
+
+      const propertyResource = ontologyData.find(r => r._id === "ex:myProperty");
+      assert.isObject(propertyResource);
+      assert.isArray(propertyResource["dcterms:isPartOf"]);
+      assert.include(propertyResource["dcterms:isPartOf"], "ex:myOntology");
+    });
+
+    it("should support multiple leading ontologies", async function () {
+      const data = [
+        {
+          "@id": "ex:ontologyA",
+          "@type": "owl:Ontology",
+          "rdfs:label": "Ontology A"
+        },
+        {
+          "@id": "ex:ontologyB",
+          "@type": "owl:Ontology",
+          "rdfs:label": "Ontology B"
+        },
+        {
+          "@id": "ex:SomeClass",
+          "@type": "rdfs:Class",
+          "rdfs:label": "Some Class"
+        }
+      ];
+
+      const result = await ontologizeServer.importData(data);
+      assert.isTrue(result.success);
+
+      const classResource = ontologyData.find(r => r._id === "ex:SomeClass");
+      assert.isObject(classResource);
+      assert.isArray(classResource["dcterms:isPartOf"]);
+      assert.equal(classResource["dcterms:isPartOf"].length, 2);
+      assert.include(classResource["dcterms:isPartOf"], "ex:ontologyA");
+      assert.include(classResource["dcterms:isPartOf"], "ex:ontologyB");
+    });
+
+    it("should only include leading ontologies, not ontologies appearing later", async function () {
+      const data = [
+        {
+          "@id": "ex:leadingOntology",
+          "@type": "owl:Ontology",
+          "rdfs:label": "Leading Ontology"
+        },
+        {
+          "@id": "ex:SomeClass",
+          "@type": "rdfs:Class",
+          "rdfs:label": "Some Class"
+        },
+        {
+          "@id": "ex:lateOntology",
+          "@type": "owl:Ontology",
+          "rdfs:label": "Late Ontology"
+        }
+      ];
+
+      const result = await ontologizeServer.importData(data);
+      assert.isTrue(result.success);
+
+      // SomeClass should only have the leading ontology
+      const classResource = ontologyData.find(r => r._id === "ex:SomeClass");
+      assert.isObject(classResource);
+      assert.isArray(classResource["dcterms:isPartOf"]);
+      assert.include(classResource["dcterms:isPartOf"], "ex:leadingOntology");
+      assert.notInclude(classResource["dcterms:isPartOf"], "ex:lateOntology");
+
+      // The late ontology should NOT have dcterms:isPartOf either (it's an ontology)
+      const lateOntology = ontologyData.find(r => r._id === "ex:lateOntology");
+      assert.isObject(lateOntology);
+      assert.isUndefined(lateOntology["dcterms:isPartOf"]);
+    });
+
+    it("should not add dcterms:isPartOf when addIsPartOf is false", async function () {
+      const data = [
+        {
+          "@id": "ex:myOntology",
+          "@type": "owl:Ontology",
+          "rdfs:label": "My Ontology"
+        },
+        {
+          "@id": "ex:MyClass",
+          "@type": "rdfs:Class",
+          "rdfs:label": "My Class"
+        }
+      ];
+
+      const result = await ontologizeServer.importData(data, { addIsPartOf: false });
+      assert.isTrue(result.success);
+
+      const classResource = ontologyData.find(r => r._id === "ex:MyClass");
+      assert.isObject(classResource);
+      assert.isUndefined(classResource["dcterms:isPartOf"]);
+    });
+
+    it("should not add dcterms:isPartOf when there are no leading ontologies", async function () {
+      const data = [
+        {
+          "@id": "ex:MyClass",
+          "@type": "rdfs:Class",
+          "rdfs:label": "My Class"
+        },
+        {
+          "@id": "ex:AnotherClass",
+          "@type": "owl:Class",
+          "rdfs:label": "Another Class"
+        }
+      ];
+
+      const result = await ontologizeServer.importData(data);
+      assert.isTrue(result.success);
+
+      const classResource = ontologyData.find(r => r._id === "ex:MyClass");
+      assert.isObject(classResource);
+      assert.isUndefined(classResource["dcterms:isPartOf"]);
+
+      const anotherClass = ontologyData.find(r => r._id === "ex:AnotherClass");
+      assert.isObject(anotherClass);
+      assert.isUndefined(anotherClass["dcterms:isPartOf"]);
+    });
+
+    it("should merge dcterms:isPartOf across multiple imports with mergeResources", async function () {
+      // First import: resource comes from ontologyA
+      const firstData = [
+        {
+          "@id": "ex:ontologyA",
+          "@type": "owl:Ontology",
+          "rdfs:label": "Ontology A"
+        },
+        {
+          "@id": "ex:SharedClass",
+          "@type": "rdfs:Class",
+          "rdfs:label": "Shared Class"
+        }
+      ];
+
+      await ontologizeServer.importData(firstData);
+
+      // Verify after first import
+      let classResource = ontologyData.find(r => r._id === "ex:SharedClass");
+      assert.isArray(classResource["dcterms:isPartOf"]);
+      assert.deepEqual(classResource["dcterms:isPartOf"], ["ex:ontologyA"]);
+
+      // Second import: bridge ontology amends the same resource
+      const secondData = [
+        {
+          "@id": "ex:bridgeOntology",
+          "@type": "owl:Ontology",
+          "rdfs:label": "Bridge Ontology"
+        },
+        {
+          "@id": "ex:SharedClass",
+          "@type": "rdfs:Class",
+          "rdfs:subClassOf": "ex:ParentClass"
+        }
+      ];
+
+      await ontologizeServer.importData(secondData);
+
+      // After merge, dcterms:isPartOf should include both ontologies
+      classResource = ontologyData.find(r => r._id === "ex:SharedClass");
+      assert.isArray(classResource["dcterms:isPartOf"]);
+      assert.equal(classResource["dcterms:isPartOf"].length, 2);
+      assert.include(classResource["dcterms:isPartOf"], "ex:ontologyA");
+      assert.include(classResource["dcterms:isPartOf"], "ex:bridgeOntology");
+
+      // Original properties should be preserved
+      assert.equal(classResource["rdfs:label"], "Shared Class");
+      assert.equal(classResource["rdfs:subClassOf"], "ex:ParentClass");
+    });
+
+    it("should preserve existing dcterms:isPartOf values on the resource itself", async function () {
+      const data = [
+        {
+          "@id": "ex:myOntology",
+          "@type": "owl:Ontology",
+          "rdfs:label": "My Ontology"
+        },
+        {
+          "@id": "ex:MyClass",
+          "@type": "rdfs:Class",
+          "rdfs:label": "My Class",
+          "dcterms:isPartOf": "ex:previousOntology"
+        }
+      ];
+
+      const result = await ontologizeServer.importData(data);
+      assert.isTrue(result.success);
+
+      const classResource = ontologyData.find(r => r._id === "ex:MyClass");
+      assert.isArray(classResource["dcterms:isPartOf"]);
+      assert.include(classResource["dcterms:isPartOf"], "ex:previousOntology");
+      assert.include(classResource["dcterms:isPartOf"], "ex:myOntology");
     });
   });
 });
