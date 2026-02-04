@@ -595,9 +595,8 @@ export class OntologizeServer extends Ontologize {
 
   /**
    * Determine if a resource is a TBox (ontology) resource
-   * @private
    */
-  async _isTBoxResource(resource) {
+  async isTBoxResource(resource) {
     // due to JSON-LD idiosyncrasy we can't give @type a @type, so it needs a special case:
     if (resource._id === "@type") {
       return true;
@@ -823,7 +822,7 @@ export class OntologizeServer extends Ontologize {
 
     // Step 5: Classify as TBox/ABox resource
     if (ontologize) {
-      isTBoxResource = await this._isTBoxResource(processedResource);
+      isTBoxResource = await this.isTBoxResource(processedResource);
     }
 
     // Step 5.5: Detect Statement resources

@@ -266,14 +266,14 @@ describe("OntologizeServer Import", function () {
     });
   });
 
-  describe("_isTBoxResource", function () {
+  describe("isTBoxResource", function () {
     it("should identify owl:Class as TBox resource", async function () {
       const resource = {
         "_id": "ex:TestClass",
         "@type": "owl:Class"
       };
 
-      assert.isTrue(await ontologizeServer._isTBoxResource(resource));
+      assert.isTrue(await ontologizeServer.isTBoxResource(resource));
     });
 
     it("should identify rdfs:Class as TBox resource", async function () {
@@ -282,7 +282,7 @@ describe("OntologizeServer Import", function () {
         "@type": "rdfs:Class"
       };
 
-      assert.isTrue(await ontologizeServer._isTBoxResource(resource));
+      assert.isTrue(await ontologizeServer.isTBoxResource(resource));
     });
 
     it("should identify owl:ObjectProperty as TBox resource", async function () {
@@ -291,7 +291,7 @@ describe("OntologizeServer Import", function () {
         "@type": "owl:ObjectProperty"
       };
 
-      assert.isTrue(await ontologizeServer._isTBoxResource(resource));
+      assert.isTrue(await ontologizeServer.isTBoxResource(resource));
     });
 
     it("should identify multiple types including TBox", async function () {
@@ -300,7 +300,7 @@ describe("OntologizeServer Import", function () {
         "@type": ["owl:Class", "ex:SpecialClass"]
       };
 
-      assert.isTrue(await ontologizeServer._isTBoxResource(resource));
+      assert.isTrue(await ontologizeServer.isTBoxResource(resource));
     });
 
     it("should not identify regular resources as TBox", async function () {
@@ -309,7 +309,7 @@ describe("OntologizeServer Import", function () {
         "@type": "ex:Person"
       };
 
-      assert.isFalse(await ontologizeServer._isTBoxResource(resource));
+      assert.isFalse(await ontologizeServer.isTBoxResource(resource));
     });
 
     it("should handle resources without @type", async function () {
@@ -318,7 +318,7 @@ describe("OntologizeServer Import", function () {
         "rdfs:label": "Test"
       };
 
-      assert.isFalse(await ontologizeServer._isTBoxResource(resource));
+      assert.isFalse(await ontologizeServer.isTBoxResource(resource));
     });
   });
 
