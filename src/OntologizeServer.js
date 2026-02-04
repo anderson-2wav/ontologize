@@ -236,7 +236,7 @@ export class OntologizeServer extends Ontologize {
    * @param {boolean} [opts.ontologize=true] - Classify resources as TBox/ABox
    * @param {boolean} [opts.shareTBox=false] - Store TBox resources in both collections
    * @param {boolean} [opts.ensureArrayProps=true] - Ensure array props including @type
-   * @param {boolean} [opts.mergeOntology=true] - Merge TBox resources with existing resources using schema merge strategy
+   * @param {boolean} [opts.mergeResources=true] - Merge resources with existing resources using schema merge strategy
    * @param {Function} [opts.beforeSaveFn=null] - Callback to filter/modify resources before saving. Called with normalized resource. May be sync or async.
    Return modified resource to save, or falsey (false/null/undefined) to skip.
    * @param {boolean} [opts.useNamespaceCollections=true] - use named collections by uri prefix (instead of collection param)
@@ -257,7 +257,7 @@ export class OntologizeServer extends Ontologize {
       shareTBox = false,
       shareStatements = false,
       ensureArrayProps = true,
-      mergeOntology = true,
+      mergeResources = true,
       beforeSaveFn = null,
       typeCollections = null
     } = opts;
@@ -306,7 +306,7 @@ export class OntologizeServer extends Ontologize {
             contextToUse,
             collection,
             this.collections.context,
-            { normalize, ontologize, shareTBox, shareStatements, ensureArrayProps, mergeOntology, beforeSaveFn, typeCollections }
+            { normalize, ontologize, shareTBox, shareStatements, ensureArrayProps, mergeResources, beforeSaveFn, typeCollections }
           );
 
           if (processed) {
@@ -707,7 +707,7 @@ export class OntologizeServer extends Ontologize {
       shareTBox = false,
       shareStatements = false,
       ensureArrayProps = true,
-      mergeOntology = true,
+      mergeResources = true,
       beforeSaveFn = null,
       useNamespaceCollections = true
     } = opts;
@@ -897,7 +897,7 @@ export class OntologizeServer extends Ontologize {
 
     if (isStatementResource && statementsCollection) {
       // Statement resource - save to Statements collection with merge strategy
-      await this._saveResourceWithMerge(processedResource, statementsCollection, { mergeOntology });
+      await this._saveResourceWithMerge(processedResource, statementsCollection, { mergeResources });
 
       // Also save to target collection if shareStatements is true
       if (shareStatements && collection !== statementsCollection) {
@@ -910,7 +910,7 @@ export class OntologizeServer extends Ontologize {
     }
     else if (isTBoxResource || collection === ontologyCollection) {
       // TBox resource - save to Ontology collection with merge strategy.
-      await this._saveResourceWithMerge(processedResource, ontologyCollection, { mergeOntology });
+      await this._saveResourceWithMerge(processedResource, ontologyCollection, { mergeResources });
 
       // Also save to main collection if shareTBox is true,
       // But not if the collection we're importing into is the ontologyCollection,
@@ -1027,7 +1027,7 @@ export class OntologizeServer extends Ontologize {
    * @private
    */
   async _saveResourceWithMerge(resource, collection, opts = {}) {
-    const { mergeOntology = true } = opts;
+    const { mergeResources = true } = opts;
     check(resource, Object);
     check(collection, Object);
 
@@ -1038,7 +1038,7 @@ export class OntologizeServer extends Ontologize {
     // Check if a resource with this _id already exists
     const existingResource = await collection.findOne({ _id: resource._id });
 
-    if (existingResource && mergeOntology) {
+    if (existingResource && mergeResources) {
       // Merge existing resource with new resource using schema merge strategy
       // Clone the existing resource to avoid modifying the original
       const mergedResource = _.mergeWith(_.cloneDeep(existingResource), resource, this._schemaMergeCustomizer.bind(this));
@@ -1051,7 +1051,7 @@ export class OntologizeServer extends Ontologize {
       );
     }
     else {
-      // Either no existing resource, or mergeOntology is false - just replace
+      // Either no existing resource, or mergeResources is false - just replace
       await collection.replaceOne(
         { _id: resource._id },
         resource,
