@@ -81,9 +81,8 @@ export class OntologizeServer extends Ontologize {
   }
 
   /**
-   * Bootstrap ontology data from configured files.
-   * Imports all files specified in opts.bootstrapFiles, clearing the collection
-   * on the first file and merging subsequent files.
+   * Bootstrap data from configured files.
+   * Imports all files specified in opts.bootstrapFiles
    *
    * @param {object} [opts] - Bootstrap options
    * @param {string[]} [opts.files] - Override bootstrapFiles from constructor
