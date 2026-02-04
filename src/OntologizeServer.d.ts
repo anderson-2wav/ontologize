@@ -130,7 +130,7 @@ export declare class OntologizeServer extends Ontologize {
    * Determine if a resource is a TBox (ontology) resource
    * @private
    */
-  private _isTBoxResource(resource: Resource): boolean;
+  private _isTBoxResource(resource: Resource): Promise<boolean>;
 
   /**
    * Extract context and resources from JSON-LD input
