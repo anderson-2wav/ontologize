@@ -894,57 +894,71 @@ export class OntologizeServer extends Ontologize {
     // Step 6: Save to appropriate collection(s)
 
     // if this is destined for an ABox collection,
-    // check if we should use a namespace collection from ontologize.collections (also this.opts.idResolvers)
-    if (useNamespaceCollections && (!isTBoxResource || shareTBox)) {
+    if (!isTBoxResource || shareTBox) {
       let _collection;
-      const prefix = processedResource._id.match(/^([^:]+):/)?.[1];
-      if (prefix) {
-        // do we have idResolvers for this prefix in our opts?
-        if (this.opts.idResolvers?.[prefix]) {
-          const resolvers = this.opts.idResolvers[prefix];
-          if (Array.isArray(resolvers)) {
-            for (const resolver of resolvers) {
-              if (resolver.match) {
-                const re = new RegExp(resolver.match);
-                if (processedResource._id.match(re) && resolver.collection) {
-                  // resolver.collection will be the registered name of the collection
-                  if (this.collections[resolver.collection]) {
-                    _collection = this.collections[resolver.collection];
+      const defaultAboxCollection = this.opts.typeCollections?.["*"];
+      if (this.opts.typeCollections) {
+        /*
+        const example = {
+          "typeCollections": {
+            "bold:Animal": "animal",
+            "orju:Bird": "animal"
+          }
+        }
+        */
+        for (const typ of (processedResource["@type"] ?? [])) {
+          if (_collection) {
+            // stick with the first found
+            continue;
+          }
+          const colName = this.opts.typeCollections[typ];
+          if (colName) {
+            _collection = this.collections[colName];
+            if (_collection) {
+              console.log(`using typeCollection "${colName}" for ${processedResource._id} @type: ${typ}`);
+            }
+            else {
+              console.error(`Unknown typeCollection "${typ}"`);
+            }
+          }
+        }
+      }
+      if (!_collection) {
+        const prefix = processedResource._id.match(/^([^:]+):/)?.[1];
+        if (prefix) {
+          // do we have idResolvers for this prefix in our opts?
+          if (this.opts.idResolvers?.[prefix]) {
+            const resolvers = this.opts.idResolvers[prefix];
+            if (Array.isArray(resolvers)) {
+              for (const resolver of resolvers) {
+                if (_collection) {
+                  continue;
+                }
+                if (resolver.match) {
+                  const re = new RegExp(resolver.match);
+                  if (processedResource._id.match(re) && resolver.collection) {
+                    // resolver.collection will be the registered name of the collection
+                    if (this.collections[resolver.collection]) {
+                      _collection = this.collections[resolver.collection];
+                    }
                   }
                 }
               }
             }
           }
-        }
-        if (this.opts.typeCollections) {
-          /*
-          const example = {
-            "typeCollections": {
-              "bold:Animal": "animal",
-              "orju:Bird": "animal"
+          if (!_collection && useNamespaceCollections) {
+            const namespaceCollection = this.collections[prefix];
+            if (namespaceCollection) {
+              _collection = namespaceCollection;
             }
-          }
-          */
-          for (const typ of (processedResource["@type"] ?? [])) {
-            const colName = this.opts.typeCollections[typ];
-            if (colName) {
-              _collection = this.collections[colName];
-              if (_collection) {
-                console.log(`using typeCollection "${colName}" for ${processedResource._id} @type: ${typ}`);
-              }
-              else {
-                console.error(`Unknown typeCollection "${typ}"`);
-              }
-            }
-          }
-        }
-        if (!_collection) {
-          const namespaceCollection = this.collections[prefix];
-          if (namespaceCollection) {
-            _collection = namespaceCollection;
           }
         }
       }
+      // after checking for type, _id, and namespace, use default if there is one
+      if (!_collection && defaultAboxCollection) {
+        _collection = defaultAboxCollection;
+      }
+      // if we found a type, _id, namespace, or default collection, use it
       if (_collection) {
         collection = _collection;
       }
