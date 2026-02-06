@@ -86,6 +86,19 @@ const ontologize = new Ontologize(
 );
 ```
 
+#### Default ABox Collection
+`opts.typeCollections` can use a "*" key to delegate a "catch-all" collection for ABox individuals that don't resolve to any namespace, `typeCollections` or `idResolvers` collection.
+
+```js
+opts = {
+   "typeCollections": {
+      "*": "abox"
+   }
+}
+```
+
+
+
 ### ID Resolvers
 Resources can be routed to specific collections based on recognized patterns in @id for a particular namespace:
 
