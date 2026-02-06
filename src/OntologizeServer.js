@@ -926,10 +926,6 @@ export class OntologizeServer extends Ontologize {
           }
           */
           for (const typ of (processedResource["@type"] ?? [])) {
-            if (typ === "bold:Species") {
-              console.log("this.opts.typeCollections",this.opts.typeCollections);
-              console.log(`this.opts.typeCollections[${typ}]`,this.opts.typeCollections[typ]);
-            }
             const colName = this.opts.typeCollections[typ];
             if (colName) {
               _collection = this.collections[colName];
