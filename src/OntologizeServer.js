@@ -955,8 +955,9 @@ export class OntologizeServer extends Ontologize {
         }
       }
       // after checking for type, _id, and namespace, use default if there is one
-      if (!_collection && defaultAboxCollection) {
-        _collection = defaultAboxCollection;
+      if (!_collection && defaultAboxCollection && this.collections[defaultAboxCollection]) {
+        _collection = this.collections[defaultAboxCollection];
+        console.log(`using ABox Collection "${defaultAboxCollection}" for ${processedResource._id} @type: ${processedResource["@type"]}`);
       }
       // if we found a type, _id, namespace, or default collection, use it
       if (_collection) {
