@@ -915,7 +915,7 @@ export class OntologizeServer extends Ontologize {
           if (colName) {
             _collection = this.collections[colName];
             if (_collection) {
-              console.log(`using typeCollection "${colName}" for ${processedResource._id} @type: ${typ}`);
+              // console.log(`using typeCollection "${colName}" for ${processedResource._id} @type: ${typ}`);
             }
             else {
               console.error(`Unknown typeCollection "${typ}"`);
@@ -957,7 +957,7 @@ export class OntologizeServer extends Ontologize {
       // after checking for type, _id, and namespace, use default if there is one
       if (!_collection && defaultAboxCollection && this.collections[defaultAboxCollection]) {
         _collection = this.collections[defaultAboxCollection];
-        console.log(`using ABox Collection "${defaultAboxCollection}" for ${processedResource._id} @type: ${processedResource["@type"]}`);
+        // console.log(`using ABox Collection "${defaultAboxCollection}" for ${processedResource._id} @type: ${processedResource["@type"]}`);
       }
       // if we found a type, _id, namespace, or default collection, use it
       if (_collection) {
