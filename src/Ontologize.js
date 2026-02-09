@@ -243,7 +243,9 @@ export class Ontologize {
   async getLabel(resource, property, fallbackOrOpts, opts) {
     check(resource, Object);
     check(property, Match.Optional(String));
-
+    // if (resource._id === "demo:report-MA04-903" && !property) {
+    //   debugger;
+    // }
     // Handle flexible argument pattern: (resource, property, fallback) or (resource, property, opts)
     let fallback;
     if (typeof fallbackOrOpts === "object" && fallbackOrOpts !== null) {
@@ -1680,6 +1682,7 @@ export class Ontologize {
       try {
         const raw = await collection.findOne({ _id: id });
         if (raw) {
+          // TODO we probably shouldn't assume proxies
           const resource = this.ld().proxy(raw);
           return { collection: collectionName, resource };
         }
