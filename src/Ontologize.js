@@ -1714,7 +1714,6 @@ export class Ontologize {
     "dc" : "http://purl.org/dc/elements/1.1/",
     "org" : "http://www.w3.org/ns/org#",
     "uo" : "http://purl.obolibrary.org/obo/uo.owl",
-    "xbfo" : "http://purl.obolibrary.org/obo/bfo.owl",
     "obo" : "http://purl.obolibrary.org/obo/",
     "bfo" : "https://ontologize.2wav.com/ontology/bfo#",
     "ctb" : "https://ontologize.2wav.com/ontology/bridge#",

@@ -39,8 +39,6 @@
     "void": "http://rdfs.org/ns/void#",
     "vs": "http://www.w3.org/2003/06/sw-vocab-status/ns#",
     "wot": "http://xmlns.com/wot/0.1/",
-    "wwav": "https://ontologize.2wav.com/ontology#",
-    "xbfo": "http://purl.obolibrary.org/obo/bfo.owl",
     "xsd": "http://www.w3.org/2001/XMLSchema#",
     "bold:collection": {
       "@type": "http://www.w3.org/2001/XMLSchema#string"

@@ -12,7 +12,6 @@
       "org": "http://www.w3.org/ns/org#",
       "uo": "http://purl.obolibrary.org/obo/uo.owl",
       "obo": "http://purl.obolibrary.org/obo/",
-      "wwav": "https://ontologize.2wav.com/ontology#",
       "bold": "https://ontologize.2wav.com/ontology/bold#",
       "bui": "https://ontologize.2wav.com/ontology/bold-ui#",
       "ctb": "https://ontologize.2wav.com/ontology/bridge#",
