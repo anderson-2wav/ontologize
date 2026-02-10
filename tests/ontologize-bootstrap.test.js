@@ -112,8 +112,8 @@ describe("OntologizeServer Bootstrap", function () {
           return {
             _id: "@context",
             "@context": {
-              "@vocab": "https://ontology.2wav.com/bold#",
-              "bfo": "https://ontology.2wav.com/bfo#",
+              "@vocab": "https://ontologize.2wav.com/ontology/bold#",
+              "bfo": "https://ontologize.2wav.com/ontology/bfo#",
               "owl": "http://www.w3.org/2002/07/owl#",
               "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
               "rdfs": "http://www.w3.org/2000/01/rdf-schema#"
@@ -274,7 +274,7 @@ describe("OntologizeServer Bootstrap", function () {
 
       assert.isString(sparqlInsert);
       assert.include(sparqlInsert, "INSERT DATA");
-      assert.include(sparqlInsert, "https://ontology.2wav.com/bfo#entity");
+      assert.include(sparqlInsert, "https://ontologize.2wav.com/ontology/bfo#entity");
       assert.include(sparqlInsert, "http://www.w3.org/2000/01/rdf-schema#label");
       assert.include(sparqlInsert, "http://www.w3.org/2002/07/owl#Class");
     });

@@ -737,7 +737,7 @@ describe("OntologizeServer", function () {
 
       contextCollection = {
         _documents: [
-          { _id: "@id", "@vocab": "https://ontology.2wav.com#" }
+          { _id: "@id", "@vocab": "https://ontologize.2wav.com/ontology#" }
         ],
 
         findOne: async function(query) {

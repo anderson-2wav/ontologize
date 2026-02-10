@@ -104,8 +104,8 @@ describe("OntologizeServer updateOne", function () {
           return {
             _id: "@context",
             "@context": {
-              "@vocab": "https://ontology.2wav.com/bold#",
-              "bfo": "https://ontology.2wav.com/bfo#",
+              "@vocab": "https://ontologize.2wav.com/ontology/bold#",
+              "bfo": "https://ontologize.2wav.com/ontology/bfo#",
               "owl": "http://www.w3.org/2002/07/owl#",
               "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
               "rdfs": "http://www.w3.org/2000/01/rdf-schema#"

@@ -260,7 +260,7 @@ describe("Ontologize.getSchema", function() {
     it("should work like the DWC ontology example with format: markdown", async function() {
       // Example from dwc-compact.jsonld: owl:Ontology with bui:schema for dc:description
       const dwcOntology = {
-        _id: "https://ontology.2wav.com/dwc#",
+        _id: "https://ontologize.2wav.com/ontology/dwc#",
         "@type": ["owl:Ontology"],
         "dcterms:title": "Darwin Core",
         "dcterms:description": "# Darwin Core\nSome markdown content...",

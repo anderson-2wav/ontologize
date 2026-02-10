@@ -2123,10 +2123,10 @@ INSERT DATA {
     "bui:Schema",
     "bold:GeoJson",
     "bold:GeoPoint",
-    "https://ontology.2wav.com/bold#JSON",
-    "https://ontology.2wav.com/bold-ui#Schema",
-    "https://ontology.2wav.com/bold-ui#GeoJson",
-    "https://ontology.2wav.com/bold-ui#GeoPoint",
+    "https://ontologize.2wav.com/ontology/bold#JSON",
+    "https://ontologize.2wav.com/ontology/bold-ui#Schema",
+    "https://ontologize.2wav.com/ontology/bold-ui#GeoJson",
+    "https://ontologize.2wav.com/ontology/bold-ui#GeoPoint",
   ];
 
   /**

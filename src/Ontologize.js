@@ -1705,7 +1705,7 @@ export class Ontologize {
   }
 
   static DEFAULT_CONTEXT = {
-    "@vocab" : "https://ontology.2wav.com#",
+    "@vocab" : "https://ontologize.2wav.com/ontology#",
     "rdf" : "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
     "rdfs" : "http://www.w3.org/2000/01/rdf-schema#",
     "owl" : "http://www.w3.org/2002/07/owl#",
@@ -1716,11 +1716,11 @@ export class Ontologize {
     "uo" : "http://purl.obolibrary.org/obo/uo.owl",
     "xbfo" : "http://purl.obolibrary.org/obo/bfo.owl",
     "obo" : "http://purl.obolibrary.org/obo/",
-    "bfo" : "https://ontology.2wav.com/bfo#",
-    "ctb" : "https://ontology.2wav.com/bridge#",
-    "ctl" : "https://ontology.2wav.com/800-53#",
-    "ctl5" : "https://ontology.2wav.com/800-53/rev5#",
-    "nice" : "https://ontology.2wav.com/nice#",
+    "bfo" : "https://ontologize.2wav.com/ontology/bfo#",
+    "ctb" : "https://ontologize.2wav.com/ontology/bridge#",
+    "ctl" : "https://ontologize.2wav.com/ontology/800-53#",
+    "ctl5" : "https://ontologize.2wav.com/ontology/800-53/rev5#",
+    "nice" : "https://ontologize.2wav.com/ontology/nice#",
     "acrt" : "https://privatealpha.com/ontology/certification/1#",
     "time" : "http://www.w3.org/2006/time#",
     "skos" : "http://www.w3.org/2004/02/skos/core#",
