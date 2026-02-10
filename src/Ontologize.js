@@ -694,8 +694,8 @@ export class Ontologize {
       return this._parseGeoValue(value[0]);
     }
 
-    // Direct GeoJSON object (has type and coordinates/geometries)
-    if (typeof value === "object" && value.type && (value.coordinates || value.geometries)) {
+    // Direct GeoJSON object (has type and coordinates/geometries/geometry)
+    if (typeof value === "object" && value.type && (value.coordinates || value.geometries || value.geometry)) {
       return value;
     }
 
