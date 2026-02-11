@@ -154,7 +154,7 @@ export declare class Ontologize {
    *
    * @returns GeoJSON object (typically a Point), or null if no location found
    */
-  getLocation(resource: Resource, opts?: GetLocationOptions): Promise<GeoJSONGeometry | null>;
+  getGeoFeature(resource: Resource, opts?: GetLocationOptions): Promise<GeoJSONGeometry | null>;
 
   /**
    * Get context for compaction from provided context, Context collection, or default

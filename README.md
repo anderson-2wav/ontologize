@@ -326,7 +326,7 @@ const ontologize: Ontologize = new Ontologize(
 - **`OntologyResource`** - Resource with required `@id` and `@type`
 - **`MongoCollection`** - MongoDB collection interface
 - **`GetLabelOptions`** - Options for `getLabel()` method
-- **`GetLocationOptions`** - Options for `getLocation()` method
+- **`GetLocationOptions`** - Options for `getGeoFeature()` method
 - **`FormatDateOptions`** - Options for `formatDate()` and `formatDateTime()`
 - **`SunriseSunsetResponse`** - Return type for `getSunriseSunset()`
 - **`GeoJSONPoint`**, **`GeoJSONGeometry`** - GeoJSON location types
