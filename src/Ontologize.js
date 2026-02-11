@@ -590,7 +590,7 @@ export class Ontologize {
    * @param {object} resource - The resource to get location for
    * @param {object} [opts] - Options
    * @param {Map} [opts.ontologyCache] - Cache Map for ontology lookups
-   * @returns {Promise<object|null>} GeoJSON object (typically a Point), or null if no location found
+   * @returns {Promise<object|null>} GeoJSON Feature, or null if no location found
    */
   async getLocation(resource, opts = {}) {
     check(resource, Object);
