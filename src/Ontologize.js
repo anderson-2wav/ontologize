@@ -592,7 +592,7 @@ export class Ontologize {
    * @param {Map} [opts.ontologyCache] - Cache Map for ontology lookups
    * @returns {Promise<object|null>} GeoJSON Feature, or null if no location found
    */
-  async getGeoFeature(resource, opts = {}) {
+  async getGeoJSON(resource, opts = {}) {
     check(resource, Object);
     const cache = opts.ontologyCache;
 
@@ -695,7 +695,7 @@ export class Ontologize {
     }
 
     // Direct GeoJSON object (has type and coordinates/geometries/geometry)
-    if (typeof value === "object" && value.type && (value.coordinates || value.geometries || value.geometry)) {
+    if (typeof value === "object" && value.type && (value.coordinates || value.geometries || value.geometry || value.features)) {
       return value;
     }
 

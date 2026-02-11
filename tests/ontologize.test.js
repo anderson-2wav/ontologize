@@ -722,14 +722,14 @@ describe("Ontologize", function () {
     });
   });
 
-  describe("getGeoFeature", function () {
+  describe("getGeoJSON", function () {
     it("should return null for resource with no location information", async function () {
       const resource = {
         "@id": "ex:NoLocationResource",
         "@type": "ex:Thing",
         "rdfs:label": "No Location"
       };
-      const location = await ontologize.getGeoFeature(resource);
+      const location = await ontologize.getGeoJSON(resource);
       assert.isNull(location);
     });
 
@@ -740,7 +740,7 @@ describe("Ontologize", function () {
         "geo:lat": 34.0598954,
         "geo:long": -118.4464607
       };
-      const location = await ontologize.getGeoFeature(resource);
+      const location = await ontologize.getGeoJSON(resource);
       assert.isObject(location);
       assert.equal(location.type, "Point");
       assert.isArray(location.coordinates);
@@ -755,7 +755,7 @@ describe("Ontologize", function () {
         "geo:lat": { "@value": "34.0598954", "@type": "xsd:decimal" },
         "geo:long": { "@value": "-118.4464607", "@type": "xsd:decimal" }
       };
-      const location = await ontologize.getGeoFeature(resource);
+      const location = await ontologize.getGeoJSON(resource);
       assert.isObject(location);
       assert.equal(location.type, "Point");
       assert.closeTo(location.coordinates[0], -118.4464607, 0.0001);
@@ -769,7 +769,7 @@ describe("Ontologize", function () {
         "geo:lat": "34.0598954",
         "geo:long": "-118.4464607"
       };
-      const location = await ontologize.getGeoFeature(resource);
+      const location = await ontologize.getGeoJSON(resource);
       assert.isObject(location);
       assert.equal(location.type, "Point");
       assert.closeTo(location.coordinates[0], -118.4464607, 0.0001);
@@ -820,7 +820,7 @@ describe("Ontologize", function () {
         }
       };
 
-      const location = await testOntologize.getGeoFeature(resource);
+      const location = await testOntologize.getGeoJSON(resource);
       assert.isObject(location);
       assert.equal(location.type, "Point");
       assert.deepEqual(location.coordinates, [-118.4464607, 34.0598954]);
@@ -870,7 +870,7 @@ describe("Ontologize", function () {
         }
       };
 
-      const location = await testOntologize.getGeoFeature(resource);
+      const location = await testOntologize.getGeoJSON(resource);
       assert.isObject(location);
       assert.equal(location.type, "Polygon");
       assert.isArray(location.coordinates);
@@ -919,7 +919,7 @@ describe("Ontologize", function () {
         })
       };
 
-      const location = await testOntologize.getGeoFeature(resource);
+      const location = await testOntologize.getGeoJSON(resource);
       assert.isObject(location);
       assert.equal(location.type, "Point");
       assert.deepEqual(location.coordinates, [-118.4464607, 34.0598954]);
@@ -971,7 +971,7 @@ describe("Ontologize", function () {
         }
       };
 
-      const location = await testOntologize.getGeoFeature(resource);
+      const location = await testOntologize.getGeoJSON(resource);
       assert.isObject(location);
       assert.equal(location.type, "Point");
       assert.deepEqual(location.coordinates, [-118.4464607, 34.0598954]);
@@ -1023,7 +1023,7 @@ describe("Ontologize", function () {
         }
       };
 
-      const location = await testOntologize.getGeoFeature(resource);
+      const location = await testOntologize.getGeoJSON(resource);
       assert.isObject(location);
       assert.equal(location.type, "Point");
       // Should use geo:lat/geo:long values, not ex:hasLocation
@@ -1038,7 +1038,7 @@ describe("Ontologize", function () {
         "geo:lat": 34.0598954
         // geo:long is missing
       };
-      const location = await ontologize.getGeoFeature(resource);
+      const location = await ontologize.getGeoJSON(resource);
       assert.isNull(location);
     });
 
@@ -1049,7 +1049,7 @@ describe("Ontologize", function () {
         "geo:long": -118.4464607
         // geo:lat is missing
       };
-      const location = await ontologize.getGeoFeature(resource);
+      const location = await ontologize.getGeoJSON(resource);
       assert.isNull(location);
     });
   });
