@@ -85,13 +85,13 @@ export class OntologizeServer extends Ontologize {
    * Imports all files specified in opts.bootstrapFiles
    *
    * @param {object} [opts] - Bootstrap options
-   * @param {string[]} [opts.files] - Override bootstrapFiles from constructor
+   * @param {string[]} [opts.bootstrapFiles] - Override bootstrapFiles from constructor
    * @param {string} [opts.basePath] - Override bootstrapPath from constructor
    * @param {boolean} [opts.removeAll=true] - Clear all collections before first import
    * @returns {Promise<object>} Summary of import results
    */
   async bootstrap(opts = {}) {
-    const files = opts.files || this.bootstrapFiles;
+    const files = opts.bootstrapFiles || this.bootstrapFiles;
     const basePath = opts.basePath || this.bootstrapPath;
     const removeAll = opts.removeAll !== false;
 
