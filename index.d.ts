@@ -212,7 +212,7 @@ export interface QuerySpec {
   /** Registered name of the Ontologize collection */
   collection: string;
   /** MongoDB query selector */
-  query?: Record<string, any>;
+  selector?: Record<string, any>;
   /** Query options (sort, limit, projection, etc.) */
   opts?: Record<string, any>;
 }
@@ -228,7 +228,7 @@ export declare class Query {
 
   readonly name: string;
   readonly collection: string;
-  readonly query: Record<string, any>;
+  readonly selector: Record<string, any>;
   readonly opts: Record<string, any>;
 
   constructor(spec: QuerySpec);

@@ -14,7 +14,7 @@ describe("Query", function () {
   const animalQuery = {
     name: "Animals",
     collection: "animal",
-    query: { "@type": "bold:Animal" },
+    selector: { "@type": "bold:Animal" },
     opts: { sort: { "bold:begin": 1 } }
   };
 
@@ -23,13 +23,13 @@ describe("Query", function () {
       const q = new Query(animalQuery);
       assert.equal(q.name, "Animals");
       assert.equal(q.collection, "animal");
-      assert.deepEqual(q.query, { "@type": "bold:Animal" });
+      assert.deepEqual(q.selector, { "@type": "bold:Animal" });
       assert.deepEqual(q.opts, { sort: { "bold:begin": 1 } });
     });
 
-    it("should default query and opts to empty objects", function () {
+    it("should default selector and opts to empty objects", function () {
       const q = new Query({ name: "All", collection: "ontology" });
-      assert.deepEqual(q.query, {});
+      assert.deepEqual(q.selector, {});
       assert.deepEqual(q.opts, {});
     });
 
@@ -49,8 +49,8 @@ describe("Query", function () {
       assert.throws(() => new Query({ name: "Animals", collection: 123 }), /collection/);
     });
 
-    it("should throw if query is not an object", function () {
-      assert.throws(() => new Query({ name: "X", collection: "c", query: "bad" }));
+    it("should throw if selector is not an object", function () {
+      assert.throws(() => new Query({ name: "X", collection: "c", selector: "bad" }));
     });
 
     it("should throw if opts is not an object", function () {
@@ -89,7 +89,7 @@ describe("Query", function () {
       assert.equal(json["@type"], "ontologize:Query");
       assert.equal(json.name, "Animals");
       assert.equal(json.collection, "animal");
-      assert.deepEqual(json.query, { "@type": "bold:Animal" });
+      assert.deepEqual(json.selector, { "@type": "bold:Animal" });
       assert.deepEqual(json.opts, { sort: { "bold:begin": 1 } });
     });
 
@@ -99,7 +99,7 @@ describe("Query", function () {
       assert.instanceOf(q2, Query);
       assert.equal(q2.name, q1.name);
       assert.equal(q2.collection, q1.collection);
-      assert.deepEqual(q2.query, q1.query);
+      assert.deepEqual(q2.selector, q1.selector);
       assert.deepEqual(q2.opts, q1.opts);
     });
   });

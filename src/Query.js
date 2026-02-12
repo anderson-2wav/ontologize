@@ -26,18 +26,18 @@ export class Query {
    * @param {object} spec - Query specification
    * @param {string} spec.name - Readable name for this query (used in UI)
    * @param {string} spec.collection - Registered name of the Ontologize collection
-   * @param {object} [spec.query={}] - MongoDB query selector
+   * @param {object} [spec.selector={}] - MongoDB query selector
    * @param {object} [spec.opts={}] - Query options (sort, limit, projection, etc.)
    * @throws {Error} If name or collection are not strings
    */
-  constructor({ name, collection, query = {}, opts = {} }) {
+  constructor({ name, collection, selector = {}, opts = {} }) {
     check(name, String, "Query requires a string 'name'");
     check(collection, String, "Query requires a string 'collection'");
-    check(query, Object, "Query 'query' must be an object");
+    check(selector, Object, "Query 'selector' must be an object");
     check(opts, Object, "Query 'opts' must be an object");
     this.name = name;
     this.collection = collection;
-    this.query = query;
+    this.selector = selector;
     this.opts = opts;
   }
 
@@ -66,7 +66,7 @@ export class Query {
       "@type": Query.TYPE,
       name: this.name,
       collection: this.collection,
-      query: this.query,
+      selector: this.selector,
       opts: this.opts
     };
   }
