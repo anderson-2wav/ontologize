@@ -205,3 +205,37 @@ export declare class Ontologize {
 }
 
 export default Ontologize;
+
+export interface QuerySpec {
+  /** Readable name for this query (used in UI) */
+  name: string;
+  /** Registered name of the Ontologize collection */
+  collection: string;
+  /** MongoDB query selector */
+  query?: Record<string, any>;
+  /** Query options (sort, limit, projection, etc.) */
+  opts?: Record<string, any>;
+}
+
+/**
+ * Query - A standard query specifier for Ontologize collections.
+ *
+ * Represents a named MongoDB query against a registered Ontologize collection.
+ * Instances validate on construction and serialize cleanly to/from JSON.
+ */
+export declare class Query {
+  static readonly TYPE: "ontologize:Query";
+
+  readonly name: string;
+  readonly collection: string;
+  readonly query: Record<string, any>;
+  readonly opts: Record<string, any>;
+
+  constructor(spec: QuerySpec);
+
+  /** Create a Query from a plain object, or return an existing Query instance as-is. */
+  static from(obj: QuerySpec | Query): Query;
+
+  /** Serialize to a plain object with @type discriminator. */
+  toJSON(): QuerySpec & { "@type": "ontologize:Query" };
+}

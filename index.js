@@ -5,3 +5,4 @@
 
 // Main entry point for ontologize module
 export { Ontologize, default } from "./src/Ontologize.js";
+export { Query } from "./src/Query.js";
