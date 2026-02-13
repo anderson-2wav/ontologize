@@ -1171,15 +1171,16 @@ export class OntologizeServer extends Ontologize {
    * Create a JSON object that maps the ontology showing all classes ordered by specificity
    * and all properties grouped by type
    *
-   * @param {Array<object>} collections - Array of MongoDB collection instances to analyze
+   * @param {Array<object>|Array<string>} [collections] - Array of MongoDB collection instances
+   *   or collection name strings to analyze. If omitted, all registered collections are used.
    * @param {object} [opts] - Options for exploration
    * @param {boolean} [opts.recurse=true] - Whether to recurse into embedded resources
    * @returns {object} Explorer map with Classes and Properties sections
    */
   async explorer(collections, opts = {}) {
-    check(collections, Array);
     check(opts, Match.Optional(Object));
 
+    const resolvedCollections = this._resolveCollections(collections);
     opts.recurse = opts.recurse !== false;
 
     // Step 1: Get all classes from the ontology
@@ -1192,7 +1193,7 @@ export class OntologizeServer extends Ontologize {
     const domainProperties = await this._getPropertiesByDomain();
 
     // Step 4: Collect properties directly found on instances of each class
-    const instanceProperties = await this._getInstancePropertiesByType(collections, opts);
+    const { instanceProperties, individualCounts } = await this._getInstanceInfoByType(resolvedCollections, opts);
 
     // Step 5: Get all properties grouped by type
     const allProperties = await this._getAllPropertiesGroupedByType();
@@ -1212,7 +1213,8 @@ export class OntologizeServer extends Ontologize {
       ontMap.Classes[className] = {
         classInfo: classInfo,
         domainProperties: domainProperties[className] || {},
-        instanceProperties: instanceProperties[className] || {}
+        instanceProperties: instanceProperties[className] || {},
+        individualCt: individualCounts[className] || 0
       };
     }
 
@@ -1354,11 +1356,13 @@ export class OntologizeServer extends Ontologize {
   }
 
   /**
-   * Get properties found on instances grouped by their @type
+   * Get properties found on instances grouped by their @type, and count individuals per type
    * @private
+   * @returns {{ instanceProperties: object, individualCounts: object }}
    */
-  async _getInstancePropertiesByType(collections, opts) {
+  async _getInstanceInfoByType(collections, opts) {
     const instanceProperties = {};
+    const individualCounts = {};
 
     for (const collection of collections) {
       const collectionName = collection.collectionName || collection._name || "unknown";
@@ -1373,6 +1377,7 @@ export class OntologizeServer extends Ontologize {
 
         for (const type of typeArray) {
           instanceProperties[type] = instanceProperties[type] || {};
+          individualCounts[type] = (individualCounts[type] || 0) + 1;
 
           // Add all properties found on this resource
           for (const prop in resource) {
@@ -1395,6 +1400,7 @@ export class OntologizeServer extends Ontologize {
 
               for (const embeddedType of embeddedTypeArray) {
                 instanceProperties[embeddedType] = instanceProperties[embeddedType] || {};
+                individualCounts[embeddedType] = (individualCounts[embeddedType] || 0) + 1;
 
                 for (const prop in embeddedResource) {
                   if (prop !== "@type" && prop !== "_id") {
@@ -1409,7 +1415,40 @@ export class OntologizeServer extends Ontologize {
       }
     }
 
-    return instanceProperties;
+    return { instanceProperties, individualCounts };
+  }
+
+  /**
+   * Resolve a collections argument to an array of raw MongoDB collection objects.
+   * @private
+   * @param {Array<object>|Array<string>|undefined} collections
+   *   - falsy or empty array → all registered collections
+   *   - array of strings → resolve each name from this.collections
+   *   - array of objects → pass through (backward compat)
+   * @returns {Array<object>} Array of raw MongoDB collection objects
+   */
+  _resolveCollections(collections) {
+    if (!collections || (Array.isArray(collections) && collections.length === 0)) {
+      return Object.values(this.collections);
+    }
+
+    if (!Array.isArray(collections)) {
+      throw new Error("collections must be an array of collection names or collection objects");
+    }
+
+    // If first element is a string, resolve all as names
+    if (typeof collections[0] === "string") {
+      return collections.map(name => {
+        const col = this.collections[name];
+        if (!col) {
+          throw new Error(`Unknown collection name: "${name}"`);
+        }
+        return col;
+      });
+    }
+
+    // Otherwise assume array of collection objects (backward compat)
+    return collections;
   }
 
   /**

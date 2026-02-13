@@ -76,6 +76,7 @@ export class Ontologize {
    * @param {string} [opts.dateTimeFormat="M/d/yyyy h:mm a"] - Default format for date-times
    * @param {string} [opts.dateTimeZone="America/Los_Angeles"] - Default timezone for date formatting
    * @param {object} [opts.idResolvers] - hints to resolve ids to collections for special cases other than namespaces
+   * @param {boolean} [opts.proxy=true] - prefer LD Proxies
    */
   constructor(ontologyCollection, contextCollection, statementsCollection, opts = {}) {
     check(ontologyCollection, Object);
@@ -99,6 +100,7 @@ export class Ontologize {
     if (this.opts.collections) {
       Object.assign(this.collections, this.opts.collections);
     }
+    this.opts.proxy = this.opts.proxy !== false;
     this.version = "0.1.0";
 
     // Initialize singleton LD instance for this Ontologize instance
@@ -109,12 +111,20 @@ export class Ontologize {
     const wat = this.collections.context.findOne({ _id: "@id" });
     if (wat instanceof Promise) {
       wat.then((context) => {
-        const ld = new LD({ context, sortTypesFn: this.sortTypesFn.bind(this) });
+        const ld = new LD({
+          context,
+          proxy: this.opts.proxy,
+          sortTypesFn: this.sortTypesFn.bind(this)
+        });
         this._ld = ld;
       });
     }
     else if (wat) {
-      const ld = new LD({ context: wat, sortTypesFn: this.sortTypesFn.bind(this) });
+      const ld = new LD({
+        context,
+        proxy: this.opts.proxy,
+        sortTypesFn: this.sortTypesFn.bind(this)
+      });
       this._ld = ld;
     }
   }
@@ -243,6 +253,10 @@ export class Ontologize {
   async getLabel(resource, property, fallbackOrOpts, opts) {
     check(resource, Object);
     check(property, Match.Optional(String));
+
+    if (this.opts.proxy && !this.ld().isProxy(resource)) {
+      resource = this.ld().proxy(resource);
+    }
     // if (resource._id === "demo:report-MA04-903" && !property) {
     //   debugger;
     // }
