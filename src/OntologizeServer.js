@@ -1186,22 +1186,25 @@ export class OntologizeServer extends Ontologize {
     // Step 1: Get all classes from the ontology
     const allClasses = await this._getAllClassesFromOntology();
 
-    // Step 2: Order classes by specificity (least to most specific)
+    // Step 2: Get direct superclasses (filters out redundant ancestors from reasoning)
+    const directSuperclassMap = this._getDirectSuperclasses(allClasses);
+
+    // Step 3: Order classes by specificity (least to most specific)
     const orderedClasses = await this._orderClassesBySpecificity(allClasses);
 
-    // Step 3: For each class, get properties with this class as rdfs:domain
+    // Step 4: For each class, get properties with this class as rdfs:domain
     const domainProperties = await this._getPropertiesByDomain();
 
-    // Step 4: Collect properties directly found on instances of each class
+    // Step 5: Collect properties directly found on instances of each class
     const { instanceProperties, individualCounts } = await this._getInstanceInfoByType(resolvedCollections, opts);
 
-    // Step 5: Get all properties grouped by type
+    // Step 6: Get all properties grouped by type
     const allProperties = await this._getAllPropertiesGroupedByType();
 
-    // Step 6: Get all ontology resources
+    // Step 7: Get all ontology resources
     const allOntologies = await this._getAllOntologies();
 
-    // Step 7: Build the explorer map with Classes, Properties, and Ontologies sections
+    // Step 8: Build the explorer map with Classes, Properties, and Ontologies sections
     const ontMap = {};
     ontMap.README = "This is a JSON map of the ontology structure. Classes are ordered from least to most specific, showing domain properties and instance properties. Properties are grouped by ObjectProperties, DatatypeProperties, and general Properties. Ontologies shows loaded ontology definitions.";
 
@@ -1212,6 +1215,7 @@ export class OntologizeServer extends Ontologize {
 
       ontMap.Classes[className] = {
         classInfo: classInfo,
+        directSuperclasses: directSuperclassMap[className] || [],
         domainProperties: domainProperties[className] || {},
         instanceProperties: instanceProperties[className] || {},
         individualCt: individualCounts[className] || 0
@@ -1363,6 +1367,16 @@ export class OntologizeServer extends Ontologize {
   async _getInstanceInfoByType(collections, opts) {
     const instanceProperties = {};
     const individualCounts = {};
+    // Cache ontology lookups so each property is only queried once
+    const ontologyCache = new Map();
+
+    const lookupProperty = async (prop) => {
+      if (ontologyCache.has(prop)) return ontologyCache.get(prop);
+      const ontResource = await this.collections.ontology.findOne({ _id: prop });
+      const result = ontResource || { propertyInfo: "No ontology definition found" };
+      ontologyCache.set(prop, result);
+      return result;
+    };
 
     for (const collection of collections) {
       const collectionName = collection.collectionName || collection._name || "unknown";
@@ -1382,9 +1396,7 @@ export class OntologizeServer extends Ontologize {
           // Add all properties found on this resource
           for (const prop in resource) {
             if (prop !== "@type" && prop !== "_id") {
-              // Get ontology info for this property if available
-              const ontResource = await this.collections.ontology.findOne({ _id: prop });
-              instanceProperties[type][prop] = ontResource || { propertyInfo: "No ontology definition found" };
+              instanceProperties[type][prop] = await lookupProperty(prop);
             }
           }
 
@@ -1404,8 +1416,7 @@ export class OntologizeServer extends Ontologize {
 
                 for (const prop in embeddedResource) {
                   if (prop !== "@type" && prop !== "_id") {
-                    const ontResource = await this.collections.ontology.findOne({ _id: prop });
-                    instanceProperties[embeddedType][prop] = ontResource || { propertyInfo: "No ontology definition found" };
+                    instanceProperties[embeddedType][prop] = await lookupProperty(prop);
                   }
                 }
               }
