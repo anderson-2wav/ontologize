@@ -769,6 +769,8 @@ export class OntologizeServer extends Ontologize {
       // useCache: false is necessary because cache keeps updating as we add new resources
       processedResource = await this._stringifyJsonProperties(processedResource, {useCache: false});
 
+      processedResource = this._removeCommentProperties(processedResource);
+
       // Step 1-b: expand resource with its own context
       if (incomingContext) {
         processedResource = await ld.expand(processedResource, incomingContext);
@@ -2033,6 +2035,21 @@ INSERT DATA {
     }
 
     return processed;
+  }
+
+  /**
+   * Remove all properties with keys beginning "//"
+   * @param {object} resource
+   * @return {object}
+   * @private
+   */
+  _removeCommentProperties(resource) {
+    for (const prop in resource) {
+      if (prop.substring(0, 2) === "//") {
+        delete resource[prop];
+      }
+    }
+    return resource;
   }
 
   /**
