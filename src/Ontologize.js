@@ -1841,13 +1841,20 @@ export class Ontologize {
 
   /**
    * Explore the ontology structure showing classes, properties, and ontologies.
-   * This is the client/server compatible version that only uses the Ontology collection.
+   * Scans registered collections for instance data (counts, instance properties).
+   * Works on both client (Minimongo) and server (raw MongoDB collections).
    *
+   * @param {Array<object>|Array<string>} [collections] - Collections to scan for instances.
+   *   Array of collection objects or name strings. If omitted, all registered collections are used.
    * @param {Object} [opts] - Options
+   * @param {boolean} [opts.recurse=true] - Whether to recurse into embedded resources
    * @returns {Promise<Object>} Explorer data with Classes, Properties, and Ontologies sections
    */
-  async explorer(opts = {}) {
+  async explorer(collections, opts = {}) {
     check(opts, Match.Optional(Object));
+
+    const resolvedCollections = this._resolveCollections(collections);
+    opts.recurse = opts.recurse !== false;
 
     // Step 1: Get all classes from the ontology
     const allClasses = await this._getAllClassesFromOntology();
@@ -1861,15 +1868,18 @@ export class Ontologize {
     // Step 4: For each class, get properties with this class as rdfs:domain
     const domainProperties = await this._getPropertiesByDomain();
 
-    // Step 5: Get all properties grouped by type
+    // Step 5: Collect properties directly found on instances of each class
+    const { instanceProperties, individualCounts } = await this._getInstanceInfoByType(resolvedCollections, opts);
+
+    // Step 6: Get all properties grouped by type
     const allProperties = await this._getAllPropertiesGroupedByType();
 
-    // Step 6: Get all ontology resources
+    // Step 7: Get all ontology resources
     const allOntologies = await this._getAllOntologies();
 
-    // Step 7: Build the explorer map
+    // Step 8: Build the explorer map
     const ontMap = {};
-    ontMap.README = "This is a JSON map of the ontology structure. Classes are ordered from least to most specific, showing domain properties. Properties are grouped by ObjectProperties, DatatypeProperties, and general Properties. Ontologies shows loaded ontology definitions.";
+    ontMap.README = "This is a JSON map of the ontology structure. Classes are ordered from least to most specific, showing domain properties and instance properties. Properties are grouped by ObjectProperties, DatatypeProperties, and general Properties. Ontologies shows loaded ontology definitions.";
 
     // Classes section
     ontMap.Classes = {};
@@ -1879,7 +1889,9 @@ export class Ontologize {
       ontMap.Classes[className] = {
         classInfo: classInfo,
         directSuperclasses: directSuperclassMap[className] || [],
-        domainProperties: domainProperties[className] || {}
+        domainProperties: domainProperties[className] || {},
+        instanceProperties: instanceProperties[className] || {},
+        individualCt: individualCounts[className] || 0
       };
     }
 
@@ -1890,6 +1902,172 @@ export class Ontologize {
     ontMap.Ontologies = allOntologies;
 
     return ontMap;
+  }
+
+  /**
+   * Resolve a collections argument to an array of collection objects.
+   * @private
+   * @param {Array<object>|Array<string>|undefined} collections
+   *   - falsy or empty array → all registered collections
+   *   - array of strings → resolve each name from this.collections
+   *   - array of objects → pass through (backward compat)
+   * @returns {Array<object>} Array of collection objects
+   */
+  _resolveCollections(collections) {
+    if (!collections || (Array.isArray(collections) && collections.length === 0)) {
+      return Object.values(this.collections);
+    }
+
+    if (!Array.isArray(collections)) {
+      throw new Error("collections must be an array of collection names or collection objects");
+    }
+
+    // If first element is a string, resolve all as names
+    if (typeof collections[0] === "string") {
+      return collections.map(name => {
+        const col = this.collections[name];
+        if (!col) {
+          throw new Error(`Unknown collection name: "${name}"`);
+        }
+        return col;
+      });
+    }
+
+    // Otherwise assume array of collection objects (backward compat)
+    return collections;
+  }
+
+  /**
+   * Get properties found on instances grouped by their @type, and count individuals per type.
+   * Works with both MongoDB raw collections (toArray) and Meteor Minimongo (fetch).
+   * @private
+   * @returns {{ instanceProperties: object, individualCounts: object }}
+   */
+  async _getInstanceInfoByType(collections, opts) {
+    const instanceProperties = {};
+    const individualCounts = {};
+    // Cache ontology lookups so each property is only queried once
+    const ontologyCache = new Map();
+
+    const lookupProperty = async (prop) => {
+      if (ontologyCache.has(prop)) return ontologyCache.get(prop);
+      const ontResource = await this.collections.ontology.findOne({ _id: prop });
+      const result = ontResource || { propertyInfo: "No ontology definition found" };
+      ontologyCache.set(prop, result);
+      return result;
+    };
+
+    for (const collection of collections) {
+      const collectionName = collection.collectionName || collection._name || "unknown";
+      const cursor = collection.find();
+      const documents = cursor.toArray ? await cursor.toArray() : cursor.fetch();
+
+      for (const resource of documents) {
+        const types = resource["@type"];
+        if (!types) continue;
+
+        const typeArray = Array.isArray(types) ? types : [types];
+
+        for (const type of typeArray) {
+          instanceProperties[type] = instanceProperties[type] || {};
+          individualCounts[type] = (individualCounts[type] || 0) + 1;
+
+          // Add all properties found on this resource
+          for (const prop in resource) {
+            if (prop !== "@type" && prop !== "_id") {
+              instanceProperties[type][prop] = await lookupProperty(prop);
+            }
+          }
+
+          // Handle embedded resources if recursion is enabled
+          if (opts.recurse && collectionName !== "bridge" && collectionName !== "statements") {
+            const embeddedResources = this._findEmbeddedResources(resource);
+
+            for (const embeddedResource of embeddedResources) {
+              const embeddedTypes = embeddedResource["@type"];
+              if (!embeddedTypes) continue;
+
+              const embeddedTypeArray = Array.isArray(embeddedTypes) ? embeddedTypes : [embeddedTypes];
+
+              for (const embeddedType of embeddedTypeArray) {
+                instanceProperties[embeddedType] = instanceProperties[embeddedType] || {};
+                individualCounts[embeddedType] = (individualCounts[embeddedType] || 0) + 1;
+
+                for (const prop in embeddedResource) {
+                  if (prop !== "@type" && prop !== "_id") {
+                    instanceProperties[embeddedType][prop] = await lookupProperty(prop);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return { instanceProperties, individualCounts };
+  }
+
+  /**
+   * Find embedded resources within a resource using JSON-LD patterns.
+   * An embedded resource is any nested object with an @type property.
+   * @private
+   */
+  _findEmbeddedResources(resource) {
+    const embeddedResources = [];
+    const paths = jsonPath(resource, "$..*['@type']", { resultType: "PATH" });
+
+    if (paths) {
+      for (const p of paths) {
+        // Skip @context paths and root @type
+        if (p.indexOf("@context") !== -1 || p === "$['@type']") {
+          continue;
+        }
+
+        // Get the parent path (remove the ['@type'] part)
+        const parentPath = p.substring(1, p.length - "['@type']".length);
+        const embeddedResource = this._getByBracketPath(resource, parentPath);
+
+        if (embeddedResource && !this._isType(embeddedResource, "rdf:Statement")) {
+          embeddedResources.push(embeddedResource);
+        }
+      }
+    }
+
+    return embeddedResources;
+  }
+
+  /**
+   * Navigate an object using a bracket-notation path from jsonPath (e.g., "['prop']['nested']").
+   * Replaces lodash _.get for this specific use case.
+   * @private
+   */
+  _getByBracketPath(obj, bracketPath) {
+    if (!bracketPath) return obj;
+    const keys = [];
+    const re = /\['([^']+)'\]|\[(\d+)\]/g;
+    let match;
+    while ((match = re.exec(bracketPath)) !== null) {
+      keys.push(match[1] !== undefined ? match[1] : Number(match[2]));
+    }
+    let current = obj;
+    for (const key of keys) {
+      if (current == null) return undefined;
+      current = current[key];
+    }
+    return current;
+  }
+
+  /**
+   * Check if a resource has a given @type.
+   * @private
+   */
+  _isType(resource, type) {
+    const types = resource?.["@type"];
+    if (!types) return false;
+    const typeArray = Array.isArray(types) ? types : [types];
+    const checkTypes = Array.isArray(type) ? type : [type];
+    return typeArray.some(t => checkTypes.includes(t));
   }
 
   /**
