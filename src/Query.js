@@ -28,17 +28,22 @@ export class Query {
    * @param {string} spec.collection - Registered name of the Ontologize collection
    * @param {object} [spec.selector={}] - MongoDB query selector
    * @param {object} [spec.opts={}] - Query options (sort, limit, projection, etc.)
+   * @param {number} [count] = sometimes useful to indicate how many found
    * @throws {Error} If name or collection are not strings
    */
-  constructor({ name, collection, selector = {}, opts = {} }) {
+  constructor({ name, collection, selector = {}, opts = {}, count }) {
     check(name, String, "Query requires a string 'name'");
     check(collection, String, "Query requires a string 'collection'");
     check(selector, Object, "Query 'selector' must be an object");
     check(opts, Object, "Query 'opts' must be an object");
+    check(count, Match.Optional(Number), "Query 'count' must be a number");
     this.name = name;
     this.collection = collection;
     this.selector = selector;
     this.opts = opts;
+    if (typeof count === "number") {
+      this.count = count;
+    }
   }
 
   /**
@@ -67,7 +72,8 @@ export class Query {
       name: this.name,
       collection: this.collection,
       selector: this.selector,
-      opts: this.opts
+      opts: this.opts,
+      count: this.count
     };
   }
 }

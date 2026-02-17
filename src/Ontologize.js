@@ -13,6 +13,7 @@ import LD from "bold-ld";
 import { format } from "date-fns";
 import { TZDate, tzName } from "@date-fns/tz";
 import { getSunriseSunsetInfo } from "sunrise-sunset-api";
+import {Query} from "./Query.js";
 
 /**
  * Ontologize - Utilities for working with ontology data in JSON-LD format
@@ -1872,7 +1873,7 @@ export class Ontologize {
     const domainProperties = await this._getPropertiesByDomain();
 
     // Step 5: Collect properties directly found on instances of each class
-    const { instanceProperties, individualCounts } = await this._getInstanceInfoByType(resolvedCollections, opts);
+    const { instanceProperties, individualCounts, individualQueries } = await this._getInstanceInfoByType(resolvedCollections, opts);
 
     // Step 6: Get all properties grouped by type
     const allProperties = await this._getAllPropertiesGroupedByType();
@@ -1894,7 +1895,8 @@ export class Ontologize {
         directSuperclasses: directSuperclassMap[className] || [],
         domainProperties: domainProperties[className] || {},
         instanceProperties: instanceProperties[className] || {},
-        individualCt: individualCounts[className] || 0
+        individualCt: individualCounts[className] || 0,
+        individualQueries: individualQueries[className],
       };
     }
 
@@ -1949,6 +1951,7 @@ export class Ontologize {
   async _getInstanceInfoByType(collections, opts) {
     const instanceProperties = {};
     const individualCounts = {};
+    const individualQueries = {};
     // Cache ontology lookups so each property is only queried once
     const ontologyCache = new Map();
 
@@ -1974,6 +1977,23 @@ export class Ontologize {
         for (const type of typeArray) {
           instanceProperties[type] = instanceProperties[type] || {};
           individualCounts[type] = (individualCounts[type] || 0) + 1;
+          individualQueries[type] = individualQueries[type] || [];
+
+          // Query we might add
+          const queryName = `${type}-${collectionName}`;
+          const foundQuery = individualQueries[type].find(q => q.name === queryName);
+          if (foundQuery) {
+            foundQuery.count += 1;
+          }
+          else {
+            const query = new Query({
+              name: `${type}-${collectionName}`,
+              collection: collectionName,
+              selector: { "@type": type },
+              count: 1
+            });
+            individualQueries[type].push(query);
+          }
 
           // Add all properties found on this resource
           for (const prop in resource) {
@@ -2008,7 +2028,7 @@ export class Ontologize {
       }
     }
 
-    return { instanceProperties, individualCounts };
+    return { instanceProperties, individualCounts, individualQueries };
   }
 
   /**
