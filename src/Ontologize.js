@@ -1873,7 +1873,7 @@ export class Ontologize {
     const domainProperties = await this._getPropertiesByDomain();
 
     // Step 5: Collect properties directly found on instances of each class
-    const { instanceProperties, individualCounts, individualQueries } = await this._getInstanceInfoByType(resolvedCollections, opts);
+    const { instanceProperties, individualCounts, individualQueries, individualLocations } = await this._getInstanceInfoByType(resolvedCollections, opts);
 
     // Step 6: Get all properties grouped by type
     const allProperties = await this._getAllPropertiesGroupedByType();
@@ -1897,6 +1897,7 @@ export class Ontologize {
         instanceProperties: instanceProperties[className] || {},
         individualCt: individualCounts[className] || 0,
         individualQueries: individualQueries[className],
+        individualLocations: individualLocations[className]
       };
     }
 
@@ -1952,6 +1953,7 @@ export class Ontologize {
     const instanceProperties = {};
     const individualCounts = {};
     const individualQueries = {};
+    const individualLocations = {};
     // Cache ontology lookups so each property is only queried once
     const ontologyCache = new Map();
 
@@ -1971,13 +1973,16 @@ export class Ontologize {
       for (const resource of documents) {
         const types = resource["@type"];
         if (!types) continue;
-
+        const instanceLoc = await this.getGeoJSON(resource,ontologyCache);
+        // console.log(`instanceLoc for ${resource._id}`,instanceLoc);
         const typeArray = Array.isArray(types) ? types : [types];
-
         for (const type of typeArray) {
           instanceProperties[type] = instanceProperties[type] || {};
           individualCounts[type] = (individualCounts[type] || 0) + 1;
           individualQueries[type] = individualQueries[type] || [];
+          if (instanceLoc) {
+            individualLocations[type] = (individualLocations[type] || 0) + 1;
+          }
 
           // Query we might add
           const queryName = `${type}-${collectionName}`;
@@ -2028,7 +2033,7 @@ export class Ontologize {
       }
     }
 
-    return { instanceProperties, individualCounts, individualQueries };
+    return { instanceProperties, individualCounts, individualQueries, individualLocations };
   }
 
   /**
