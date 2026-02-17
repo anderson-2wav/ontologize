@@ -1950,6 +1950,13 @@ export class Ontologize {
    * @returns {{ instanceProperties: object, individualCounts: object }}
    */
   async _getInstanceInfoByType(collections, opts) {
+    // this is a temporary fast hack to determine if a resource might have a location.
+    const LOCATION_PROPS = [
+      "geo:lat",
+      "geo:long",
+      "bold:spatialDepiction",
+      "bold:spatialRange"
+    ];
     const instanceProperties = {};
     const individualCounts = {};
     const individualQueries = {};
@@ -1973,16 +1980,11 @@ export class Ontologize {
       for (const resource of documents) {
         const types = resource["@type"];
         if (!types) continue;
-        const instanceLoc = await this.getGeoJSON(resource,ontologyCache);
-        // console.log(`instanceLoc for ${resource._id}`,instanceLoc);
         const typeArray = Array.isArray(types) ? types : [types];
         for (const type of typeArray) {
           instanceProperties[type] = instanceProperties[type] || {};
           individualCounts[type] = (individualCounts[type] || 0) + 1;
           individualQueries[type] = individualQueries[type] || [];
-          if (instanceLoc) {
-            individualLocations[type] = (individualLocations[type] || 0) + 1;
-          }
 
           // Query we might add
           const queryName = `${type}-${collectionName}`;
@@ -2000,11 +2002,18 @@ export class Ontologize {
             individualQueries[type].push(query);
           }
 
+          let hasLocation = false;
           // Add all properties found on this resource
           for (const prop in resource) {
             if (prop !== "@type" && prop !== "_id") {
               instanceProperties[type][prop] = await lookupProperty(prop);
+              if (LOCATION_PROPS.includes(prop)) {
+                hasLocation = true;
+              }
             }
+          }
+          if (hasLocation) {
+            individualLocations[type] = (individualLocations[type] || 0) + 1;
           }
 
           // Handle embedded resources if recursion is enabled
