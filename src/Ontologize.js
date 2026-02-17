@@ -7,6 +7,7 @@
  */
 
 import { check, Match } from "./lib/check.js";
+import _ from "lodash";
 import jsonPath from "./lib/jsonpath.js";
 import LD from "bold-ld";
 import { format } from "date-fns";
@@ -255,7 +256,9 @@ export class Ontologize {
     check(property, Match.Optional(String));
 
     if (this.opts.proxy && !this.ld().isProxy(resource)) {
-      resource = this.ld().proxy(resource);
+      // TODO think about... ld.proxy(opt.proxyFlatten) is too invasive
+      //it can break non-proxy objects in surprising ways,
+      resource = this.ld().proxy(_.cloneDeep(resource));
     }
     // if (resource._id === "demo:report-MA04-903" && !property) {
     //   debugger;
