@@ -1870,7 +1870,7 @@ export class Ontologize {
     const domainProperties = await this._getPropertiesByDomain();
 
     // Step 5: Collect properties directly found on instances of each class
-    const { instanceProperties, individualCounts, individualQueries, individualLocations } = await this._getInstanceInfoByType(resolvedCollections, opts);
+    const { instanceProperties, individualCounts, individualQueries, locationsCt } = await this._getInstanceInfoByType(resolvedCollections, opts);
 
     // Step 6: Get all properties grouped by type
     const allProperties = await this._getAllPropertiesGroupedByType();
@@ -1894,7 +1894,7 @@ export class Ontologize {
         instanceProperties: instanceProperties[className] || {},
         individualCt: individualCounts[className] || 0,
         individualQueries: individualQueries[className],
-        individualLocations: individualLocations[className]
+        locationsCt: locationsCt[className]
       };
     }
 
@@ -1957,7 +1957,7 @@ export class Ontologize {
     const instanceProperties = {};
     const individualCounts = {};
     const individualQueries = {};
-    const individualLocations = {};
+    const locationsCt = {};
     // Cache ontology lookups so each property is only queried once
     const ontologyCache = new Map();
 
@@ -2010,7 +2010,7 @@ export class Ontologize {
             }
           }
           if (hasLocation) {
-            individualLocations[type] = (individualLocations[type] || 0) + 1;
+            locationsCt[type] = (locationsCt[type] || 0) + 1;
           }
 
           // Handle embedded resources if recursion is enabled
@@ -2039,7 +2039,7 @@ export class Ontologize {
       }
     }
 
-    return { instanceProperties, individualCounts, individualQueries, individualLocations };
+    return { instanceProperties, individualCounts, individualQueries, locationsCt };
   }
 
   /**

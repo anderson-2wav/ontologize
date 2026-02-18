@@ -597,7 +597,7 @@ export class OntologizeServer extends Ontologize {
    */
   async isTBoxResource(resource) {
     // due to JSON-LD idiosyncrasy we can't give @type a @type, so it needs a special case:
-    if (resource._id === "@type") {
+    if (resource._id === "@type" || resource._id === "_id") {
       return true;
     }
 
