@@ -261,9 +261,6 @@ export class Ontologize {
       //it can break non-proxy objects in surprising ways,
       resource = this.ld().proxy(_.cloneDeep(resource));
     }
-    // if (resource._id === "demo:report-MA04-903" && !property) {
-    //   debugger;
-    // }
     // Handle flexible argument pattern: (resource, property, fallback) or (resource, property, opts)
     let fallback;
     if (typeof fallbackOrOpts === "object" && fallbackOrOpts !== null) {
