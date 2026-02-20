@@ -399,3 +399,174 @@ describe("Ontologize.getSchema", function() {
     });
   });
 });
+
+describe("Ontologize group methods", function() {
+  let ontologize;
+  let ontologyCollection;
+
+  // Classes with group strategies
+  const trackingReportClass = {
+    _id: "bold:TrackingReport",
+    "@type": "rdfs:Class",
+    "bui:schema": {
+      "groups": [
+        { "label": "Individuals", "property": "bold:animal" },
+        { "label": "Species", "property": "bold:species" }
+      ]
+    }
+  };
+
+  const animalClass = {
+    _id: "bold:Animal",
+    "@type": "rdfs:Class",
+    "bui:schema": {
+      "groups": [
+        { "label": "Species", "property": "bold:species" }
+      ]
+    }
+  };
+
+  const collarReportClass = {
+    _id: "track:CollarReport",
+    "@type": "rdfs:Class",
+    "rdfs:subClassOf": "bold:TrackingReport"
+    // No bui:schema — inherits from TrackingReport
+  };
+
+  const noGroupsClass = {
+    _id: "test:Plain",
+    "@type": "rdfs:Class",
+    "rdfs:comment": "A class with no group strategies"
+  };
+
+  // Sample resources
+  const resources = [
+    { _id: "r1", "@type": "track:CollarReport", "bold:animal": "animal:A", "bold:species": "species:Coyote" },
+    { _id: "r2", "@type": "track:CollarReport", "bold:animal": "animal:A", "bold:species": "species:Coyote" },
+    { _id: "r3", "@type": "track:CollarReport", "bold:animal": "animal:B", "bold:species": "species:Fox" },
+    { _id: "r4", "@type": "track:CollarReport", "bold:animal": null, "bold:species": "species:Fox" },
+    { _id: "r5", "@type": "track:CollarReport" }
+  ];
+
+  beforeEach(function() {
+    ontologyCollection = createMockCollection([
+      trackingReportClass,
+      animalClass,
+      collarReportClass,
+      noGroupsClass
+    ]);
+
+    const contextCollection = createMockCollection([
+      { _id: "@id", "@context": {} }
+    ]);
+
+    const statementsCollection = createMockCollection([]);
+
+    ontologize = new Ontologize(ontologyCollection, contextCollection, statementsCollection);
+  });
+
+  describe("getGroupStrategies", function() {
+    it("should return groups from class schema", async function() {
+      const resource = { "@type": "bold:TrackingReport" };
+      const strategies = await ontologize.getGroupStrategies(resource);
+      assert.lengthOf(strategies, 2);
+      assert.equal(strategies[0].label, "Individuals");
+      assert.equal(strategies[0].property, "bold:animal");
+      assert.equal(strategies[1].label, "Species");
+      assert.equal(strategies[1].property, "bold:species");
+    });
+
+    it("should inherit groups from superclass", async function() {
+      const resource = { "@type": "track:CollarReport" };
+      const strategies = await ontologize.getGroupStrategies(resource);
+      assert.isAbove(strategies.length, 0);
+      const props = strategies.map(s => s.property);
+      assert.include(props, "bold:animal");
+      assert.include(props, "bold:species");
+    });
+
+    it("should deduplicate by property name", async function() {
+      const resource = { "@type": "track:CollarReport" };
+      const strategies = await ontologize.getGroupStrategies(resource);
+      const props = strategies.map(s => s.property);
+      const uniqueProps = [...new Set(props)];
+      assert.equal(props.length, uniqueProps.length);
+    });
+
+    it("should return empty array when no groups defined", async function() {
+      const resource = { "@type": "test:Plain" };
+      const strategies = await ontologize.getGroupStrategies(resource);
+      assert.isArray(strategies);
+      assert.lengthOf(strategies, 0);
+    });
+  });
+
+  describe("groupResources", function() {
+    it("should group by property", function() {
+      const group = { label: "Individuals", property: "bold:animal" };
+      const map = ontologize.groupResources(resources, group);
+      assert.isTrue(map.has("animal:A"));
+      assert.isTrue(map.has("animal:B"));
+      assert.lengthOf(map.get("animal:A"), 2);
+      assert.lengthOf(map.get("animal:B"), 1);
+    });
+
+    it("should put ungrouped resources in null bucket", function() {
+      const group = { label: "Individuals", property: "bold:animal" };
+      const map = ontologize.groupResources(resources, group);
+      assert.isTrue(map.has(null));
+      // r4 has null animal, r5 has no animal
+      assert.lengthOf(map.get(null), 2);
+    });
+
+    it("should exclude ungrouped when includeUngrouped is false", function() {
+      const group = { label: "Individuals", property: "bold:animal" };
+      const map = ontologize.groupResources(resources, group, { includeUngrouped: false });
+      assert.isFalse(map.has(null));
+      assert.equal(map.size, 2);
+    });
+
+    it("should group by species property", function() {
+      const group = { label: "Species", property: "bold:species" };
+      const map = ontologize.groupResources(resources, group);
+      assert.isTrue(map.has("species:Coyote"));
+      assert.isTrue(map.has("species:Fox"));
+      assert.lengthOf(map.get("species:Coyote"), 2);
+      assert.lengthOf(map.get("species:Fox"), 2);
+    });
+  });
+
+  describe("buildGroupOptions", function() {
+    it("should return options with labels, colors, and counts", async function() {
+      const group = { label: "Individuals", property: "bold:animal" };
+      const options = await ontologize.buildGroupOptions(resources, group);
+      assert.isArray(options);
+      // animal:A, animal:B, plus "No Group"
+      assert.lengthOf(options, 3);
+
+      const animalA = options.find(o => o._id === "animal:A");
+      assert.isOk(animalA);
+      assert.equal(animalA.count, 2);
+      assert.isString(animalA.color);
+      assert.isString(animalA.label);
+    });
+
+    it("should append 'No Group' entry with neutral color", async function() {
+      const group = { label: "Individuals", property: "bold:animal" };
+      const options = await ontologize.buildGroupOptions(resources, group);
+      const noGroup = options.find(o => o._id === null);
+      assert.isOk(noGroup);
+      assert.equal(noGroup.label, "No Group");
+      assert.equal(noGroup.color, "#cccccc");
+      assert.equal(noGroup.count, 2);
+    });
+
+    it("should not include 'No Group' when all resources have group values", async function() {
+      const groupedResources = resources.filter(r => r["bold:species"]);
+      const group = { label: "Species", property: "bold:species" };
+      const options = await ontologize.buildGroupOptions(groupedResources, group);
+      const noGroup = options.find(o => o._id === null);
+      assert.isNotOk(noGroup);
+    });
+  });
+});

@@ -2361,6 +2361,7 @@ export class Ontologize {
   /**
    * Group resources by individual ID.
    *
+   * @deprecated Use groupResources() with a group strategy object instead.
    * @param {Object[]} resources - Array of resources to group
    * @param {Function} getIndividualId - Function that takes a resource and returns its individual ID
    * @returns {Map<string, Object[]>} Map of individual ID to array of resources
@@ -2429,6 +2430,7 @@ export class Ontologize {
    * Build individual options array with _id, label, color, and count.
    * Convenience method combining groupResourcesByIndividual, assignIndividualColors, and fetchIndividualLabels.
    *
+   * @deprecated Use buildGroupOptions() with a group strategy object instead.
    * @param {Object[]} resources - Array of resources to process
    * @param {Function} getIndividualId - Function that takes a resource and returns its individual ID
    * @param {string[]} [colorScheme] - Color scheme array (defaults to Ontologize.DEFAULT_COLOR_SCHEME)
@@ -2449,6 +2451,102 @@ export class Ontologize {
       color: colors.get(id),
       count: map.get(id).length
     }));
+  }
+
+  /**
+   * Get available group strategies for a resource from its class schema.
+   * Calls _getClassSchema to get the merged bui:schema and returns the groups array.
+   * Deduplicates by property name (since _mergeSchemas uses Set with reference equality
+   * on objects, inherited group objects from different class levels won't be deduped).
+   *
+   * @param {Object} resource - A resource to discover group strategies for
+   * @param {Object} [opts] - Options
+   * @param {Map} [opts.ontologyCache] - Cache Map for ontology lookups
+   * @returns {Promise<Array<{label: string, property: string}>>} Array of group strategy objects
+   */
+  async getGroupStrategies(resource, opts) {
+    check(resource, Object);
+    opts = opts || {};
+
+    const schema = await this._getClassSchema(resource, opts.ontologyCache);
+    const groups = schema.groups || [];
+
+    // Deduplicate by property name
+    const seen = new Set();
+    const deduped = [];
+    for (const group of groups) {
+      if (!seen.has(group.property)) {
+        seen.add(group.property);
+        deduped.push(group);
+      }
+    }
+
+    return deduped;
+  }
+
+  /**
+   * Group resources by a group strategy's property.
+   * Resources with a falsy group property value go into a null-keyed bucket.
+   *
+   * @param {Object[]} resources - Array of resources to group
+   * @param {Object} group - Group strategy object with { label, property }
+   * @param {Object} [opts] - Options
+   * @param {boolean} [opts.includeUngrouped=true] - Whether to include the null bucket for ungrouped resources
+   * @returns {Map<string|null, Object[]>} Map of group key to array of resources
+   */
+  groupResources(resources, group, opts) {
+    check(resources, Array);
+    check(group, Object);
+    opts = opts || {};
+    const includeUngrouped = opts.includeUngrouped !== false;
+
+    const map = new Map();
+    for (const resource of resources) {
+      const key = resource[group.property] || null;
+      if (key === null && !includeUngrouped) continue;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(resource);
+    }
+    return map;
+  }
+
+  /**
+   * Build group options array with _id, label, color, and count.
+   * Like buildIndividualOptions but driven by a group strategy object.
+   * Appends a "No Group" option with neutral color if ungrouped resources exist.
+   *
+   * @param {Object[]} resources - Array of resources to process
+   * @param {Object} group - Group strategy object with { label, property }
+   * @param {string[]} [colorScheme] - Color scheme array (defaults to Ontologize.DEFAULT_COLOR_SCHEME)
+   * @returns {Promise<Object[]>} Array of { _id, label, color, count } objects
+   */
+  async buildGroupOptions(resources, group, colorScheme) {
+    check(resources, Array);
+    check(group, Object);
+
+    const map = this.groupResources(resources, group);
+    const ids = [...map.keys()].filter(id => id !== null);
+    const colors = this.assignIndividualColors(ids, colorScheme);
+    const labels = await this.fetchIndividualLabels(ids);
+
+    const options = ids.map(id => ({
+      _id: id,
+      label: labels.get(id),
+      color: colors.get(id),
+      count: map.get(id).length
+    }));
+
+    // Append "No Group" option if there are ungrouped resources
+    if (map.has(null)) {
+      options.push({
+        _id: null,
+        label: "No Group",
+        color: "#cccccc",
+        count: map.get(null).length
+      });
+    }
+
+    return options;
   }
 }
 
