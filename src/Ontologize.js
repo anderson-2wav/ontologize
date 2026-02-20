@@ -2359,28 +2359,6 @@ export class Ontologize {
   ];
 
   /**
-   * Group resources by individual ID.
-   *
-   * @deprecated Use groupResources() with a group strategy object instead.
-   * @param {Object[]} resources - Array of resources to group
-   * @param {Function} getIndividualId - Function that takes a resource and returns its individual ID
-   * @returns {Map<string, Object[]>} Map of individual ID to array of resources
-   */
-  groupResourcesByIndividual(resources, getIndividualId) {
-    check(resources, Array);
-    check(getIndividualId, Function);
-
-    const map = new Map();
-    for (const resource of resources) {
-      const id = getIndividualId(resource);
-      if (!id) continue;
-      if (!map.has(id)) map.set(id, []);
-      map.get(id).push(resource);
-    }
-    return map;
-  }
-
-  /**
    * Assign colors to individual IDs from a color scheme.
    * Pure function - does not use ontologize internals.
    *
@@ -2424,33 +2402,6 @@ export class Ontologize {
       }
     }));
     return map;
-  }
-
-  /**
-   * Build individual options array with _id, label, color, and count.
-   * Convenience method combining groupResourcesByIndividual, assignIndividualColors, and fetchIndividualLabels.
-   *
-   * @deprecated Use buildGroupOptions() with a group strategy object instead.
-   * @param {Object[]} resources - Array of resources to process
-   * @param {Function} getIndividualId - Function that takes a resource and returns its individual ID
-   * @param {string[]} [colorScheme] - Color scheme array (defaults to Ontologize.DEFAULT_COLOR_SCHEME)
-   * @returns {Promise<Object[]>} Array of { _id, label, color, count } objects
-   */
-  async buildIndividualOptions(resources, getIndividualId, colorScheme) {
-    check(resources, Array);
-    check(getIndividualId, Function);
-
-    const map = this.groupResourcesByIndividual(resources, getIndividualId);
-    const ids = [...map.keys()];
-    const colors = this.assignIndividualColors(ids, colorScheme);
-    const labels = await this.fetchIndividualLabels(ids);
-
-    return ids.map(id => ({
-      _id: id,
-      label: labels.get(id),
-      color: colors.get(id),
-      count: map.get(id).length
-    }));
   }
 
   /**
@@ -2512,7 +2463,7 @@ export class Ontologize {
 
   /**
    * Build group options array with _id, label, color, and count.
-   * Like buildIndividualOptions but driven by a group strategy object.
+   * Build group options array with _id, label, color, and count.
    * Appends a "No Group" option with neutral color if ungrouped resources exist.
    *
    * @param {Object[]} resources - Array of resources to process
