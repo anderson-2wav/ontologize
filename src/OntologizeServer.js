@@ -2128,6 +2128,8 @@ INSERT DATA {
     }
   }
 
+  "**** REASONER METHODS ****";
+
   /**
    * Bootstrap the reasoner with ontology data and capture inferences.
    *
