@@ -2346,7 +2346,7 @@ INSERT DATA {
    * @param {string} [opts.collection] collection name, otherwise getResourceForId will search for one.
    * @param {boolean} [opts.reasoning=true] - Enable reasoning for this update
    * @param {string} [opts.hylarUrl="http://localhost:4000"] - HyLAR server URL
-   * @param {boolean} [opts.persistToHylar=false] - Persist to HyLAR triplestore
+   * @param {boolean} [opts.saveHylar=false] - save triples in HyLAR
    * @param {string} [opts.userId] - User ID for provenance
    * @param {boolean} [opts.includeStatements=false] - Include statements in response
    * @returns {Promise<object>} Update result with resource and metadata
@@ -2359,7 +2359,7 @@ INSERT DATA {
     // Default options
     opts.reasoning = opts.reasoning !== false;
     opts.hylarUrl = opts.hylarUrl || "http://localhost:4000";
-    opts.persistToHylar = opts.persistToHylar === true;
+    opts.saveHylar = opts.saveHylar === true;
 
     console.log(`Updating resource ${resourceId}...`);
 
@@ -2431,7 +2431,7 @@ INSERT DATA {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             query: sparqlInsert,
-            save: opts.persistToHylar
+            save: opts.saveHylar
           })
         });
       }
@@ -2664,6 +2664,217 @@ INSERT DATA {
     }
 
     return updateCount;
+  }
+
+  /**
+   * Insert the resources from the named collection into the reasoner triplestore,
+   * then classify qnd capture the inferences as new properties and statements.
+   * Usually, the inserted and inferred triples are not saved in HyLAR.
+   *
+   * @param {string} collectionName a named ontologize collection
+   * @param {object} [opts] - Configuration options
+   * @param {string} [opts.userId] - User ID for provenance
+   * @param {string} [opts.hylarUrl="http://localhost:4000"] - HyLAR server URL
+   * @param {number} [opts.hylarPort=4000] - Port for HyLAR server if starting
+   * @param {boolean} [opts.persist=true] - shorthand for opts.updateResources and opts.persistStatements
+   * @param {boolean} [opts.updateResources=true] - Update resources with inferences
+   * @param {boolean} [opts.persistStatements=true] - Persist statements to collection
+   * @param {boolean} [opts.saveHylar=false] - save triples in HyLAR
+   * @param {number} [opts.batchSize=1000] - Number of triples to insert per batch
+   * @param {boolean} [opts.blankNodes=false] - include blank nodes
+   * @param {boolean} [opts.debugDump=false] - write sparql and inferred props to files in /temp
+   * @returns {Promise<object>} Result summary with counts
+   */
+  async reasonCollection(collectionName, opts={}) {
+    check(collectionName, String);
+
+    // Validate collection exists
+    const collection = this.collections[collectionName];
+    if (!collection) {
+      throw new Error(
+        `Collection "${collectionName}" not found. ` +
+        `Available collections: ${Object.keys(this.collections).join(", ")}`
+      );
+    }
+
+    // Default options
+    opts.hylarUrl = opts.hylarUrl || "http://localhost:4000";
+    opts.persist = opts.persist !== false;
+    opts.updateResources = opts.updateResources === false ? false : opts.persist;
+    opts.persistStatements = opts.persistStatements === false ? false : opts.persist;
+    opts.saveHylar = opts.saveHylar === true; // default false for ABox
+    opts.batchSize = opts.batchSize || 1000;
+    opts.blankNodes = opts.blankNodes || false;
+    opts.debugDump = opts.debugDump || false;
+
+    console.log(`Starting reasonCollection for "${collectionName}"...`);
+    const startTime = Date.now();
+
+    // 1. Optionally start HyLAR child process
+    if (opts.startHylar) {
+      console.log("Starting HyLAR child process...");
+      this.hylarProcess = await this._startHylarProcess(opts.hylarPort || 4000);
+    }
+
+    // 2. Health check HyLAR
+    try {
+      const healthCheck = await fetch(`${opts.hylarUrl}/`, { method: "GET" });
+      if (!healthCheck.ok) {
+        throw new Error("HyLAR health check failed");
+      }
+    }
+    catch (error) {
+      throw new Error(`HyLAR server not available at ${opts.hylarUrl}. Ensure HyLAR is running.`);
+    }
+
+    // 3. Load all resources from the named collection
+    console.log(`Loading resources from "${collectionName}" collection...`);
+    const resources = await collection.find({}).toArray();
+    console.log(`Found ${resources.length} resources`);
+
+    if (resources.length === 0) {
+      const duration = Date.now() - startTime;
+      return {
+        duration,
+        collectionName,
+        resourcesLoaded: 0,
+        triplesGenerated: 0,
+        factsInferred: 0,
+        statementsCreated: 0,
+        resourcesUpdated: 0
+      };
+    }
+
+    // 4. Convert resources to triples
+    console.log("Converting resources to triples...");
+    const triples = await this.getTriplesForResources(resources, {
+      blankNodes: opts.blankNodes,
+      includeStatements: false
+    });
+    console.log(`Generated ${triples.length} triples`);
+
+    // 5. Group triples by subject so batches contain complete resources
+    const triplesBySubject = new Map();
+    for (const triple of triples) {
+      if (!triplesBySubject.has(triple.s)) {
+        triplesBySubject.set(triple.s, []);
+      }
+      triplesBySubject.get(triple.s).push(triple);
+    }
+
+    // Build batches: add complete resources until batch exceeds batchSize
+    const batches = [];
+    let currentBatch = [];
+    for (const [, resourceTriples] of triplesBySubject) {
+      if (currentBatch.length > 0 && currentBatch.length + resourceTriples.length > opts.batchSize) {
+        batches.push(currentBatch);
+        currentBatch = [];
+      }
+      currentBatch.push(...resourceTriples);
+    }
+    if (currentBatch.length > 0) {
+      batches.push(currentBatch);
+    }
+
+    // 6. Send each batch to /update, accumulating derivations
+    const allAdditions = [];
+    console.log(`Inserting ${triples.length} triples via /update in ${batches.length} batches (batchSize ${opts.batchSize})...`);
+
+    for (let i = 0; i < batches.length; i++) {
+      const batch = batches[i];
+      console.log(`  Batch ${i + 1}/${batches.length}: inserting ${batch.length} triples...`);
+
+      const sparqlInsert = await this.createSparqlInsert(batch);
+      if (opts.debugDump) fs.writeFileSync("/tmp/reasonCollection-insert.sparql", sparqlInsert, { flag: "a" });
+
+      try {
+        const response = await fetch(`${opts.hylarUrl}/update`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: sparqlInsert,
+            save: opts.saveHylar
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to insert triples (batch ${i + 1}): ${response.statusText}`);
+        }
+
+        const responseData = await response.json();
+        // /update may return { derivations: { additions } } or { additions } directly
+        const derivations = responseData.derivations ?? responseData;
+        if (derivations.additions && derivations.additions.length > 0) {
+          allAdditions.push(...derivations.additions);
+          console.log(`  Batch ${i + 1}: ${derivations.additions.length} new derivations`);
+        }
+      }
+      catch (error) {
+        console.error(`HyLAR /update failed on batch ${i + 1}:`, error);
+        throw error;
+      }
+    }
+    console.log(`Successfully processed all ${triples.length} triples, total derivations: ${allAdditions.length}`);
+
+    // 8. Process derivations
+    let facts = [];
+    let statements = [];
+    let assembledResources = {};
+
+    if (allAdditions.length > 0) {
+      // Convert derivations to Facts
+      facts = this._derivationsToFacts(allAdditions, { blankNodes: opts.blankNodes });
+      console.log(`Converted ${facts.length} facts from derivations`);
+
+      // Assemble facts into resources
+      const context = await this.getContext();
+      assembledResources = await this.assembleFactsIntoResources(facts, { context });
+      console.log(`Assembled ${Object.keys(assembledResources).length} resources from facts`);
+      if (opts.debugDump) fs.writeFileSync("/tmp/reasonCollection-assembled.json", JSON.stringify(assembledResources, null, 2));
+
+      // Create statements for inferred facts
+      const metaProps = {
+        "bold:when": new Date().toISOString(),
+        "bold:createdBy": "bold:reasonCollection",
+        "bold:scope": "bold:system"
+      };
+      if (opts.userId) {
+        metaProps["bold:updatedBy"] = opts.userId;
+      }
+
+      statements = await this.createStatementsForFacts(facts, {
+        onlyInferred: true,
+        metaPropsByPredicate: {
+          "*": metaProps
+        }
+      });
+      console.log(`Created ${statements.length} statements from facts`);
+
+      // 9. Persist statements
+      if (this.collections.statements && opts.persistStatements && statements.length > 0) {
+        await this._persistStatements(statements);
+        console.log(`Persisted ${statements.length} statements to collection`);
+      }
+
+      // 10. Merge inferred properties back into the source collection
+      if (opts.updateResources && Object.keys(assembledResources).length > 0) {
+        const updateCount = await this._mergeAndUpdateResources(assembledResources, collection);
+        console.log(`Updated ${updateCount} resources with inferred properties`);
+      }
+    }
+
+    const duration = Date.now() - startTime;
+    console.log(`reasonCollection "${collectionName}" completed in ${Math.round(duration / 1000)} seconds`);
+
+    return {
+      duration,
+      collectionName,
+      resourcesLoaded: resources.length,
+      triplesGenerated: triples.length,
+      factsInferred: facts.length,
+      statementsCreated: statements.length,
+      resourcesUpdated: Object.keys(assembledResources).length
+    };
   }
 
 }
