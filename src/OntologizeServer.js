@@ -2172,6 +2172,8 @@ INSERT DATA {
    * @param {boolean} [opts.updateResources=true] - Update resources with inferences
    * @param {boolean} [opts.persistStatements=true] - Persist statements to collection
    * @param {number} [opts.batchSize=1000] - Number of triples to insert per batch
+   * @param {boolean} [opts.blankNodes=false] - include blank nodes
+   * @param {boolean} [opts.debugDump=false] - write sparql and inferred props to files in /temp
    * @returns {Promise<object>} Result summary with counts
    */
   async bootstrapReasoner(opts = {}) {
@@ -2230,7 +2232,7 @@ INSERT DATA {
     // 4. Convert to triples and insert into HyLAR (only if available)
     console.log("Converting resources to triples...");
     const triples = await this.getTriplesForResources(ontologyResources, {
-      blankNodes: true,
+      blankNodes: opts.blankNodes,
       includeStatements: false
     });
     console.log(`Generated ${triples.length} triples`);
@@ -2245,7 +2247,7 @@ INSERT DATA {
         console.log(`  Batch ${batchNum}/${totalBatches}: inserting ${batch.length} triples...`);
 
         const sparqlInsert = await this.createSparqlInsert(batch);
-        fs.writeFileSync("/tmp/insert.sparql", sparqlInsert);
+        if (opts.debugDump) fs.writeFileSync("/tmp/insert.sparql", sparqlInsert, { flag: "a" });
         try {
           const body = JSON.stringify({ query: sparqlInsert });
           const insertResponse = await fetch(`${opts.hylarUrl}/query`, {
@@ -2288,14 +2290,14 @@ INSERT DATA {
       console.log(`Classification complete: ${derivations.additions.length} new derivations`);
 
       // 6. Convert derivations to Facts format
-      facts = this._derivationsToFacts(derivations.additions);
+      facts = this._derivationsToFacts(derivations.additions, { blankNodes: opts.blankNodes });
       console.log(`Converted ${facts.length} facts from derivations`);
 
       // 7. Assemble facts into resources
       const context = await this.getContext();
       assembledResources = await this.assembleFactsIntoResources(facts, { context });
       console.log(`Assembled ${Object.keys(assembledResources).length} resources from facts`);
-
+      if (opts.debugDump) fs.writeFileSync("/tmp/assembledResources.json", JSON.stringify(assembledResources,null,2));
       // 8. Create statements for inferred facts
       statements = await this.createStatementsForFacts(facts, {
         onlyInferred: true,
@@ -2317,7 +2319,7 @@ INSERT DATA {
 
       // 10. Merge assembled resources with existing ones
       if (opts.updateResources && Object.keys(assembledResources).length > 0) {
-        const updateCount = await this._mergeAndUpdateResources(assembledResources);
+        const updateCount = await this._mergeAndUpdateResources(assembledResources, this.collections.ontology);
         console.log(`Updated ${updateCount} resources with inferred properties`);
       }
     }
@@ -2341,12 +2343,12 @@ INSERT DATA {
    * @param {string} resourceId - The _id of the resource to update
    * @param {object} update - Fields to update
    * @param {object} [opts] - Configuration options
+   * @param {string} [opts.collection] collection name, otherwise getResourceForId will search for one.
    * @param {boolean} [opts.reasoning=true] - Enable reasoning for this update
    * @param {string} [opts.hylarUrl="http://localhost:4000"] - HyLAR server URL
    * @param {boolean} [opts.persistToHylar=false] - Persist to HyLAR triplestore
    * @param {string} [opts.userId] - User ID for provenance
    * @param {boolean} [opts.includeStatements=false] - Include statements in response
-   * @param {string} [opts.collection] collection name, otherwise getResourceForId will search for one.
    * @returns {Promise<object>} Update result with resource and metadata
    */
   async updateOne(resourceId, update, opts = {}) {
@@ -2569,9 +2571,17 @@ INSERT DATA {
    * Convert HyLAR derivations to Facts format
    * @private
    */
-  _derivationsToFacts(derivations) {
+  _derivationsToFacts(derivations, opts = {}) {
     if (!derivations || !Array.isArray(derivations)) {
       return [];
+    }
+    if (!opts.blankNodes) {
+      derivations = derivations.filter((d) => {
+        if (d.subject.indexOf("_:") === 0 || d.object.indexOf("_:") === 0) {
+          return false;
+        }
+        return true;
+      });
     }
 
     return derivations.map(d => ({
@@ -2617,7 +2627,7 @@ INSERT DATA {
    * Merge and update resources with inferred properties
    * @private
    */
-  async _mergeAndUpdateResources(assembledResources, opts = {}) {
+  async _mergeAndUpdateResources(assembledResources, collection, opts = {}) {
     let updateCount = 0;
     // TODO impl this opt up the line
     const includeBlankNodes = opts.includeBlankNodes !== false;
@@ -2629,7 +2639,7 @@ INSERT DATA {
       }
 
       // Get existing resource
-      const existing = await this.collections.ontology.findOne({ _id: resourceId });
+      const existing = await collection.findOne({ _id: resourceId });
 
       if (existing) {
         // Merge with existing
@@ -2638,7 +2648,7 @@ INSERT DATA {
         });
 
         // Update in collection
-        await this.collections.ontology.replaceOne(
+        await collection.replaceOne(
           { _id: resourceId },
           merged,
           { upsert: false }
@@ -2648,7 +2658,7 @@ INSERT DATA {
       else {
         // Insert new resource
         const newResource = { ...assembledResource, _id: resourceId };
-        await this.collections.ontology.insertOne(newResource);
+        await collection.insertOne(newResource);
         updateCount++;
       }
     }
