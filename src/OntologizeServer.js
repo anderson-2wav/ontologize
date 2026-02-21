@@ -1269,6 +1269,16 @@ export class OntologizeServer extends Ontologize {
       }
     }
 
+    // Strip properties with JSON values — they cannot be represented as triples
+    for (const r of resources) {
+      for (const key of Object.keys(r)) {
+        if (key[0] === "@" || key === "_id") continue;
+        if (await this._isJsonProperty(key)) {
+          delete r[key];
+        }
+      }
+    }
+
     // Get the context from the Context collection (which should have _id: "@id" mapping)
     const contextForExpansion = await this.getContext(opts.context);
 
@@ -1444,6 +1454,18 @@ INSERT DATA {
 
     // Step 1: Group facts by subject into JSON-LD objects
     facts.forEach(fact => {
+      // HACKERY
+      // for reasons unknown at the moment, string values are coming across quoted...
+      let rr = fact.subject.match(/^"(.*)"$/s);
+      if (rr) {
+        console.log(`fact.subject ${fact.subject} appears quoted.`);
+        fact.subject = rr[1];
+      }
+      rr = fact.object.match(/^"(.*)"$/s);
+      if (rr) {
+        console.log(`fact.object for ${fact.subject} appears quoted:`, fact.object);
+        fact.object = rr[1];
+      }
       // Skip facts that don't have proper structure
       if (!fact.subject || !fact.predicate) {
         return;
@@ -1878,34 +1900,34 @@ INSERT DATA {
     if (!propertyId) return false;
 
     // Check cache first
-    if (!this._jsonPropertyCache) {
-      this._jsonPropertyCache = new Map();
+    if (!this._jsonPropertyLookupCache) {
+      this._jsonPropertyLookupCache = new Map();
     }
-    if (this._jsonPropertyCache.has(propertyId)) {
-      return this._jsonPropertyCache.get(propertyId);
+    if (this._jsonPropertyLookupCache.has(propertyId)) {
+      return this._jsonPropertyLookupCache.get(propertyId);
     }
 
     // Look up property definition in Ontology collection
     const propertyDef = await this.collections.ontology.findOne({ _id: propertyId });
     if (!propertyDef) {
-      this._jsonPropertyCache.set(propertyId, false);
+      this._jsonPropertyLookupCache.set(propertyId, false);
       return false;
     }
 
     // Check for explicit bold:isJsonProperty marker
     if (propertyDef["bold:isJsonProperty"] === true) {
-      this._jsonPropertyCache.set(propertyId, true);
+      this._jsonPropertyLookupCache.set(propertyId, true);
       return true;
     }
 
     // Check rdfs:range
     const range = propertyDef["rdfs:range"];
     if (range && OntologizeServer.BUI_JSON_TYPES.includes(range)) {
-      this._jsonPropertyCache.set(propertyId, true);
+      this._jsonPropertyLookupCache.set(propertyId, true);
       return true;
     }
 
-    this._jsonPropertyCache.set(propertyId, false);
+    this._jsonPropertyLookupCache.set(propertyId, false);
     return false;
   }
 
@@ -1917,12 +1939,12 @@ INSERT DATA {
    * @private
    */
   async _getJsonPropertyIds(useCache = true) {
-    if (!this._jsonPropertyCache) {
-      this._jsonPropertyCache = new Set();
+    if (!this._jsonPropertyIdsCache) {
+      this._jsonPropertyIdsCache = new Set();
     }
-    const jsonProps = this._jsonPropertyCache;
-    if (useCache && this._jsonPropertyCache.size) {
-      return this._jsonPropertyCache;
+    const jsonProps = this._jsonPropertyIdsCache;
+    if (useCache && this._jsonPropertyIdsCache.size) {
+      return this._jsonPropertyIdsCache;
     }
 
     // Find properties with bold:JSON or bui:Schema range
@@ -1951,7 +1973,8 @@ INSERT DATA {
    * Clear the JSON property cache (call when ontology changes)
    */
   clearJsonPropertyCache() {
-    this._jsonPropertyCache = null;
+    this._jsonPropertyLookupCache = null;
+    this._jsonPropertyIdsCache = null;
   }
 
   /**
