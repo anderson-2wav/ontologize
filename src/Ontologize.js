@@ -2020,11 +2020,9 @@ export class Ontologize {
           let hasLocation = false;
           // Add all properties found on this resource
           for (const prop in resource) {
-            if (prop !== "@type" && prop !== "_id") {
-              instanceProperties[type][prop] = await lookupProperty(prop);
-              if (LOCATION_PROPS.includes(prop)) {
-                hasLocation = true;
-              }
+            instanceProperties[type][prop] = await lookupProperty(prop);
+            if (LOCATION_PROPS.includes(prop)) {
+              hasLocation = true;
             }
           }
           if (hasLocation) {
@@ -2046,9 +2044,7 @@ export class Ontologize {
                 individualCounts[embeddedType] = (individualCounts[embeddedType] || 0) + 1;
 
                 for (const prop in embeddedResource) {
-                  if (prop !== "@type" && prop !== "_id") {
-                    instanceProperties[embeddedType][prop] = await lookupProperty(prop);
-                  }
+                  instanceProperties[embeddedType][prop] = await lookupProperty(prop);
                 }
               }
             }

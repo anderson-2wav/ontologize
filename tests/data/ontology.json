@@ -109,12 +109,18 @@
   },
   {
     "_id": "_id",
-    "rdfs:label": "ID"
+    "rdfs:label": "ID",
+    "bui:schema": {
+      "weight": -10
+    }
   },
   {
     "_id": "@type",
     "rdfs:comment": "@type will be enforced to be an Array. Due to JSON-LD idiosyncrasy we can't give @type a @type, so a special case will flag this as a TBox resource.",
-    "bold:container": "@list"
+    "bold:container": "@list",
+    "bui:schema": {
+      "weight": -9
+    }
   },
   {
     "_id": "bars",
