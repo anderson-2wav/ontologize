@@ -1872,13 +1872,31 @@ export class Ontologize {
     // Step 5: Collect properties directly found on instances of each class
     const { instanceProperties, individualCounts, individualQueries, locationsCt } = await this._getInstanceInfoByType(resolvedCollections, opts);
 
-    // Step 6: Get all properties grouped by type
+    // Step 6: Enrich instance properties with assembled bui:schema per class context.
+    // Clone each propInfo before adding the type-specific schema, because the
+    // ontologyCache shares objects across types and each type may produce a
+    // different assembled schema for the same property.
+    for (const [type, props] of Object.entries(instanceProperties)) {
+      for (const [prop, propInfo] of Object.entries(props)) {
+        try {
+          const schema = await this.getSchema(prop, { "@type": [type] });
+          if (schema && Object.keys(schema).length > 0) {
+            props[prop] = { ...propInfo, "bui:schema": schema };
+          }
+        }
+        catch (e) {
+          // no schema available for this property in this class context
+        }
+      }
+    }
+
+    // Step 7: Get all properties grouped by type
     const allProperties = await this._getAllPropertiesGroupedByType();
 
-    // Step 7: Get all ontology resources
+    // Step 8: Get all ontology resources
     const allOntologies = await this._getAllOntologies();
 
-    // Step 8: Build the explorer map
+    // Step 9: Build the explorer map
     const ontMap = {};
     ontMap.README = "This is a JSON map of the ontology structure. Classes are ordered from least to most specific, showing domain properties and instance properties. Properties are grouped by ObjectProperties, DatatypeProperties, and general Properties. Ontologies shows loaded ontology definitions.";
 
