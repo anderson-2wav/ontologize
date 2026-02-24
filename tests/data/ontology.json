@@ -69,7 +69,9 @@
       "rdfs:subClassOf": {
         "@type": "@id"
       },
-      "bui:schema": {},
+      "bui:schema": {
+        "@type": "@json"
+      },
       "dc:description": {
         "@type": "http://www.w3.org/2001/XMLSchema#string"
       },

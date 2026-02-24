@@ -1834,7 +1834,7 @@ INSERT DATA {
    * @returns {string|null} The @type value for context, or null if undetermined
    * @private
    */
-  _getPropertyContextType(resource) {
+  async _getPropertyContextType(resource) {
     const XSD_PREFIX = "http://www.w3.org/2001/XMLSchema#";
     const types = Array.isArray(resource["@type"]) ? resource["@type"] : [resource["@type"]];
 
@@ -1854,11 +1854,18 @@ INSERT DATA {
       if (range.startsWith(XSD_PREFIX)) {
         return range;
       }
+      if (range === "bold:JSON" || range === "bui:Schema") {
+        return "@json";
+      }
     }
 
     // Default for ObjectProperty-like behavior (range points to a class)
     if (resource["rdfs:range"] && !resource["rdfs:range"].startsWith("xsd:")) {
       return "@id";
+    }
+
+    if (await this._isJsonProperty(resource._id)) {
+      return "@json";
     }
 
     return null; // No type determination possible
@@ -2102,7 +2109,7 @@ INSERT DATA {
       }
 
       // Determine @type from property definition
-      const contextType = this._getPropertyContextType(propertyDef);
+      const contextType = await this._getPropertyContextType(propertyDef);
 
       // Determine @container from existing isArrayProperty logic
       const shouldBeArray = await this.isArrayProperty(propertyDef);

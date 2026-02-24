@@ -46,7 +46,9 @@
     "bold:when": {
       "@type": "http://www.w3.org/2001/XMLSchema#dateTime"
     },
-    "bui:schema": {},
+    "bui:schema": {
+      "@type": "@json"
+    },
     "dc:description": {
       "@type": "http://www.w3.org/2001/XMLSchema#string"
     },
