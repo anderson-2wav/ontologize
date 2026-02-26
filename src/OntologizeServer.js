@@ -1400,29 +1400,36 @@ INSERT DATA {
 
   /**
    * Format a term for SPARQL (wrap URIs in <>, quote literals)
-   * @param {string} term - The term to format
+   * @param {string} value - The term to format
    * @returns {string} Formatted term for SPARQL
    * @private
    */
-  _formatSparqlTerm(term) {
-    if (typeof term !== "string") {
-      return `"${term}"`;
+  _formatSparqlTerm(value) {
+    switch (typeof value) {
+      case "number":
+      case "boolean":
+        return value;
+      default:
+    }
+
+    if (typeof value !== "string") {
+      return `"${value}"`;
     }
 
     // Check if it's a valid full URI - must be a proper URI without spaces or invalid characters
     // URI pattern: scheme://authority/path (no spaces, must end before whitespace)
-    if (/^https?:\/\/[^\s<>"{}|\\^`[\]]+$/.test(term)) {
-      return `<${term}>`;
+    if (/^https?:\/\/[^\s<>"{}|\\^`[\]]+$/.test(value)) {
+      return `<${value}>`;
     }
 
     // Check if it's a valid prefixed name (QName)
-    if (this._isValidPrefixedName(term)) {
-      return term;
+    if (this._isValidPrefixedName(value)) {
+      return value;
     }
 
     // Otherwise, treat as a literal and quote it
     // Escape backslashes first, then quotes, then whitespace characters
-    const escapedTerm = term
+    const escapedTerm = value
       .replace(/\\/g, "\\\\")
       .replace(/"/g, '\\"')
       .replace(/\n/g, "\\n")

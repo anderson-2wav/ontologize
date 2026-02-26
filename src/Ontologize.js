@@ -1017,11 +1017,18 @@ export class Ontologize {
         }
       }
 
-      return await ld.compact(merged, context, {
-        ensureArrayProps: opts.ensureArrayProps !== false,
-        showContext: !!opts.showContext,
-        proxy: false
-      });
+      try {
+        return await ld.compact(merged, context, {
+          ensureArrayProps: opts.ensureArrayProps !== false,
+          showContext: !!opts.showContext,
+          proxy: false
+        });
+      }
+      catch (error) {
+        console.error(error);
+        throw error;
+      }
+
     }
 
     return merged;
