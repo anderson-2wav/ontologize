@@ -475,8 +475,9 @@ export class OntologizeServer extends Ontologize {
         }
       }
 
-      // Get context for output
-      const contextForOutput = await this.getContext(context);
+      // Get context for output (remove _id alias — it's a MongoDB convenience, not valid JSON-LD)
+      const contextForOutput = { ...(await this.getContext(context)) };
+      delete contextForOutput._id;
 
       // Create JSON-LD output structure with @context
       let data;
