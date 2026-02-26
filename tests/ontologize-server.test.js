@@ -952,4 +952,71 @@ describe("OntologizeServer", function () {
       assert.equal(updateCount, 0);
     });
   });
+
+  describe("_convertXsdLiteral", function () {
+    it("should convert xsd:boolean 'true' to true", function () {
+      const result = ontologizeServer._convertXsdLiteral('"true"^^<http://www.w3.org/2001/XMLSchema#boolean>');
+      assert.strictEqual(result, true);
+    });
+
+    it("should convert xsd:boolean 'false' to false", function () {
+      const result = ontologizeServer._convertXsdLiteral('"false"^^<http://www.w3.org/2001/XMLSchema#boolean>');
+      assert.strictEqual(result, false);
+    });
+
+    it("should convert xsd:integer to number", function () {
+      const result = ontologizeServer._convertXsdLiteral('"42"^^<http://www.w3.org/2001/XMLSchema#integer>');
+      assert.strictEqual(result, 42);
+    });
+
+    it("should convert xsd:decimal to number", function () {
+      const result = ontologizeServer._convertXsdLiteral('"1.234"^^<http://www.w3.org/2001/XMLSchema#decimal>');
+      assert.strictEqual(result, 1.234);
+    });
+
+    it("should convert xsd:double to number", function () {
+      const result = ontologizeServer._convertXsdLiteral('"3.14159"^^<http://www.w3.org/2001/XMLSchema#double>');
+      assert.strictEqual(result, 3.14159);
+    });
+
+    it("should convert xsd:float to number", function () {
+      const result = ontologizeServer._convertXsdLiteral('"2.5"^^<http://www.w3.org/2001/XMLSchema#float>');
+      assert.strictEqual(result, 2.5);
+    });
+
+    it("should return string value for xsd:string", function () {
+      const result = ontologizeServer._convertXsdLiteral('"hello"^^<http://www.w3.org/2001/XMLSchema#string>');
+      assert.strictEqual(result, "hello");
+    });
+
+    it("should return string value for xsd:dateTime", function () {
+      const result = ontologizeServer._convertXsdLiteral('"2026-01-15T10:30:00Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>');
+      assert.strictEqual(result, "2026-01-15T10:30:00Z");
+    });
+
+    it("should handle literals without angle brackets", function () {
+      const result = ontologizeServer._convertXsdLiteral('"true"^^http://www.w3.org/2001/XMLSchema#boolean');
+      assert.strictEqual(result, true);
+    });
+
+    it("should return non-literal values unchanged", function () {
+      const uri = "http://example.org/thing";
+      assert.strictEqual(ontologizeServer._convertXsdLiteral(uri), uri);
+    });
+
+    it("should return null/undefined unchanged", function () {
+      assert.strictEqual(ontologizeServer._convertXsdLiteral(null), null);
+      assert.strictEqual(ontologizeServer._convertXsdLiteral(undefined), undefined);
+    });
+
+    it("should handle negative numbers", function () {
+      const result = ontologizeServer._convertXsdLiteral('"-7"^^<http://www.w3.org/2001/XMLSchema#integer>');
+      assert.strictEqual(result, -7);
+    });
+
+    it("should handle zero", function () {
+      const result = ontologizeServer._convertXsdLiteral('"0"^^<http://www.w3.org/2001/XMLSchema#integer>');
+      assert.strictEqual(result, 0);
+    });
+  });
 });

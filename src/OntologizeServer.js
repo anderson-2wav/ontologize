@@ -1488,7 +1488,7 @@ INSERT DATA {
 
       const resource = resources[fact.subject];
       const predicate = fact.predicate;
-      const object = fact.object;
+      const object = this._convertXsdLiteral(fact.object);
 
       // Add the property value
       if (typeof resource[predicate] === "undefined") {
@@ -1721,6 +1721,44 @@ INSERT DATA {
 
 
     return literal;
+  }
+
+  /**
+   * Convert XSD typed literals to JavaScript primitive values.
+   * Boolean and numeric XSD types are converted to their JS equivalents.
+   * String, date, and other types are returned as plain strings (type annotation stripped).
+   * Non-literal values are returned unchanged.
+   *
+   * @param {string} value - The fact object value, possibly an XSD literal
+   * @returns {boolean|number|string} The converted value
+   * @private
+   */
+  _convertXsdLiteral(value) {
+    if (!value || typeof value !== "string") return value;
+
+    const XSD = "http://www.w3.org/2001/XMLSchema#";
+
+    // Match typed literals: "value"^^<URI> or "value"^^URI
+    const match = value.match(/^"(.*)"\^\^<?([^>]*)>?$/);
+    if (!match) return value;
+
+    const [, lexical, datatype] = match;
+    const xsdType = datatype.startsWith(XSD) ? datatype.slice(XSD.length) : null;
+
+    if (!xsdType) return lexical;
+
+    switch (xsdType) {
+      case "boolean":
+        return lexical === "true";
+      case "integer":
+        return parseInt(lexical, 10);
+      case "decimal":
+      case "double":
+      case "float":
+        return parseFloat(lexical);
+      default:
+        return lexical;
+    }
   }
 
   /**
@@ -2253,6 +2291,7 @@ INSERT DATA {
     console.log(`Generated ${triples.length} triples`);
 
     if (hylarAvailable) {
+      if (opts.debugDump) fs.writeFileSync("/tmp/insert.sparql", "", { flag: "w" });
       // Insert triples in batches to avoid stack overflow in HyLAR
       const totalBatches = Math.ceil(triples.length / opts.batchSize);
       console.log(`Inserting ${triples.length} triples into HyLAR in ${totalBatches} batches of ${opts.batchSize}...`);
