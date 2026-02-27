@@ -321,6 +321,8 @@ export class OntologizeServer extends Ontologize {
         // this would be fixed if we first expand resources with their own context,
         // then compact with ours.
         // console.log(resource._id || resource["@id"]);
+        // if ((resource._id || resource["@id"]) === "bold:TrackingReport") {
+        // }
         try {
           const processed = await this._normalizeAndSaveResource(
             resource,
@@ -2083,7 +2085,22 @@ INSERT DATA {
     const processed = { ...resource };
     for (const propId of jsonPropertyIds) {
       if (propId in processed) {
-        const value = processed[propId];
+        let value = processed[propId];
+        // NASTY... we can get a variety of mess from ld.compact for properties with context @type: @json, like:
+        const ex = {
+          "@type": [
+            "@json"
+          ],
+          "@value": {
+            "properties": {
+              //...
+            }
+          }
+        };
+        // look for a { @type, @value } object, convert it to only its value
+        if (value["@type"] && value["@type"].includes("@json") && value["@value"]) {
+          value = value["@value"];
+        }
         // Parse string values back to POJOs
         if (typeof value === "string") {
           try {
@@ -2774,6 +2791,7 @@ INSERT DATA {
     try {
       const healthCheck = await fetch(`${opts.hylarUrl}/`, { method: "GET" });
       if (!healthCheck.ok) {
+        console.warn("HyLAR health check failed",healthCheck);
         throw new Error("HyLAR health check failed");
       }
     }
