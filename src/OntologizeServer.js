@@ -99,16 +99,22 @@ export class OntologizeServer extends Ontologize {
   async bootstrap(opts = {}) {
     const files = opts.bootstrapFiles || this.bootstrapFiles;
     const basePath = opts.basePath || this.bootstrapPath;
-    const removeAll = opts.removeAll !== false;
+    let removeCollections;
+    if (Array.isArray(opts.removeCollections)) {
+      removeCollections = opts.removeCollections;
+    }
+    else if (opts.removeAll !== false) {
+      removeCollections = Object.keys(this.collections);
+    }
 
     if (!Array.isArray(files) || files.length === 0) {
       throw new Error("No bootstrap files configured. Pass opts.bootstrapFiles to constructor or opts.files to bootstrap()");
     }
 
-    if (removeAll) {
+    if (removeCollections) {
       console.log("======== BOOTSTRAP REMOVE ALL ========");
       // from all known collections
-      for await (const colName of Object.keys(this.collections)) {
+      for await (const colName of removeCollections) {
         const collection = this.collections[colName];
         if (collection) {
           const result = await collection.deleteMany({});
@@ -1474,12 +1480,12 @@ INSERT DATA {
       // for reasons unknown at the moment, string values are coming across quoted...
       let rr = fact.subject.match(/^"(.*)"$/s);
       if (rr) {
-        console.log(`fact.subject ${fact.subject} appears quoted.`);
+        // console.log(`fact.subject ${fact.subject} appears quoted.`);
         fact.subject = rr[1];
       }
       rr = fact.object.match(/^"(.*)"$/s);
       if (rr) {
-        console.log(`fact.object for ${fact.subject} appears quoted:`, fact.object);
+        // console.log(`fact.object for ${fact.subject} appears quoted:`, fact.object);
         fact.object = rr[1];
       }
       // Skip facts that don't have proper structure
