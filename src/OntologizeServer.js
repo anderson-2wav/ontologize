@@ -2295,10 +2295,14 @@ INSERT DATA {
       }
     }
 
-    // 3. Load all ontology resources
+    // 3. Load unreasoned ontology resources (skip bold:reasoned to prevent double-reasoning)
     console.log("Loading ontology resources...");
-    const ontologyResources = await this.collections.ontology.find({}).toArray();
-    console.log(`Found ${ontologyResources.length} ontology resources`);
+    const allCount = await this.collections.ontology.countDocuments({});
+    const ontologyResources = await this.collections.ontology.find({ "bold:reasoned": { $exists: false } }).toArray();
+    if (ontologyResources.length < allCount) {
+      console.log(`Skipping ${allCount - ontologyResources.length} already-reasoned resources`);
+    }
+    console.log(`Found ${ontologyResources.length} ontology resources to reason`);
 
     // 4. Convert to triples and insert into HyLAR (only if available)
     console.log("Converting resources to triples...");
@@ -2557,6 +2561,7 @@ INSERT DATA {
       : updatedResource;
 
     // 5. Update the resource in collection
+    finalResource["bold:reasoned"] = new Date().toISOString();
     const updateResult = await collection.replaceOne(
       { _id: resourceId },
       finalResource,
@@ -2786,6 +2791,7 @@ INSERT DATA {
         const merged = await this.mergeResources([existing, assembledResource], {
           mergeArrays: true
         });
+        merged["bold:reasoned"] = new Date().toISOString();
 
         // Update in collection
         await collection.replaceOne(
@@ -2797,7 +2803,7 @@ INSERT DATA {
       }
       else {
         // Insert new resource
-        const newResource = { ...assembledResource, _id: resourceId };
+        const newResource = { ...assembledResource, _id: resourceId, "bold:reasoned": new Date().toISOString() };
         await collection.insertOne(newResource);
         updateCount++;
       }
@@ -2853,10 +2859,14 @@ INSERT DATA {
     // 1. Ensure HyLAR is running and healthy
     await this.checkHylar(opts);
 
-    // 3. Load all resources from the named collection
+    // 3. Load unreasoned resources (skip bold:reasoned to prevent double-reasoning)
     console.log(`Loading resources from "${collectionName}" collection...`);
-    const resources = await collection.find({}).toArray();
-    console.log(`Found ${resources.length} resources`);
+    const allCount = await collection.countDocuments({});
+    const resources = await collection.find({ "bold:reasoned": { $exists: false } }).toArray();
+    if (resources.length < allCount) {
+      console.log(`Skipping ${allCount - resources.length} already-reasoned resources`);
+    }
+    console.log(`Found ${resources.length} resources to reason`);
 
     if (resources.length === 0) {
       const duration = Date.now() - startTime;
@@ -2902,9 +2912,23 @@ INSERT DATA {
       batches.push(currentBatch);
     }
 
-    // 6. Send each batch to /update, accumulating derivations
-    const allAdditions = [];
+    // 6. Process each batch: send to /update, then persist derivations immediately
+    //    Combined with bold:reasoned, this allows resuming after a crash.
+    let totalFacts = 0;
+    let totalStatements = 0;
+    let totalUpdated = 0;
     console.log(`Inserting ${triples.length} triples via /update in ${batches.length} batches (batchSize ${opts.batchSize})...`);
+
+    // Hoist context and metaProps — they don't change per batch
+    const context = await this.getContext();
+    const metaProps = {
+      "bold:when": new Date().toISOString(),
+      "bold:createdBy": "bold:reasonCollection",
+      "bold:scope": "bold:system"
+    };
+    if (opts.userId) {
+      metaProps["bold:updatedBy"] = opts.userId;
+    }
 
     for (let i = 0; i < batches.length; i++) {
       const batch = batches[i];
@@ -2913,6 +2937,7 @@ INSERT DATA {
       const sparqlInsert = await this.createSparqlInsert(batch);
       if (opts.debugDump) fs.writeFileSync("/tmp/reasonCollection-insert.sparql", sparqlInsert, { flag: "a" });
 
+      let additions = [];
       try {
         const response = await fetch(`${opts.hylarUrl}/update`, {
           method: "POST",
@@ -2931,63 +2956,42 @@ INSERT DATA {
         // /update may return { derivations: { additions } } or { additions } directly
         const derivations = responseData.derivations ?? responseData;
         if (derivations.additions && derivations.additions.length > 0) {
-          allAdditions.push(...derivations.additions);
-          console.log(`  Batch ${i + 1}: ${derivations.additions.length} new derivations`);
+          additions = derivations.additions;
+          console.log(`  Batch ${i + 1}: ${additions.length} new derivations`);
         }
       }
       catch (error) {
         console.error(`HyLAR /update failed on batch ${i + 1}:`, error);
         throw error;
       }
-    }
-    console.log(`Successfully processed all ${triples.length} triples, total derivations: ${allAdditions.length}`);
 
-    // 8. Process derivations
-    let facts = [];
-    let statements = [];
-    let assembledResources = {};
+      // Process and persist this batch's derivations immediately
+      if (additions.length > 0) {
+        const facts = this._derivationsToFacts(additions, { blankNodes: opts.blankNodes });
+        totalFacts += facts.length;
 
-    if (allAdditions.length > 0) {
-      // Convert derivations to Facts
-      facts = this._derivationsToFacts(allAdditions, { blankNodes: opts.blankNodes });
-      console.log(`Converted ${facts.length} facts from derivations`);
+        const assembledResources = await this.assembleFactsIntoResources(facts, { context });
+        if (opts.debugDump) fs.writeFileSync("/tmp/reasonCollection-assembled.json", JSON.stringify(assembledResources, null, 2), { flag: "a" });
 
-      // Assemble facts into resources
-      const context = await this.getContext();
-      assembledResources = await this.assembleFactsIntoResources(facts, { context });
-      console.log(`Assembled ${Object.keys(assembledResources).length} resources from facts`);
-      if (opts.debugDump) fs.writeFileSync("/tmp/reasonCollection-assembled.json", JSON.stringify(assembledResources, null, 2));
+        const statements = await this.createStatementsForFacts(facts, {
+          onlyInferred: true,
+          metaPropsByPredicate: { "*": metaProps }
+        });
+        totalStatements += statements.length;
 
-      // Create statements for inferred facts
-      const metaProps = {
-        "bold:when": new Date().toISOString(),
-        "bold:createdBy": "bold:reasonCollection",
-        "bold:scope": "bold:system"
-      };
-      if (opts.userId) {
-        metaProps["bold:updatedBy"] = opts.userId;
-      }
-
-      statements = await this.createStatementsForFacts(facts, {
-        onlyInferred: true,
-        metaPropsByPredicate: {
-          "*": metaProps
+        if (this.collections.statements && opts.persistStatements && statements.length > 0) {
+          await this._persistStatements(statements);
         }
-      });
-      console.log(`Created ${statements.length} statements from facts`);
 
-      // 9. Persist statements
-      if (this.collections.statements && opts.persistStatements && statements.length > 0) {
-        await this._persistStatements(statements);
-        console.log(`Persisted ${statements.length} statements to collection`);
-      }
+        if (opts.updateResources && Object.keys(assembledResources).length > 0) {
+          const updateCount = await this._mergeAndUpdateResources(assembledResources, collection);
+          totalUpdated += updateCount;
+        }
 
-      // 10. Merge inferred properties back into the source collection
-      if (opts.updateResources && Object.keys(assembledResources).length > 0) {
-        const updateCount = await this._mergeAndUpdateResources(assembledResources, collection);
-        console.log(`Updated ${updateCount} resources with inferred properties`);
+        console.log(`  Batch ${i + 1}: persisted ${facts.length} facts, ${statements.length} statements, ${Object.keys(assembledResources).length} resources`);
       }
     }
+    console.log(`Successfully processed all ${triples.length} triples: ${totalFacts} facts, ${totalStatements} statements, ${totalUpdated} resources updated`);
 
     const duration = Date.now() - startTime;
     console.log(`reasonCollection "${collectionName}" completed in ${Math.round(duration / 1000)} seconds`);
@@ -2997,9 +3001,9 @@ INSERT DATA {
       collectionName,
       resourcesLoaded: resources.length,
       triplesGenerated: triples.length,
-      factsInferred: facts.length,
-      statementsCreated: statements.length,
-      resourcesUpdated: Object.keys(assembledResources).length
+      factsInferred: totalFacts,
+      statementsCreated: totalStatements,
+      resourcesUpdated: totalUpdated
     };
   }
 
