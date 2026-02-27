@@ -78,6 +78,12 @@ export class OntologizeServer extends Ontologize {
     this.bootstrapFiles = opts.bootstrapFiles || [];
     this.bootstrapPath = opts.bootstrapPath || path.join((process.env.APP_DIR || process.cwd()),"private/data/bootstrap");
     this.opts = opts;
+
+    // HyLAR process management defaults
+    this.hylarUrl = opts.hylarUrl || "http://localhost:4000";
+    this.hylarPort = opts.hylarPort || 4000;
+    this.hylarProcess = null;
+    this._hylarVerified = false;
   }
 
   /**
@@ -2248,7 +2254,7 @@ INSERT DATA {
    */
   async bootstrapReasoner(opts = {}) {
     // Default options
-    opts.hylarUrl = opts.hylarUrl || "http://localhost:4000";
+    opts.hylarUrl = opts.hylarUrl || this.hylarUrl;
     opts.classify = opts.classify !== false;
     opts.persist = opts.persist !== false;
     opts.updateResources = opts.updateResources === false ? false : opts.persist;
@@ -2258,22 +2264,11 @@ INSERT DATA {
     console.log("🚀 Starting bootstrapReasoner...");
     const startTime = Date.now();
 
-    // 1. Start HyLAR child process if requested
-    if (opts.startHylar) {
-      console.log("Starting HyLAR child process...");
-      this.hylarProcess = await this._startHylarProcess(opts.hylarPort || 4000);
-    }
-
-    // Check if we should skip HyLAR operations
+    // 1. Ensure HyLAR is running and healthy
     let hylarAvailable = false;
     if (opts.classify) {
-      try {
-        const healthCheck = await fetch(`${opts.hylarUrl}/`, { method: "GET" });
-        hylarAvailable = healthCheck.ok;
-      }
-      catch (error) {
-        throw new Error("HyLAR server not available. Reasoning not available.");
-      }
+      await this.checkHylar(opts);
+      hylarAvailable = true;
     }
 
     // 2. Turn off classification for bulk loading (only if HyLAR available)
@@ -2429,7 +2424,7 @@ INSERT DATA {
 
     // Default options
     opts.reasoning = opts.reasoning !== false;
-    opts.hylarUrl = opts.hylarUrl || "http://localhost:4000";
+    opts.hylarUrl = opts.hylarUrl || this.hylarUrl;
     opts.saveHylar = opts.saveHylar === true;
 
     console.log(`Updating resource ${resourceId}...`);
@@ -2466,18 +2461,7 @@ INSERT DATA {
     let statements = [];
 
     if (opts.reasoning) {
-      try {
-        // Check if HyLAR is available
-        const healthCheck = await fetch(`${opts.hylarUrl}/`, { method: "GET" });
-        if (!healthCheck.ok) {
-          console.warn("HyLAR server not available, skipping reasoning");
-          opts.reasoning = false;
-        }
-      }
-      catch (error) {
-        console.warn("HyLAR server not reachable, skipping reasoning:", error.message);
-        opts.reasoning = false;
-      }
+      await this.checkHylar(opts);
     }
 
     if (opts.reasoning) {
@@ -2584,6 +2568,55 @@ INSERT DATA {
   }
 
   /**
+   * Ensure HyLAR is running and healthy.
+   * If no hylarProcess exists, spawns one via _startHylarProcess().
+   * Performs a health check with one retry (500ms delay) before throwing.
+   *
+   * @param {object} [opts] - Options
+   * @param {string} [opts.hylarUrl] - HyLAR server URL (default: this.hylarUrl)
+   * @param {number} [opts.hylarPort] - HyLAR server port (default: this.hylarPort)
+   * @returns {Promise<void>} Resolves when HyLAR is confirmed healthy
+   * @throws {Error} If HyLAR fails health check after retry
+   */
+  async checkHylar(opts = {}) {
+    const hylarUrl = opts.hylarUrl || this.hylarUrl;
+    const hylarPort = opts.hylarPort || this.hylarPort;
+
+    // Spawn HyLAR if we haven't verified it yet
+    if (!this.hylarProcess && !this._hylarVerified) {
+      const proc = await this._startHylarProcess(hylarPort);
+      if (proc) {
+        this.hylarProcess = proc;
+      }
+      this._hylarVerified = true;
+    }
+
+    // Health check with one retry
+    const doCheck = async () => {
+      const response = await fetch(`${hylarUrl}/`, { method: "GET" });
+      if (!response.ok) {
+        throw new Error(`HyLAR health check returned ${response.status}`);
+      }
+    };
+
+    try {
+      await doCheck();
+    }
+    catch (error) {
+      console.warn(`HyLAR health check failed (${error.message}), retrying in 500ms...`);
+      await new Promise(resolve => setTimeout(resolve, 500));
+      try {
+        await doCheck();
+      }
+      catch (retryError) {
+        this.hylarProcess = null;
+        this._hylarVerified = false;
+        throw new Error(`HyLAR not available at ${hylarUrl} after retry: ${retryError.message}`);
+      }
+    }
+  }
+
+  /**
    * Start HyLAR child process if not already running
    * @param {number} port - Port to start HyLAR on
    * @returns {Promise<ChildProcess|null>} The child process, or null if HyLAR was already running
@@ -2611,12 +2644,38 @@ INSERT DATA {
       detached: false
     });
 
-    // Wait for server to be ready
+    // Watch for process exit/error and reset state so checkHylar() re-spawns
+    hylarProcess.on("exit", (code, signal) => {
+      console.warn(`HyLAR process exited (code: ${code}, signal: ${signal})`);
+      this.hylarProcess = null;
+      this._hylarVerified = false;
+    });
+
+    hylarProcess.on("error", (error) => {
+      console.error(`HyLAR process error: ${error.message}`);
+      this.hylarProcess = null;
+      this._hylarVerified = false;
+    });
+
+    // Wait for server to be ready, or reject early if process dies
     await new Promise((resolve, reject) => {
+      let settled = false;
+
+      const onEarlyExit = (code, signal) => {
+        if (!settled) {
+          settled = true;
+          reject(new Error(`HyLAR process exited before becoming ready (code: ${code}, signal: ${signal})`));
+        }
+      };
+      hylarProcess.once("exit", onEarlyExit);
+
       const checkServer = async () => {
+        if (settled) return;
         try {
           const response = await fetch(`http://localhost:${port}/`);
           if (response.ok) {
+            settled = true;
+            hylarProcess.removeListener("exit", onEarlyExit);
             console.log("HyLAR server is ready");
             resolve();
           }
@@ -2631,7 +2690,11 @@ INSERT DATA {
 
       setTimeout(checkServer, 2000);
       setTimeout(() => {
-        reject(new Error("HyLAR server failed to start within 30 seconds"));
+        if (!settled) {
+          settled = true;
+          hylarProcess.removeListener("exit", onEarlyExit);
+          reject(new Error("HyLAR server failed to start within 30 seconds"));
+        }
       }, 30000);
     });
 
@@ -2769,7 +2832,7 @@ INSERT DATA {
     }
 
     // Default options
-    opts.hylarUrl = opts.hylarUrl || "http://localhost:4000";
+    opts.hylarUrl = opts.hylarUrl || this.hylarUrl;
     opts.persist = opts.persist !== false;
     opts.updateResources = opts.updateResources === false ? false : opts.persist;
     opts.persistStatements = opts.persistStatements === false ? false : opts.persist;
@@ -2781,23 +2844,8 @@ INSERT DATA {
     console.log(`Starting reasonCollection for "${collectionName}"...`);
     const startTime = Date.now();
 
-    // 1. Optionally start HyLAR child process
-    if (opts.startHylar) {
-      console.log("Starting HyLAR child process...");
-      this.hylarProcess = await this._startHylarProcess(opts.hylarPort || 4000);
-    }
-
-    // 2. Health check HyLAR
-    try {
-      const healthCheck = await fetch(`${opts.hylarUrl}/`, { method: "GET" });
-      if (!healthCheck.ok) {
-        console.warn("HyLAR health check failed",healthCheck);
-        throw new Error("HyLAR health check failed");
-      }
-    }
-    catch (error) {
-      throw new Error(`HyLAR server not available at ${opts.hylarUrl}. Ensure HyLAR is running.`);
-    }
+    // 1. Ensure HyLAR is running and healthy
+    await this.checkHylar(opts);
 
     // 3. Load all resources from the named collection
     console.log(`Loading resources from "${collectionName}" collection...`);
