@@ -84,6 +84,9 @@ export class OntologizeServer extends Ontologize {
     this.hylarPort = opts.hylarPort || 4000;
     this.hylarProcess = null;
     this._hylarVerified = false;
+    this._hylarInitialized = false;
+    this._initializingPromise = null;
+    this._hylarCrashCount = 0;
   }
 
   /**
@@ -2403,6 +2406,10 @@ INSERT DATA {
     const duration = Date.now() - startTime;
     console.log(`✅ bootstrapReasoner completed in ${Math.round(duration / 1000)} seconds`);
 
+    // Mark reasoner as initialized whether called directly or via ensureReasoner
+    this._hylarInitialized = true;
+    this._hylarCrashCount = 0;
+
     return {
       duration,
       resourcesLoaded: ontologyResources.length,
@@ -2471,7 +2478,7 @@ INSERT DATA {
     let statements = [];
 
     if (opts.reasoning) {
-      await this.checkHylar(opts);
+      await this.ensureReasoner(opts);
     }
 
     if (opts.reasoning) {
@@ -2628,6 +2635,30 @@ INSERT DATA {
   }
 
   /**
+   * Ensure HyLAR is running, healthy, and bootstrapped with ontology triples.
+   * Uses a promise lock so concurrent callers await the same bootstrap.
+   */
+  async ensureReasoner(opts = {}) {
+    await this.checkHylar(opts);
+    if (!this._hylarInitialized) {
+      if (!this._initializingPromise) {
+        console.warn("ensureReasoner initializing");
+        this._initializingPromise = this.bootstrapReasoner(opts)
+          .then(() => {
+            this._hylarInitialized = true;
+            this._hylarCrashCount = 0;
+            console.warn("======= reasoner initialized. ======");
+          })
+          .finally(() => { this._initializingPromise = null; });
+      }
+      else {
+        console.warn("continue waiting on ensureReasoner initializing");
+      }
+      await this._initializingPromise;
+    }
+  }
+
+  /**
    * Start HyLAR child process if not already running
    * @param {number} port - Port to start HyLAR on
    * @returns {Promise<ChildProcess|null>} The child process, or null if HyLAR was already running
@@ -2660,12 +2691,25 @@ INSERT DATA {
       console.warn(`HyLAR process exited (code: ${code}, signal: ${signal})`);
       this.hylarProcess = null;
       this._hylarVerified = false;
+      this._hylarInitialized = false;
+      this._initializingPromise = null;
+      this._hylarCrashCount = (this._hylarCrashCount || 0) + 1;
+      if (this._hylarCrashCount <= 3) {
+        this.ensureReasoner().catch(err => {
+          console.error("HyLAR auto-recovery failed:", err.message);
+        });
+      }
+      else {
+        console.error("HyLAR crashed too many times, not restarting.");
+      }
     });
 
     hylarProcess.on("error", (error) => {
       console.error(`HyLAR process error: ${error.message}`);
       this.hylarProcess = null;
       this._hylarVerified = false;
+      this._hylarInitialized = false;
+      this._initializingPromise = null;
     });
 
     // Wait for server to be ready, or reject early if process dies
@@ -2856,8 +2900,8 @@ INSERT DATA {
     console.log(`Starting reasonCollection for "${collectionName}"...`);
     const startTime = Date.now();
 
-    // 1. Ensure HyLAR is running and healthy
-    await this.checkHylar(opts);
+    // 1. Ensure HyLAR is running, healthy, and bootstrapped
+    await this.ensureReasoner(opts);
 
     // 3. Load unreasoned resources (skip bold:reasoned to prevent double-reasoning)
     console.log(`Loading resources from "${collectionName}" collection...`);
