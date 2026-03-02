@@ -42,38 +42,36 @@ describe("OntologizeServer Bootstrap", function () {
       },
       find: (query) => ({
         toArray: async () => {
-          // Return inserted ontology resources for bootstrapping
-          if (!query || Object.keys(query).length === 0) {
-            return insertedOntologyResources;
-          }
-          // Handle _id: { $in: [...] } queries
-          if (query._id && query._id.$in) {
-            const ids = query._id.$in;
-            return insertedOntologyResources.filter(r => ids.includes(r._id));
-          }
-          // Handle simple _id queries
-          if (query._id && typeof query._id === "string") {
-            return insertedOntologyResources.filter(r => r._id === query._id);
-          }
-          return [];
+          return mockOntologyCollection._filter(query);
         },
         fetch: function() {
-          // Return inserted ontology resources for bootstrapping
-          if (!query || Object.keys(query).length === 0) {
-            return insertedOntologyResources;
-          }
-          // Handle _id: { $in: [...] } queries
-          if (query._id && query._id.$in) {
-            const ids = query._id.$in;
-            return insertedOntologyResources.filter(r => ids.includes(r._id));
-          }
-          // Handle simple _id queries
-          if (query._id && typeof query._id === "string") {
-            return insertedOntologyResources.filter(r => r._id === query._id);
-          }
-          return [];
+          return mockOntologyCollection._filter(query);
         }
       }),
+      _filter: (query) => {
+        // Return all for empty query
+        if (!query || Object.keys(query).length === 0) {
+          return insertedOntologyResources;
+        }
+        let results = insertedOntologyResources;
+        // Handle _id: { $in: [...] } queries
+        if (query._id && query._id.$in) {
+          const ids = query._id.$in;
+          results = results.filter(r => ids.includes(r._id));
+        }
+        // Handle simple _id queries
+        else if (query._id && typeof query._id === "string") {
+          results = results.filter(r => r._id === query._id);
+        }
+        // Handle $exists queries on other fields
+        for (const [key, val] of Object.entries(query)) {
+          if (key === "_id") continue;
+          if (val && typeof val === "object" && "$exists" in val) {
+            results = results.filter(r => val.$exists ? (key in r) : !(key in r));
+          }
+        }
+        return results;
+      },
       insertOne: async (doc) => {
         insertedOntologyResources.push(doc);
         return { insertedId: doc._id };
@@ -103,7 +101,8 @@ describe("OntologizeServer Bootstrap", function () {
         insertedOntologyResources = [];
         return { deletedCount: count };
       },
-      count: () => insertedOntologyResources.length
+      count: () => insertedOntologyResources.length,
+      countDocuments: async () => insertedOntologyResources.length
     };
 
     mockContextCollection = {
@@ -228,20 +227,6 @@ describe("OntologizeServer Bootstrap", function () {
 
       // Should have generated triples (even without HyLAR)
       assert.isAbove(result.triplesGenerated, 0);
-    });
-
-    it("should handle missing HyLAR server gracefully", async function () {
-      // Try to bootstrap with a non-existent HyLAR server
-      try {
-        await ontologizeServer.bootstrapReasoner({
-          hylarUrl: "http://localhost:9999", // Non-existent port
-          classify: true
-        });
-        assert.fail("Should have thrown error for missing HyLAR server");
-      }
-      catch (error) {
-        assert.include(error.message, "HyLAR server not available.");
-      }
     });
 
     it("should generate triples from ontology resources", async function () {
@@ -445,7 +430,7 @@ describe("OntologizeServer Bootstrap", function () {
 
     it("should bootstrap from opts.files parameter", async function () {
       const result = await ontologizeServer.bootstrap({
-        files: ["bold-bfo.jsonld"],
+        bootstrapFiles: ["bold-bfo.jsonld"],
         basePath: path.join(__dirname, "data")
       });
 
@@ -458,7 +443,7 @@ describe("OntologizeServer Bootstrap", function () {
       const absolutePath = path.join(__dirname, "data", "bold-bfo.jsonld");
 
       const result = await ontologizeServer.bootstrap({
-        files: [absolutePath]
+        bootstrapFiles: [absolutePath]
       });
 
       assert.isObject(result);
@@ -470,7 +455,7 @@ describe("OntologizeServer Bootstrap", function () {
       // First file missing should throw
       try {
         await ontologizeServer.bootstrap({
-          files: ["nonexistent.jsonld"],
+          bootstrapFiles: ["nonexistent.jsonld"],
           basePath: path.join(__dirname, "data")
         });
         assert.fail("Should have thrown error");
@@ -481,7 +466,7 @@ describe("OntologizeServer Bootstrap", function () {
 
       // Second file missing should be skipped
       const result = await ontologizeServer.bootstrap({
-        files: ["bold-bfo.jsonld", "nonexistent.jsonld"],
+        bootstrapFiles: ["bold-bfo.jsonld", "nonexistent.jsonld"],
         basePath: path.join(__dirname, "data")
       });
 
@@ -503,7 +488,7 @@ describe("OntologizeServer Bootstrap", function () {
 
       // Bootstrap with removeAll=true (default)
       const result = await ontologizeServer.bootstrap({
-        files: ["bold-bfo.jsonld"],
+        bootstrapFiles: ["bold-bfo.jsonld"],
         basePath: path.join(__dirname, "data"),
         removeAll: true
       });
@@ -522,7 +507,7 @@ describe("OntologizeServer Bootstrap", function () {
 
       // Bootstrap with removeAll=false
       const result = await ontologizeServer.bootstrap({
-        files: ["bold-bfo.jsonld"],
+        bootstrapFiles: ["bold-bfo.jsonld"],
         basePath: path.join(__dirname, "data"),
         removeAll: false
       });

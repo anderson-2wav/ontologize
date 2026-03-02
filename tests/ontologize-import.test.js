@@ -107,6 +107,15 @@ describe("OntologizeServer Import", function () {
           return (Object.keys(contextData).length === 0 || !contextData._id) ? null : contextData;
         }
         return null;
+      },
+      updateOne: async (filter, update, opts) => {
+        if (update.$set) {
+          Object.assign(contextData, update.$set);
+          if (!contextData._id && filter._id) {
+            contextData._id = filter._id;
+          }
+        }
+        return { acknowledged: true, modifiedCount: 1 };
       }
     };
 
