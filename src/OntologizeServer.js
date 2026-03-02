@@ -650,6 +650,86 @@ export class OntologizeServer extends Ontologize {
   }
 
   /**
+   * Resolve the appropriate collection for a resource.
+   *
+   * Resolution order:
+   * 1. Statement resources -> statements collection
+   * 2. TBox resources -> ontology collection
+   * 3. typeCollections — match on @type
+   * 4. idResolvers — match on _id prefix/pattern
+   * 5. namespace — _id prefix matches a registered collection name
+   * 6. default — typeCollections["*"]
+   * 7. fallback — ontology collection
+   *
+   * @param {object} resource - Resource with _id and @type
+   * @param {object} [opts]
+   * @param {boolean} [opts.useNamespaceCollections=true]
+   * @param {boolean} [opts.aboxOnly=false] - Skip Statement/TBox checks, return null if no ABox match
+   * @returns {Promise<{collection: Collection, name: string}|null>} null when aboxOnly and no match
+   */
+  async getCollectionForResource(resource, opts = {}) {
+    const useNamespaceCollections = opts.useNamespaceCollections !== false;
+    const aboxOnly = opts.aboxOnly === true;
+
+    if (!aboxOnly) {
+      // Statements
+      if (this.isStatementResource(resource)) {
+        return { collection: this.collections.statements, name: "statements" };
+      }
+
+      // TBox
+      if (await this.isTBoxResource(resource)) {
+        return { collection: this.collections.ontology, name: "ontology" };
+      }
+    }
+
+    // ABox resolution chain
+    const defaultAboxCollection = this.opts.typeCollections?.["*"];
+
+    // 1. typeCollections
+    if (this.opts.typeCollections) {
+      for (const typ of (resource["@type"] ?? [])) {
+        const colName = this.opts.typeCollections[typ];
+        if (colName && this.collections[colName]) {
+          return { collection: this.collections[colName], name: colName };
+        }
+      }
+    }
+
+    // 2. idResolvers
+    const prefix = resource._id?.match(/^([^:]+):/)?.[1];
+    if (prefix && this.opts.idResolvers?.[prefix]) {
+      const resolvers = this.opts.idResolvers[prefix];
+      if (Array.isArray(resolvers)) {
+        for (const resolver of resolvers) {
+          if (resolver.match && resolver.collection) {
+            const re = new RegExp(resolver.match);
+            if (resource._id.match(re) && this.collections[resolver.collection]) {
+              return { collection: this.collections[resolver.collection], name: resolver.collection };
+            }
+          }
+        }
+      }
+    }
+
+    // 3. namespace
+    if (prefix && useNamespaceCollections && this.collections[prefix]) {
+      return { collection: this.collections[prefix], name: prefix };
+    }
+
+    // 4. default
+    if (defaultAboxCollection && this.collections[defaultAboxCollection]) {
+      return { collection: this.collections[defaultAboxCollection], name: defaultAboxCollection };
+    }
+
+    // 5. fallback
+    if (aboxOnly) {
+      return null;
+    }
+    return { collection: this.collections.ontology, name: "ontology" };
+  }
+
+  /**
    * Determine if a resource is an owl:Ontology resource
    * Used for dcterms:isPartOf detection in importData
    * @private
@@ -915,73 +995,10 @@ export class OntologizeServer extends Ontologize {
 
     // if this is destined for an ABox collection,
     if (!isTBoxResource || shareTBox) {
-      let _collection;
-      const defaultAboxCollection = this.opts.typeCollections?.["*"];
-      if (this.opts.typeCollections) {
-        /*
-        const example = {
-          "typeCollections": {
-            "bold:Animal": "animal",
-            "orju:Bird": "animal"
-          }
-        }
-        */
-        for (const typ of (processedResource["@type"] ?? [])) {
-          if (_collection) {
-            // stick with the first found
-            continue;
-          }
-          const colName = this.opts.typeCollections[typ];
-          if (colName) {
-            _collection = this.collections[colName];
-            if (_collection) {
-              // console.log(`using typeCollection "${colName}" for ${processedResource._id} @type: ${typ}`);
-            }
-            else {
-              console.error(`Unknown typeCollection "${typ}"`);
-            }
-          }
-        }
-      }
-      if (!_collection) {
-        const prefix = processedResource._id.match(/^([^:]+):/)?.[1];
-        if (prefix) {
-          // do we have idResolvers for this prefix in our opts?
-          if (this.opts.idResolvers?.[prefix]) {
-            const resolvers = this.opts.idResolvers[prefix];
-            if (Array.isArray(resolvers)) {
-              for (const resolver of resolvers) {
-                if (_collection) {
-                  continue;
-                }
-                if (resolver.match) {
-                  const re = new RegExp(resolver.match);
-                  if (processedResource._id.match(re) && resolver.collection) {
-                    // resolver.collection will be the registered name of the collection
-                    if (this.collections[resolver.collection]) {
-                      _collection = this.collections[resolver.collection];
-                    }
-                  }
-                }
-              }
-            }
-          }
-          if (!_collection && useNamespaceCollections) {
-            const namespaceCollection = this.collections[prefix];
-            if (namespaceCollection) {
-              _collection = namespaceCollection;
-            }
-          }
-        }
-      }
-      // after checking for type, _id, and namespace, use default if there is one
-      if (!_collection && defaultAboxCollection && this.collections[defaultAboxCollection]) {
-        _collection = this.collections[defaultAboxCollection];
-        // console.log(`using ABox Collection "${defaultAboxCollection}" for ${processedResource._id} @type: ${processedResource["@type"]}`);
-      }
-      // if we found a type, _id, namespace, or default collection, use it
-      if (_collection) {
-        collection = _collection;
+      // Use aboxOnly — Statement/TBox routing is handled in the save logic below
+      const resolved = await this.getCollectionForResource(processedResource, { useNamespaceCollections, aboxOnly: true });
+      if (resolved) {
+        collection = resolved.collection;
       }
     }
 
@@ -2677,13 +2694,15 @@ INSERT DATA {
       // HyLAR not responding, proceed to start it
     }
 
-    const hylarPath = path.join(process.cwd(), "modules/hylar-reasoner");
+    const hylarPath = path.join(process.env.APP_DIR, "modules/hylar-reasoner");
 
     console.log(`Starting HyLAR server on port ${port}...`);
-    const hylarProcess = spawn("npm", ["run", `start-${port}`], {
+    const serverScript = path.join(hylarPath, "hylar/server/server.js");
+    const hylarProcess = spawn(process.execPath, [serverScript, "--port", String(port)], {
       cwd: hylarPath,
       stdio: ["ignore", "pipe", "pipe"],
-      detached: false
+      detached: false,
+      env: { ...process.env, NODE_OPTIONS: "--max-old-space-size=8192" }
     });
 
     // Watch for process exit/error and reset state so checkHylar() re-spawns
@@ -2813,7 +2832,15 @@ INSERT DATA {
   }
 
   /**
-   * Merge and update resources with inferred properties
+   * Merge and update resources with inferred properties.
+   * When singleCollection is false (default), resolves each resource's target collection
+   * via getCollectionForResource, so inferences on resources from different collections
+   * are routed correctly.
+   * @param {object} assembledResources - keyed by resource _id
+   * @param {object} collection - fallback collection
+   * @param {object} [opts]
+   * @param {boolean} [opts.includeBlankNodes=true]
+   * @param {boolean} [opts.singleCollection=false] - if true, skip per-resource resolution
    * @private
    */
   async _mergeAndUpdateResources(assembledResources, collection, opts = {}) {
@@ -2827,8 +2854,19 @@ INSERT DATA {
         continue;
       }
 
+      // Resolve target collection per resource, falling back to the passed-in collection
+      let targetCollection = collection;
+      if (!opts.singleCollection) {
+        const resolved = await this.getCollectionForResource(
+          { _id: resourceId, ...assembledResource }
+        );
+        if (resolved) {
+          targetCollection = resolved.collection;
+        }
+      }
+
       // Get existing resource
-      const existing = await collection.findOne({ _id: resourceId });
+      const existing = await targetCollection.findOne({ _id: resourceId });
 
       if (existing) {
         // Merge with existing
@@ -2838,7 +2876,7 @@ INSERT DATA {
         merged["bold:reasoned"] = new Date().toISOString();
 
         // Update in collection
-        await collection.replaceOne(
+        await targetCollection.replaceOne(
           { _id: resourceId },
           merged,
           { upsert: false }
@@ -2848,7 +2886,7 @@ INSERT DATA {
       else {
         // Insert new resource
         const newResource = { ...assembledResource, _id: resourceId, "bold:reasoned": new Date().toISOString() };
-        await collection.insertOne(newResource);
+        await targetCollection.insertOne(newResource);
         updateCount++;
       }
     }
