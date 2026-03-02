@@ -89,6 +89,28 @@ export class MeteorCollectionAdapter extends CollectionAdapter {
   }
 
   /**
+   * Count documents matching the query (MongoDB driver API)
+   * @param {object} query - MongoDB-style query object
+   * @param {object} [options] - Query options
+   * @returns {Promise<number>} Count of matching documents
+   */
+  async countDocuments(query = {}, options = {}) {
+    try {
+      // Prefer native countDocuments (available on rawCollection)
+      if (typeof this.collection.countDocuments === "function") {
+        return await this.collection.countDocuments(query, options);
+      }
+      // Fallback to find().count() for Meteor collections
+      const cursor = this.collection.find(query, options);
+      const result = cursor.count();
+      return Promise.resolve(result || 0);
+    }
+    catch (error) {
+      throw new Error(`Error in ${this.name}.countDocuments: ${error.message}`);
+    }
+  }
+
+  /**
    * Insert multiple documents
    * @param {Array<object>} docs - Documents to insert
    * @param {object} [options] - Insert options

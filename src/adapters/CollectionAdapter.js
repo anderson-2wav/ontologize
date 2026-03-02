@@ -47,6 +47,16 @@ export class CollectionAdapter {
   }
 
   /**
+   * Count documents matching the query (MongoDB driver API)
+   * @param {object} query - MongoDB-style query object
+   * @param {object} [options] - Query options
+   * @returns {Promise<number>} Count of matching documents
+   */
+  async countDocuments(query, options = {}) {
+    throw new Error("countDocuments must be implemented by subclass");
+  }
+
+  /**
    * Delete many documents matching the query
    * @param {object} query - MongoDB-style query object
    * @param {object} [options] - Delete options
