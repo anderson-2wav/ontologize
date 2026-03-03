@@ -72,12 +72,20 @@ export class OntologizeServer extends Ontologize {
    * @param {string} [opts.dateFormat="M/d/yyyy"] - (from Ontologize) Default format for dates
    * @param {string} [opts.dateTimeFormat="M/d/yyyy h:mm a"] - (from Ontologize) Default format for date-times
    * @param {string} [opts.dateTimeZone="America/Los_Angeles"] - (from Ontologize) Default timezone for date formatting
+   * @param {string} [opts.restoreArchive] - Archive filename for mongorestore (e.g. "ontology.noreasoner.archive")
+   * @param {string} [opts.restorePath] - Base path for relative archive filenames (defaults to private/data/restore)
+   * @param {string} [opts.mongoUrl] - MongoDB connection URL for mongorestore (defaults to MONGO_URL env var)
    */
   constructor(ontologyCollection, contextCollection, statementsCollection, opts = {}) {
     super(ontologyCollection, contextCollection, statementsCollection, opts);
     this.bootstrapFiles = opts.bootstrapFiles || [];
     this.bootstrapPath = opts.bootstrapPath || path.join((process.env.APP_DIR || process.cwd()),"private/data/bootstrap");
     this.opts = opts;
+
+    // Archive restore config for bootstrapReasoner
+    this.restoreArchive = opts.restoreArchive || null;
+    this.restorePath = opts.restorePath || path.join((process.env.APP_DIR || process.cwd()), "private/data/restore");
+    this.mongoUrl = opts.mongoUrl || process.env.MONGO_URL || "mongodb://127.0.0.1:3201/meteor";
 
     // HyLAR process management defaults
     this.hylarUrl = opts.hylarUrl || "http://localhost:4000";
@@ -87,6 +95,54 @@ export class OntologizeServer extends Ontologize {
     this._hylarInitialized = false;
     this._initializingPromise = null;
     this._hylarCrashCount = 0;
+  }
+
+  /**
+   * Restore a MongoDB collection from a mongorestore archive file.
+   * Pure Node.js — no Meteor dependency.
+   *
+   * @param {object} [opts]
+   * @param {string} [opts.archive] - Archive filename or absolute path (defaults to this.restoreArchive)
+   * @param {string} [opts.restorePath] - Base path for relative archive filenames (defaults to this.restorePath)
+   * @param {string} [opts.mongoUrl] - MongoDB connection URL (defaults to this.mongoUrl)
+   * @returns {Promise<object>} { success, message }
+   */
+  async restoreFromArchive(opts = {}) {
+    const archive = opts.archive || this.restoreArchive;
+    if (!archive) {
+      throw new Error("No restore archive configured. Pass opts.archive or set opts.restoreArchive in constructor.");
+    }
+
+    const archivePath = path.isAbsolute(archive)
+      ? archive
+      : path.join(opts.restorePath || this.restorePath, archive);
+
+    const mongoUrl = opts.mongoUrl || this.mongoUrl;
+
+    console.log(`restoreFromArchive: mongorestore --drop --archive=${archivePath} ${mongoUrl}`);
+
+    return new Promise((resolve, reject) => {
+      const args = ["--drop", `--archive=${archivePath}`, mongoUrl];
+      const proc = spawn("mongorestore", args);
+      let stderr = "";
+
+      proc.stdout.on("data", (data) => console.log("mongorestore stdout:", data.toString()));
+      proc.stderr.on("data", (data) => {
+        stderr += data.toString();
+        console.log("mongorestore stderr:", data.toString());
+      });
+      proc.on("close", (code) => {
+        if (code === 0) {
+          resolve({ success: true, message: `mongorestore finished (exit ${code})` });
+        }
+        else {
+          reject(new Error(`mongorestore exit code ${code}: ${stderr}`));
+        }
+      });
+      proc.on("error", (err) => {
+        reject(new Error(`mongorestore spawn failed: ${err.message}`));
+      });
+    });
   }
 
   /**
@@ -1573,6 +1629,7 @@ INSERT DATA {
 
   /**
    * Create Statement objects from HyLAR reasoning facts
+
    * @param {Object[]} facts - Array of HyLAR fact objects
    * @param {Object} opts - Options
    * @param {Object} opts.context - JSON-LD context for URI compaction
@@ -2290,14 +2347,25 @@ INSERT DATA {
     console.log("🚀 Starting bootstrapReasoner...");
     const startTime = Date.now();
 
-    // 1. Ensure HyLAR is running and healthy
+    // 1. Restore a clean, unreasoned ontology collection
+    const archive = opts.restoreArchive || this.restoreArchive;
+    if (archive) {
+      console.log(`Restoring clean ontology from archive: ${archive}`);
+      await this.restoreFromArchive({ archive });
+    }
+    else {
+      console.warn("No restore archive configured — falling back to bootstrap() for clean ontology");
+      await this.bootstrap({ removeCollections: ["ontology"] });
+    }
+
+    // 2. Ensure HyLAR is running and healthy
     let hylarAvailable = false;
     if (opts.classify) {
       await this.checkHylar(opts);
       hylarAvailable = true;
     }
 
-    // 2. Turn off classification for bulk loading (only if HyLAR available)
+    // 3. Turn off classification for bulk loading (only if HyLAR available)
     if (hylarAvailable) {
       console.log("Turning off HyLAR classification...");
       try {
@@ -2315,16 +2383,12 @@ INSERT DATA {
       }
     }
 
-    // 3. Load unreasoned ontology resources (skip bold:reasoned to prevent double-reasoning)
+    // 4. Load all ontology resources (collection is clean — no reasoned resources to skip)
     console.log("Loading ontology resources...");
-    const allCount = await this.collections.ontology.countDocuments({});
-    const ontologyResources = await this.collections.ontology.find({ "bold:reasoned": { $exists: false } }).toArray();
-    if (ontologyResources.length < allCount) {
-      console.log(`Skipping ${allCount - ontologyResources.length} already-reasoned resources`);
-    }
+    const ontologyResources = await this.collections.ontology.find({}).toArray();
     console.log(`Found ${ontologyResources.length} ontology resources to reason`);
 
-    // 4. Convert to triples and insert into HyLAR (only if available)
+    // 5. Convert to triples and insert into HyLAR (only if available)
     console.log("Converting resources to triples...");
     const triples = await this.getTriplesForResources(ontologyResources, {
       blankNodes: opts.blankNodes,
@@ -2368,7 +2432,7 @@ INSERT DATA {
     let statements = [];
     let assembledResources = {};
 
-    // 5. Turn on classification and get derivations (only if HyLAR available)
+    // 6. Turn on classification and get derivations (only if HyLAR available)
     if (opts.classify && hylarAvailable) {
       console.log("Turning on classification and reasoning...");
       const classifyOnResponse = await fetch(`${opts.hylarUrl}/classify/on`, {
@@ -2385,16 +2449,16 @@ INSERT DATA {
 
       console.log(`Classification complete: ${derivations.additions.length} new derivations`);
 
-      // 6. Convert derivations to Facts format
+      // 7. Convert derivations to Facts format
       facts = this._derivationsToFacts(derivations.additions, { blankNodes: opts.blankNodes });
       console.log(`Converted ${facts.length} facts from derivations`);
 
-      // 7. Assemble facts into resources
+      // 8. Assemble facts into resources
       const context = await this.getContext();
       assembledResources = await this.assembleFactsIntoResources(facts, { context });
       console.log(`Assembled ${Object.keys(assembledResources).length} resources from facts`);
       if (opts.debugDump) fs.writeFileSync("/tmp/assembledResources.json", JSON.stringify(assembledResources,null,2));
-      // 8. Create statements for inferred facts
+      // 9. Create statements for inferred facts
       statements = await this.createStatementsForFacts(facts, {
         onlyInferred: true,
         metaPropsByPredicate: {
@@ -2407,13 +2471,15 @@ INSERT DATA {
       });
       console.log(`Created ${statements.length} statements from facts`);
 
-      // 9. Persist statements if collection available
+      // 10. Remove previous bootstrapReasoner statements and persist new ones
       if (this.collections.statements && opts.persistStatements && statements.length > 0) {
+        const deleteResult = await this.collections.statements.deleteMany({ "bold:createdBy": "bold:bootstrapReasoner" });
+        console.log(`Removed ${deleteResult.deletedCount} previous bootstrapReasoner statements`);
         await this._persistStatements(statements);
-        console.log(`Persisted ${statements.length} statements to collection`);
+        console.log(`Persisted ${statements.length} new statements to collection`);
       }
 
-      // 10. Merge assembled resources with existing ones
+      // 11. Merge assembled resources with existing ones
       if (opts.updateResources && Object.keys(assembledResources).length > 0) {
         const updateCount = await this._mergeAndUpdateResources(assembledResources, this.collections.ontology);
         console.log(`Updated ${updateCount} resources with inferred properties`);
@@ -2558,6 +2624,7 @@ INSERT DATA {
             inferredProperties = assembled[resourceId] || {};
 
             // Create statements for inferred facts
+            // TODO problem with inserting new statements each time the ontology reasoner is bootstrapped
             statements = await this.createStatementsForFacts(resourceFacts, {
               onlyInferred: true,
               metaPropsByPredicate: {
@@ -2805,6 +2872,7 @@ INSERT DATA {
 
   /**
    * Persist statements to Statements collection
+
    * @private
    */
   async _persistStatements(statements) {
