@@ -72,7 +72,7 @@ export class OntologizeServer extends Ontologize {
    * @param {string} [opts.dateFormat="M/d/yyyy"] - (from Ontologize) Default format for dates
    * @param {string} [opts.dateTimeFormat="M/d/yyyy h:mm a"] - (from Ontologize) Default format for date-times
    * @param {string} [opts.dateTimeZone="America/Los_Angeles"] - (from Ontologize) Default timezone for date formatting
-   * @param {string} [opts.restoreArchive] - Archive filename for mongorestore (e.g. "ontology.noreasoner.archive")
+   * @param {string} [opts.restoreArchive="ontology.noreasoner.archive"] - Archive filename for mongorestore (e.g. "ontology.noreasoner.archive")
    * @param {string} [opts.restorePath] - Base path for relative archive filenames (defaults to private/data/restore)
    * @param {string} [opts.mongoUrl] - MongoDB connection URL for mongorestore (defaults to MONGO_URL env var)
    */
@@ -83,7 +83,7 @@ export class OntologizeServer extends Ontologize {
     this.opts = opts;
 
     // Archive restore config for bootstrapReasoner
-    this.restoreArchive = opts.restoreArchive || null;
+    this.restoreArchive = opts.restoreArchive || "ontology.noreasoner.archive";
     this.restorePath = opts.restorePath || path.join((process.env.APP_DIR || process.cwd()), "private/data/restore");
     this.mongoUrl = opts.mongoUrl || process.env.MONGO_URL || "mongodb://127.0.0.1:3201/meteor";
 
@@ -2325,7 +2325,6 @@ INSERT DATA {
    * @param {object} [opts] - Configuration options
    * @param {string} [opts.hylarUrl="http://localhost:4000"] - HyLAR server URL
    * @param {number} [opts.hylarPort=4000] - Port for HyLAR server if starting
-   * @param {boolean} [opts.startHylar=false] - Start HyLAR child process
    * @param {boolean} [opts.classify=true] - Run classification after loading
    * @param {boolean} [opts.persist=true] - shorthand for opts.updateResources and opts.persistStatements
    * @param {boolean} [opts.updateResources=true] - Update resources with inferences
@@ -2728,18 +2727,21 @@ INSERT DATA {
       if (!this._initializingPromise) {
         console.warn("ensureReasoner initializing");
         this._initializingPromise = this.bootstrapReasoner(opts)
-          .then(() => {
+          .then((result) => {
             this._hylarInitialized = true;
             this._hylarCrashCount = 0;
+            this._bootstrapResult = result;
             console.warn("======= reasoner initialized. ======");
+            return result;
           })
           .finally(() => { this._initializingPromise = null; });
       }
       else {
         console.warn("continue waiting on ensureReasoner initializing");
       }
-      await this._initializingPromise;
+      return await this._initializingPromise;
     }
+    return {};
   }
 
   /**
@@ -2976,6 +2978,7 @@ INSERT DATA {
    * @param {boolean} [opts.updateResources=true] - Update resources with inferences
    * @param {boolean} [opts.persistStatements=true] - Persist statements to collection
    * @param {boolean} [opts.saveHylar=false] - save triples in HyLAR
+   * @param {boolean} [opts.onlyUnReasoned=true] - only reason resources without bold:reasoned
    * @param {number} [opts.batchSize=1000] - Number of triples to insert per batch
    * @param {boolean} [opts.blankNodes=false] - include blank nodes
    * @param {boolean} [opts.debugDump=false] - write sparql and inferred props to files in /temp
@@ -3002,6 +3005,7 @@ INSERT DATA {
     opts.batchSize = opts.batchSize || 1000;
     opts.blankNodes = opts.blankNodes || false;
     opts.debugDump = opts.debugDump || false;
+    opts.onlyUnReasoned = opts.onlyUnReasoned !== false;
 
     console.log(`Starting reasonCollection for "${collectionName}"...`);
     const startTime = Date.now();
@@ -3012,7 +3016,8 @@ INSERT DATA {
     // 3. Load unreasoned resources (skip bold:reasoned to prevent double-reasoning)
     console.log(`Loading resources from "${collectionName}" collection...`);
     const allCount = await collection.countDocuments({});
-    const resources = await collection.find({ "bold:reasoned": { $exists: false } }).toArray();
+    const selector = opts.onlyUnReasoned ? { "bold:reasoned": { $exists: false } } : {};
+    const resources = await collection.find(selector).toArray();
     if (resources.length < allCount) {
       console.log(`Skipping ${allCount - resources.length} already-reasoned resources`);
     }
