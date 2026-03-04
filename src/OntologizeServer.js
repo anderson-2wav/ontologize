@@ -2981,6 +2981,7 @@ INSERT DATA {
    * @param {boolean} [opts.onlyUnReasoned=true] - only reason resources without bold:reasoned
    * @param {number} [opts.batchSize=1000] - Number of triples to insert per batch
    * @param {boolean} [opts.blankNodes=false] - include blank nodes
+   * @param {number} [opts.retries=5] - if hylar call fails, try again [5] times
    * @param {boolean} [opts.debugDump=false] - write sparql and inferred props to files in /temp
    * @returns {Promise<object>} Result summary with counts
    */
@@ -3006,6 +3007,7 @@ INSERT DATA {
     opts.blankNodes = opts.blankNodes || false;
     opts.debugDump = opts.debugDump || false;
     opts.onlyUnReasoned = opts.onlyUnReasoned !== false;
+    opts.retries = typeof opts.retries === "number" ? opts.retries : 5;
 
     console.log(`Starting reasonCollection for "${collectionName}"...`);
     const startTime = Date.now();
@@ -3084,7 +3086,7 @@ INSERT DATA {
     if (opts.userId) {
       metaProps["bold:updatedBy"] = opts.userId;
     }
-
+    let retries = 0;
     for (let i = 0; i < batches.length; i++) {
       const batch = batches[i];
       console.log(`  Batch ${i + 1}/${batches.length}: inserting ${batch.length} triples...`);
@@ -3093,31 +3095,41 @@ INSERT DATA {
       if (opts.debugDump) fs.writeFileSync("/tmp/reasonCollection-insert.sparql", sparqlInsert, { flag: "a" });
 
       let additions = [];
-      try {
-        const response = await fetch(`${opts.hylarUrl}/update`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            query: sparqlInsert,
-            save: opts.saveHylar
-          })
-        });
+      const maxRetries = opts.retries || 0;
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          await this.ensureReasoner(opts);
+          const response = await fetch(`${opts.hylarUrl}/update`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              query: sparqlInsert,
+              save: opts.saveHylar
+            })
+          });
 
-        if (!response.ok) {
-          throw new Error(`Failed to insert triples (batch ${i + 1}): ${response.statusText}`);
-        }
+          if (!response.ok) {
+            throw new Error(`Failed to insert triples (batch ${i + 1}): ${response.statusText}`);
+          }
 
-        const responseData = await response.json();
-        // /update may return { derivations: { additions } } or { additions } directly
-        const derivations = responseData.derivations ?? responseData;
-        if (derivations.additions && derivations.additions.length > 0) {
-          additions = derivations.additions;
-          console.log(`  Batch ${i + 1}: ${additions.length} new derivations`);
+          const responseData = await response.json();
+          // /update may return { derivations: { additions } } or { additions } directly
+          const derivations = responseData.derivations ?? responseData;
+          if (derivations.additions && derivations.additions.length > 0) {
+            additions = derivations.additions;
+            console.log(`  Batch ${i + 1}: ${additions.length} new derivations`);
+          }
+          break;
         }
-      }
-      catch (error) {
-        console.error(`HyLAR /update failed on batch ${i + 1}:`, error);
-        throw error;
+        catch (error) {
+          if (attempt < maxRetries) {
+            console.warn(`HyLAR /update failed on batch ${i + 1} (attempt ${attempt + 1}/${maxRetries + 1}), retrying...`, error.message);
+          }
+          else {
+            console.error(`HyLAR /update failed on batch ${i + 1} after ${attempt + 1} attempts:`, error);
+            throw error;
+          }
+        }
       }
 
       // Process and persist this batch's derivations immediately
