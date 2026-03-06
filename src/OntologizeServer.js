@@ -72,7 +72,7 @@ export class OntologizeServer extends Ontologize {
    * @param {string} [opts.dateFormat="M/d/yyyy"] - (from Ontologize) Default format for dates
    * @param {string} [opts.dateTimeFormat="M/d/yyyy h:mm a"] - (from Ontologize) Default format for date-times
    * @param {string} [opts.dateTimeZone="America/Los_Angeles"] - (from Ontologize) Default timezone for date formatting
-   * @param {string} [opts.restoreArchive="ontology.noreasoner.archive"] - Archive filename for mongorestore (e.g. "ontology.noreasoner.archive")
+   * @param {string} [opts.restoreArchive="ontology.archive"] - Archive filename for mongorestore (e.g. "ontology.archive")
    * @param {string} [opts.restorePath] - Base path for relative archive filenames (defaults to private/data/restore)
    * @param {string} [opts.mongoUrl] - MongoDB connection URL for mongorestore (defaults to MONGO_URL env var)
    */
@@ -83,7 +83,7 @@ export class OntologizeServer extends Ontologize {
     this.opts = opts;
 
     // Archive restore config for bootstrapReasoner
-    this.restoreArchive = opts.restoreArchive || "ontology.noreasoner.archive";
+    this.restoreArchive = opts.restoreArchive || "ontology.archive";
     this.restorePath = opts.restorePath || path.join((process.env.APP_DIR || process.cwd()), "private/data/restore");
     this.mongoUrl = opts.mongoUrl || process.env.MONGO_URL || "mongodb://127.0.0.1:3201/meteor";
 
@@ -1996,13 +1996,13 @@ INSERT DATA {
       }
     }
 
+    if (await this._isJsonProperty(resource)) {
+      return "@json";
+    }
+
     // Default for ObjectProperty-like behavior (range points to a class)
     if (resource["rdfs:range"] && !resource["rdfs:range"].startsWith("xsd:")) {
       return "@id";
-    }
-
-    if (await this._isJsonProperty(resource._id)) {
-      return "@json";
     }
 
     return null; // No type determination possible
@@ -2036,12 +2036,13 @@ INSERT DATA {
    * Check if a property has a bold:JSON or bui:Schema range (or subclass).
    * These properties require special handling during import/export.
    *
-   * @param {string} propertyId - The property identifier (e.g., "bui:schema")
+   * @param {string|object} propertyResourceOrId - The property identifier (e.g., "bui:schema")
    * @returns {Promise<boolean>} True if the property has a JSON-type range
    * @private
    */
-  async _isJsonProperty(propertyId) {
-    if (!propertyId) return false;
+  async _isJsonProperty(propertyResourceOrId) {
+    if (!propertyResourceOrId) return false;
+    const propertyId = typeof propertyResourceOrId === "string" ? propertyResourceOrId : propertyResourceOrId._id;
 
     // Check cache first
     if (!this._jsonPropertyLookupCache) {
@@ -2052,9 +2053,10 @@ INSERT DATA {
     }
 
     // Look up property definition in Ontology collection
-    const propertyDef = await this.collections.ontology.findOne({ _id: propertyId });
+    const propertyDef = typeof propertyResourceOrId === "object" ? propertyResourceOrId : await this.collections.ontology.findOne({ _id: propertyResourceOrId });
     if (!propertyDef) {
-      this._jsonPropertyLookupCache.set(propertyId, false);
+      // too early to say this...
+      // this._jsonPropertyLookupCache.set(propertyId, false);
       return false;
     }
 
@@ -2186,8 +2188,8 @@ INSERT DATA {
             }
           }
         };
-        // look for a { @type, @value } object, convert it to only its value
-        if (value["@type"] && value["@type"].includes("@json") && value["@value"]) {
+        // look for a { @value } object, convert it
+        if (value["@value"]) {
           value = value["@value"];
         }
         // Parse string values back to POJOs
