@@ -73,18 +73,18 @@ export class OntologizeServer extends Ontologize {
    * @param {string} [opts.dateTimeFormat="M/d/yyyy h:mm a"] - (from Ontologize) Default format for date-times
    * @param {string} [opts.dateTimeZone="America/Los_Angeles"] - (from Ontologize) Default timezone for date formatting
    * @param {string} [opts.restoreArchive="ontology.archive"] - Archive filename for mongorestore (e.g. "ontology.archive")
-   * @param {string} [opts.restorePath] - Base path for relative archive filenames (defaults to private/data/restore)
+   * @param {string} [opts.restorePath] - Base path for relative archive filenames (defaults to ./archives)
    * @param {string} [opts.mongoUrl] - MongoDB connection URL for mongorestore (defaults to MONGO_URL env var)
    */
   constructor(ontologyCollection, contextCollection, statementsCollection, opts = {}) {
     super(ontologyCollection, contextCollection, statementsCollection, opts);
     this.bootstrapFiles = opts.bootstrapFiles || [];
-    this.bootstrapPath = opts.bootstrapPath || path.join((process.env.APP_DIR || process.cwd()),"private/data/bootstrap");
+    this.bootstrapPath = opts.bootstrapPath || path.join((process.env.APP_DIR || process.cwd()),"data/bootstrap");
     this.opts = opts;
 
     // Archive restore config for bootstrapReasoner
     this.restoreArchive = opts.restoreArchive || "ontology.archive";
-    this.restorePath = opts.restorePath || path.join((process.env.APP_DIR || process.cwd()), "private/data/restore");
+    this.restorePath = opts.restorePath || path.join((process.env.APP_DIR || process.cwd()), "./archives");
     this.mongoUrl = opts.mongoUrl || process.env.MONGO_URL || "mongodb://127.0.0.1:3201/meteor";
 
     // HyLAR process management defaults
