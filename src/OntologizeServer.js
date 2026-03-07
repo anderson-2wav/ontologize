@@ -84,7 +84,7 @@ export class OntologizeServer extends Ontologize {
 
     // Archive restore config for bootstrapReasoner
     this.restoreArchive = opts.restoreArchive || "ontology.archive";
-    this.restorePath = opts.restorePath || path.join((process.env.APP_DIR || process.cwd()), "./archives");
+    this.restorePath = opts.restorePath || path.join((process.env.APP_DIR || process.cwd()), "./bold-assets/archives");
     this.mongoUrl = opts.mongoUrl || process.env.MONGO_URL || "mongodb://127.0.0.1:3201/meteor";
 
     // HyLAR process management defaults
