@@ -1856,11 +1856,13 @@ export class Ontologize {
    *   Array of collection objects or name strings. If omitted, all registered collections are used.
    * @param {Object} [opts] - Options
    * @param {boolean} [opts.recurse=true] - Whether to recurse into embedded resources
+   * @param {string[]} [opts.classFilter]
    * @returns {Promise<Object>} Explorer data with Classes, Properties, and Ontologies sections
    */
   async explorer(collections, opts = {}) {
     check(opts, Match.Optional(Object));
 
+    const start = Date.now();
     const resolvedCollections = this._resolveCollections(collections);
     opts.recurse = opts.recurse !== false;
 
@@ -1877,7 +1879,14 @@ export class Ontologize {
     const domainProperties = await this._getPropertiesByDomain();
 
     // Step 5: Collect properties directly found on instances of each class
-    const { instanceProperties, individualCounts, individualQueries, locationsCt } = await this._getInstanceInfoByType(resolvedCollections, opts);
+    const { instanceProperties, individualCounts, individualQueries, locationsCt } =
+      // false ? {
+      //     instanceProperties: {},
+      //   individualCounts: {},
+      //   individualQueries: {},
+      //   locationsCt: {},
+      // } :
+        await this._getInstanceInfoByType(resolvedCollections, opts);
 
     // Step 6: Enrich instance properties with assembled bui:schema per class context.
     // Clone each propInfo before adding the type-specific schema, because the
@@ -1928,7 +1937,7 @@ export class Ontologize {
 
     // Ontologies section
     ontMap.Ontologies = allOntologies;
-
+    console.log(`return explorer data in ${Math.round((Date.now() - start) / 1000)} seconds`);
     return ontMap;
   }
 
@@ -1943,7 +1952,7 @@ export class Ontologize {
    */
   _resolveCollections(collections) {
     if (!collections || (Array.isArray(collections) && collections.length === 0)) {
-      return Object.values(this.collections);
+      return Object.values(this.collections).filter(c => c !== this.collections["statements"]);
     }
 
     if (!Array.isArray(collections)) {
@@ -1998,10 +2007,32 @@ export class Ontologize {
       const collectionName = collection.collectionName || collection._name || "unknown";
       const cursor = collection.find();
       const documents = cursor.toArray ? await cursor.toArray() : cursor.fetch();
-
+      console.log(`processing ${documents.length} documents from ${collectionName}`);
       for (const resource of documents) {
-        const types = resource["@type"];
-        if (!types) continue;
+        let types = resource["@type"] ?? []; //[resource["@type"]?.[0]];
+
+        // experiment with using the classFilter here to find all direct and subclasses of filtered types
+        if (opts.classFilter) {
+          const classFilter = opts.classFilter; // ['orju:SpecimenSample', 'orju:Species', 'orju:Bird'];
+          const filteredTypes = [];
+          classFilter.forEach((ft,ftIdx) => {
+            if (types.includes(ft)) {
+              const superClass = classFilter[ftIdx];
+              const superClassIdx = types.indexOf(superClass);
+              if (superClassIdx > -1) {
+                types.forEach((type,idx) => {
+                  if (idx <= superClassIdx) {
+                    // console.log(`${type} subClassOf ${superClass} on ${resource._id}`);
+                    filteredTypes.push(type);
+                  }
+                });
+              }
+            }
+          });
+          types = filteredTypes;
+        }
+
+        if (!types.length) continue;
         const typeArray = Array.isArray(types) ? types : [types];
         for (const type of typeArray) {
           instanceProperties[type] = instanceProperties[type] || {};
