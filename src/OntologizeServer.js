@@ -61,17 +61,10 @@ export class OntologizeServer extends Ontologize {
    * @param {object} ontologyCollection
    * @param {object} contextCollection
    * @param {object} statementsCollection
-   * @param {object} [opts] - Configuration options (same as Ontologize)
+   * @param {object} [opts] - Configuration options (also all opts from Ontologize)
    * @param {string[]} [opts.bootstrapFiles] - Array of file paths for bootstrap ontologies
    * @param {string} [opts.bootstrapPath] - Base path for relative bootstrap file paths
-   * @param {object} [opts.collections] - (from Ontologize) named collections in addition to ontology, context, and statements
-   * @param {object} [opts.context] - (from Ontologize) Default JSON-LD context
-   * @param {boolean} [opts.debug=false] - (from Ontologize) Enable debug logging
-   * @param {string[]} [opts.labelProperties] - (from Ontologize) Properties to check for labels (in order of preference)
-   * @param {string[]} [opts.descriptionProperties] - (from Ontologize) Properties to check for descriptions (in order of preference)
-   * @param {string} [opts.dateFormat="M/d/yyyy"] - (from Ontologize) Default format for dates
-   * @param {string} [opts.dateTimeFormat="M/d/yyyy h:mm a"] - (from Ontologize) Default format for date-times
-   * @param {string} [opts.dateTimeZone="America/Los_Angeles"] - (from Ontologize) Default timezone for date formatting
+   *
    * @param {string} [opts.restoreArchive="ontology.archive"] - Archive filename for mongorestore (e.g. "ontology.archive")
    * @param {string} [opts.restorePath] - Base path for relative archive filenames (defaults to ./archives)
    * @param {string} [opts.mongoUrl] - MongoDB connection URL for mongorestore (defaults to MONGO_URL env var)

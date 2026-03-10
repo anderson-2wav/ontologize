@@ -1856,7 +1856,7 @@ export class Ontologize {
    *   Array of collection objects or name strings. If omitted, all registered collections are used.
    * @param {Object} [opts] - Options
    * @param {boolean} [opts.recurse=true] - Whether to recurse into embedded resources
-   * @param {string[]} [opts.classFilter]
+   * @param {string[]} [opts.classFilter] -
    * @returns {Promise<Object>} Explorer data with Classes, Properties, and Ontologies sections
    */
   async explorer(collections, opts = {}) {
