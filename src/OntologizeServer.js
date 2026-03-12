@@ -2768,6 +2768,14 @@ INSERT DATA {
       env: { ...process.env, NODE_OPTIONS: "--max-old-space-size=8192" }
     });
 
+    hylarProcess.stdout.on("data", (data) => {
+      console.log(`[HyLAR] ${data.toString().trimEnd()}`);
+    });
+
+    hylarProcess.stderr.on("data", (data) => {
+      console.warn(`[HyLAR] ${data.toString().trimEnd()}`);
+    });
+
     // Watch for process exit/error and reset state so checkHylar() re-spawns
     hylarProcess.on("exit", (code, signal) => {
       console.warn(`HyLAR process exited (code: ${code}, signal: ${signal})`);
