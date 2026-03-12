@@ -64,9 +64,8 @@ export class OntologizeServer extends Ontologize {
    * @param {object} [opts] - Configuration options (also all opts from Ontologize)
    * @param {string[]} [opts.bootstrapFiles] - Array of file paths for bootstrap ontologies
    * @param {string} [opts.bootstrapPath] - Base path for relative bootstrap file paths
-   *
-   * @param {string} [opts.restoreArchive="ontology.archive"] - Archive filename for mongorestore (e.g. "ontology.archive")
-   * @param {string} [opts.restorePath] - Base path for relative archive filenames (defaults to ./archives)
+   * @param {string} [opts.ontologyArchive="ontology.archive"] - mongodb archive filename for ontology
+   * @param {string} [opts.archivePath] - Base path for relative archive filenames (defaults to ./bold-assets/archives)
    * @param {string} [opts.mongoUrl] - MongoDB connection URL for mongorestore (defaults to MONGO_URL env var)
    */
   constructor(ontologyCollection, contextCollection, statementsCollection, opts = {}) {
@@ -76,8 +75,8 @@ export class OntologizeServer extends Ontologize {
     this.opts = opts;
 
     // Archive restore config for bootstrapReasoner
-    this.restoreArchive = opts.restoreArchive || "ontology.archive";
-    this.restorePath = opts.restorePath || path.join((process.env.APP_DIR || process.cwd()), "./bold-assets/archives");
+    this.ontologyArchive = opts.ontologyArchive || "ontology.archive";
+    this.archivePath = opts.archivePath || path.join((process.env.APP_DIR || process.cwd()), "./bold-assets/archives");
     this.mongoUrl = opts.mongoUrl || process.env.MONGO_URL || "mongodb://127.0.0.1:3201/meteor";
 
     // HyLAR process management defaults
@@ -95,20 +94,20 @@ export class OntologizeServer extends Ontologize {
    * Pure Node.js — no Meteor dependency.
    *
    * @param {object} [opts]
-   * @param {string} [opts.archive] - Archive filename or absolute path (defaults to this.restoreArchive)
-   * @param {string} [opts.restorePath] - Base path for relative archive filenames (defaults to this.restorePath)
+   * @param {string} [opts.archive] - Archive filename or absolute path (defaults to this.ontologyArchive)
+   * @param {string} [opts.archivePath] - Base path for relative archive filenames (defaults to this.archivePath)
    * @param {string} [opts.mongoUrl] - MongoDB connection URL (defaults to this.mongoUrl)
    * @returns {Promise<object>} { success, message }
    */
   async restoreFromArchive(opts = {}) {
-    const archive = opts.archive || this.restoreArchive;
+    const archive = opts.archive || this.ontologyArchive;
     if (!archive) {
-      throw new Error("No restore archive configured. Pass opts.archive or set opts.restoreArchive in constructor.");
+      throw new Error("No restore archive configured. Pass opts.archive or set opts.ontologyArchive in constructor.");
     }
 
     const archivePath = path.isAbsolute(archive)
       ? archive
-      : path.join(opts.restorePath || this.restorePath, archive);
+      : path.join(opts.archivePath || this.archivePath, archive);
 
     const mongoUrl = opts.mongoUrl || this.mongoUrl;
 
@@ -2342,7 +2341,7 @@ INSERT DATA {
     const startTime = Date.now();
 
     // 1. Restore a clean, unreasoned ontology collection
-    const archive = opts.restoreArchive || this.restoreArchive;
+    const archive = opts.ontologyArchive || this.ontologyArchive;
     if (archive) {
       console.log(`Restoring clean ontology from archive: ${archive}`);
       await this.restoreFromArchive({ archive });
