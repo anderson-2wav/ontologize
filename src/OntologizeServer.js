@@ -2759,13 +2759,14 @@ INSERT DATA {
 
     const hylarPath = path.join(process.env.APP_DIR, "modules/hylar-reasoner");
 
-    console.log(`Starting HyLAR server on port ${port}...`);
+    const heapSize = Meteor.settings.hylarHeapSize ?? 8192;
+    console.log(`Starting HyLAR server on port ${port} with heap size ${heapSize}`);
     const serverScript = path.join(hylarPath, "hylar/server/server.js");
     const hylarProcess = spawn(process.execPath, [serverScript, "--port", String(port)], {
       cwd: hylarPath,
       stdio: ["ignore", "pipe", "pipe"],
       detached: false,
-      env: { ...process.env, NODE_OPTIONS: "--max-old-space-size=8192" }
+      env: { ...process.env, NODE_OPTIONS: `--max-old-space-size=${heapSize}` }
     });
 
     hylarProcess.stdout.on("data", (data) => {
