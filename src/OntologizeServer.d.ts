@@ -1,9 +1,9 @@
 /**
- * This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at https://mozilla.org/MPL/2.0/.
- *
  * Copyright (c) 2026 2wav, Inc.
+ *
+ * This file is part of the BOLD libraries, licensed under the GNU Lesser
+ * General Public License v3.0 or later. See LICENSE for details, or
+ * <https://www.gnu.org/licenses/lgpl-3.0.html>.
  */
 
 import { Ontologize, OntologizeOptions, Resource, MongoCollection } from "../index";

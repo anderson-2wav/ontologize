@@ -15,10 +15,10 @@ The Ontologize module provides two distinct imports: `Ontologize` is intended fo
 
 ## License
 
-Ontologize is licensed under the **Mozilla Public License 2.0 (MPL-2.0)**.
+Ontologize is licensed under the **GNU Lesser General Public License v3.0 or later (LGPL-3.0-or-later)**.
 
 This means:
-- If you modify Ontologize source files, share those changes
+- If you modify Ontologize source files, share those changes under LGPL
 - Your application code that uses Ontologize can remain proprietary
 - See [LICENSE](./LICENSE) for full terms
 
