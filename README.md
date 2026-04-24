@@ -2,7 +2,7 @@
 
 Ontologize is the core API of BOLD for working with ontology data in MongoDB. It provides tools for importing, managing, and querying JSON-LD ontologies and instance data (ABox) with full OWL compatibility.
 
-Ontologize borrows heavily from concepts developed for CyberTalent Bridge™, a cyber-security workforce planning tool created with generous support of U.S. Department of Homeland Security under Grant Award Number, 2015-ST-061-CIRC01.
+Ontologize borrows heavily from concepts developed for CyberTalent Bridge™, a cyber-security workforce planning tool created with generous support of U.S. Department of Homeland Security under Grant Award Number, 2015-ST-061-CIRC01. The code has been entirely rewritten to be framework and application agnostic.
 
 Ontologize is a component of the BOLD stack (Bridge Ontology Linked Data). It handles:
 - **TBox/ABox separation:** Ontology definitions (classes, properties) are stored separately from instance data
@@ -18,7 +18,7 @@ The Ontologize module provides two distinct imports: `Ontologize` is intended fo
 Ontologize is licensed under the **GNU Lesser General Public License v3.0 or later (LGPL-3.0-or-later)**.
 
 This means:
-- If you modify Ontologize source files, share those changes under LGPL
+- If you modify Ontologize source files, share those changes under LGPL. (PRs would be nice.)
 - Your application code that uses Ontologize can remain proprietary
 - See [LICENSE](./LICENSE) for full terms
 
