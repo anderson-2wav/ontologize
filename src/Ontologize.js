@@ -1878,15 +1878,11 @@ export class Ontologize {
     // Step 4: For each class, get properties with this class as rdfs:domain
     const domainProperties = await this._getPropertiesByDomain();
 
-    // Step 5: Collect properties directly found on instances of each class
+    // Step 5: Collect per-type counts via aggregation (fast path).
+    // _getInstanceInfoByType is preserved for cases where field introspection
+    // is also needed, but it does not scale to large ABox collections.
     const { instanceProperties, individualCounts, individualQueries, locationsCt } =
-      // false ? {
-      //     instanceProperties: {},
-      //   individualCounts: {},
-      //   individualQueries: {},
-      //   locationsCt: {},
-      // } :
-        await this._getInstanceInfoByType(resolvedCollections, opts);
+      await this._getInstanceCountsByType(resolvedCollections);
 
     // Step 6: Enrich instance properties with assembled bui:schema per class context.
     // Clone each propInfo before adding the type-specific schema, because the
@@ -2008,7 +2004,11 @@ export class Ontologize {
       const cursor = collection.find();
       const documents = cursor.toArray ? await cursor.toArray() : cursor.fetch();
       console.log(`processing ${documents.length} documents from ${collectionName}`);
+      let ct = 0;
       for (const resource of documents) {
+        if (!(++ct % 100)) {
+          console.log(`processed ${ct} documents from ${collectionName}`);
+        }
         let types = resource["@type"] ?? []; //[resource["@type"]?.[0]];
 
         // experiment with using the classFilter here to find all direct and subclasses of filtered types
@@ -2087,6 +2087,73 @@ export class Ontologize {
               }
             }
           }
+        }
+      }
+    }
+
+    return { instanceProperties, individualCounts, individualQueries, locationsCt };
+  }
+
+  /**
+   * Efficiently compute per-type counts and location counts using MongoDB
+   * aggregation pipelines rather than iterating every document.
+   *
+   * Returns the same shape as _getInstanceInfoByType but with instanceProperties: {}
+   * (no field introspection). Use this for large ABox collections where document-level
+   * iteration would time out.
+   *
+   * @private
+   * @param {Array} collections - resolved collection objects
+   * @returns {{ instanceProperties, individualCounts, individualQueries, locationsCt }}
+   */
+  async _getInstanceCountsByType(collections) {
+    const LOCATION_PROPS = ["geo:lat", "geo:long", "bold:spatialDepiction", "bold:spatialRange"];
+
+    const instanceProperties = {};
+    const individualCounts = {};
+    const individualQueries = {};
+    const locationsCt = {};
+
+    for (const collection of collections) {
+      const collectionName = collection.collectionName || collection._name || "unknown";
+
+      // Single aggregation: unwind @type, group by type, count documents
+      const rawCol = collection.rawCollection
+        ? collection.rawCollection()
+        : collection;
+
+      const typeCounts = await rawCol.aggregate([
+        { $unwind: { path: "$@type", preserveNullAndEmptyArrays: false } },
+        { $group: { _id: "$@type", count: { $sum: 1 } } },
+      ]).toArray();
+
+      // Documents that have at least one location property, counted per type
+      const locationFilter = { $or: LOCATION_PROPS.map(p => ({ [p]: { $exists: true } })) };
+      const locationTypeCounts = await rawCol.aggregate([
+        { $match: locationFilter },
+        { $unwind: { path: "$@type", preserveNullAndEmptyArrays: false } },
+        { $group: { _id: "$@type", count: { $sum: 1 } } },
+      ]).toArray();
+
+      const locationCountMap = new Map(locationTypeCounts.map(r => [r._id, r.count]));
+
+      for (const { _id: type, count } of typeCounts) {
+        individualCounts[type] = (individualCounts[type] || 0) + count;
+
+        if (locationCountMap.has(type)) {
+          locationsCt[type] = (locationsCt[type] || 0) + locationCountMap.get(type);
+        }
+
+        // Build one Query per (type, collection) pair — same structure as _getInstanceInfoByType
+        if (!individualQueries[type]) individualQueries[type] = [];
+        const queryName = `${type}-${collectionName}`;
+        if (!individualQueries[type].find(q => q.name === queryName)) {
+          individualQueries[type].push(new Query({
+            name: queryName,
+            collection: collectionName,
+            selector: { "@type": type },
+            count,
+          }));
         }
       }
     }
