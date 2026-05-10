@@ -105,6 +105,17 @@ export class Ontologize {
     this.opts.proxy = this.opts.proxy !== false;
     this.version = "0.1.0";
 
+    // Optional: per-resource info-component resolver. Used by GeoView's
+    // NodeInfoPlugin (docs/geo-view-spec.md §17.8) — applications register a
+    // function that picks a Vue component to render info for a given
+    // resource. Constructor opt is accepted for completeness; most apps
+    // register post-init via setInfoComponentResolver() so the function can
+    // close over imported Vue components.
+    this._infoComponentResolver = null;
+    if (this.opts.infoComponentResolver) {
+      this.setInfoComponentResolver(this.opts.infoComponentResolver);
+    }
+
     // Initialize singleton LD instance for this Ontologize instance
     this._ld = null;
     // TODO THERE WERE CLIENT/SERVER PROBLEMS HERE...
@@ -143,6 +154,46 @@ export class Ontologize {
       this._ld = new LD();
     }
     return this._ld;
+  }
+
+  /**
+   * Register a resolver that picks a Vue component to render info for a
+   * given resource. Used by GeoView's NodeInfoPlugin (and any host that
+   * wants ontology-driven UI selection). Applications typically call this
+   * once at startup, passing a function that closes over imported Vue
+   * components. Pass `null` to clear.
+   *
+   * @param {Function|null} resolver
+   *   - resolver(resource, hint?) → Vue component | null
+   *   - hint may include { kind: "raw"|"summary", feature }
+   *   - returning null lets the caller fall back to its default.
+   */
+  setInfoComponentResolver(resolver) {
+    if (resolver !== null && typeof resolver !== "function") {
+      throw new Error("Ontologize.setInfoComponentResolver: resolver must be a function or null");
+    }
+    this._infoComponentResolver = resolver;
+  }
+
+  /**
+   * Pick a Vue component to render info for the given resource. Returns
+   * null when no resolver is registered or the resolver opts out, so the
+   * caller (e.g. NodeInfoPlugin) can supply its own fallback (e.g.
+   * MinimalNodeInfo, ResourceViewer).
+   *
+   * @param {Object} resource
+   * @param {Object} [hint]   { kind: "raw"|"summary", feature } (optional)
+   * @returns {*}             a Vue component (whatever the resolver returned), or null
+   */
+  getInfoComponent(resource, hint) {
+    if (typeof this._infoComponentResolver !== "function") return null;
+    try {
+      return this._infoComponentResolver(resource, hint) ?? null;
+    }
+    catch (err) {
+      console.error("[Ontologize] infoComponentResolver threw:", err);
+      return null;
+    }
   }
 
   /**
