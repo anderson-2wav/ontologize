@@ -1,6 +1,6 @@
 {
   "name": "ontologize",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Ontology processing utilities for JSON-LD and MongoDB",
   "main": "index.js",
   "type": "module",
@@ -14,6 +14,12 @@
     "./server": {
       "import": "./src/OntologizeServer.js",
       "types": "./src/OntologizeServer.d.ts"
+    },
+    "./geo": {
+      "import": "./src/geo/index.js"
+    },
+    "./geo-server": {
+      "import": "./src/geo/server.js"
     },
     "./readme": {
       "import": "./readme.js"
@@ -51,7 +57,9 @@
     "bold-ld": "file:../bold-ld",
     "chai": "^4.3.10",
     "date-fns": "^4.1.0",
+    "h3-js": "^4.1.0",
     "lodash": "^4.17.21",
+    "ngeohash": "^0.6.3",
     "sunrise-sunset-api": "^0.2.1"
   },
   "devDependencies": {
