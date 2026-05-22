@@ -13,3 +13,4 @@
  */
 
 export * from "./cellFetcher.js";
+export * from "./addH3.js";
