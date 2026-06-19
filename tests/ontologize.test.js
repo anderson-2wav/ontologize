@@ -244,6 +244,55 @@ describe("Ontologize", function () {
     });
   });
 
+  describe("setLabelResolver", function () {
+    afterEach(function () {
+      ontologize.setLabelResolver(null);
+    });
+
+    it("should use resolver result when no label property is found", async function () {
+      ontologize.setLabelResolver(async (resource) => {
+        if (resource["@id"] === "ex:NoLabel") return "Resolver Label";
+        return null;
+      });
+      const resource = { "@id": "ex:NoLabel", "@type": "owl:Class" };
+      const label = await ontologize.getLabel(resource);
+      assert.equal(label, "Resolver Label");
+    });
+
+    it("should skip resolver when a label property is already found", async function () {
+      ontologize.setLabelResolver(async () => "Should Not Be Used");
+      const resource = { "@id": "ex:HasLabel", "@type": "owl:Class", "rdfs:label": "Direct Label" };
+      const label = await ontologize.getLabel(resource);
+      assert.equal(label, "Direct Label");
+    });
+
+    it("should fall through to ID parsing when resolver returns null", async function () {
+      ontologize.setLabelResolver(async () => null);
+      const resource = { "@id": "ex:FallThrough", "@type": "owl:Class" };
+      const label = await ontologize.getLabel(resource);
+      assert.equal(label, "FallThrough");
+    });
+
+    it("should fall through to ID parsing when resolver throws", async function () {
+      ontologize.setLabelResolver(async () => { throw new Error("boom"); });
+      const resource = { "@id": "ex:ErrorCase", "@type": "owl:Class" };
+      const label = await ontologize.getLabel(resource);
+      assert.equal(label, "ErrorCase");
+    });
+
+    it("should clear resolver when passed null", async function () {
+      ontologize.setLabelResolver(async () => "Resolver Label");
+      ontologize.setLabelResolver(null);
+      const resource = { "@id": "ex:AfterClear", "@type": "owl:Class" };
+      const label = await ontologize.getLabel(resource);
+      assert.equal(label, "AfterClear");
+    });
+
+    it("should throw when given a non-function non-null value", function () {
+      assert.throws(() => ontologize.setLabelResolver("not a function"), /must be a function or null/);
+    });
+  });
+
   describe("getLabelFromId", function () {
     it("should return label from resource lookup", async function () {
       // Mock collection with a test resource

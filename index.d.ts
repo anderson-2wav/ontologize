@@ -6,6 +6,16 @@
  * <https://www.gnu.org/licenses/lgpl-3.0.html>.
  */
 
+/**
+ * Application-supplied label resolver. Called by `getLabel` when no standard
+ * label property is found. Return a non-null string to provide the label;
+ * return null or undefined to decline and let the built-in fallback run.
+ */
+export type LabelResolver = (
+  resource: Resource,
+  opts?: GetLabelOptions
+) => Promise<string | null | undefined> | string | null | undefined;
+
 export interface OntologizeOptions {
   /** Named collections in addition to ontology, context, and statements */
   collections?: Record<string, any>;
@@ -23,6 +33,8 @@ export interface OntologizeOptions {
   dateTimeFormat?: string;
   /** Timezone for date formatting. Default: "America/Los_Angeles" */
   dateTimeZone?: string;
+  /** Application-specific label resolver; return null/undefined to decline */
+  labelResolver?: LabelResolver;
 }
 
 export interface GetLabelOptions {
@@ -134,6 +146,14 @@ export declare class Ontologize {
    * - Resource has properties rdf:subject, rdf:predicate, rdf:object (implies Statement by domain)
    */
   isStatementResource(resource: Resource): boolean;
+
+  /**
+   * Register an application-specific label resolver. Called by `getLabel`
+   * when no standard label property is found, before falling back to ID
+   * parsing. Return a non-null string to supply the label; return
+   * null/undefined to decline. Pass `null` to clear.
+   */
+  setLabelResolver(resolver: LabelResolver | null): void;
 
   /**
    * Get the label for a resource, checking properties in order of preference.

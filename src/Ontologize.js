@@ -116,6 +116,14 @@ export class Ontologize {
       this.setInfoComponentResolver(this.opts.infoComponentResolver);
     }
 
+    // Optional: application-specific label resolver. Called when no standard
+    // label property is found on a resource, before falling back to ID parsing.
+    // Returns null/undefined to decline and let the default fallback run.
+    this._labelResolver = null;
+    if (this.opts.labelResolver) {
+      this.setLabelResolver(this.opts.labelResolver);
+    }
+
     // Initialize singleton LD instance for this Ontologize instance
     this._ld = null;
     // TODO THERE WERE CLIENT/SERVER PROBLEMS HERE...
@@ -194,6 +202,22 @@ export class Ontologize {
       console.error("[Ontologize] infoComponentResolver threw:", err);
       return null;
     }
+  }
+
+  /**
+   * Register an application-specific label resolver. Called by `getLabel`
+   * when no standard label property is found, before falling back to ID
+   * parsing. Return a non-null string to supply the label; return
+   * null/undefined to decline and let the default fallback run.
+   * Pass `null` to clear a previously registered resolver.
+   *
+   * @param {Function|null} resolver  async (resource, opts) => string|null
+   */
+  setLabelResolver(resolver) {
+    if (resolver !== null && typeof resolver !== "function") {
+      throw new Error("Ontologize.setLabelResolver: resolver must be a function or null");
+    }
+    this._labelResolver = resolver;
   }
 
   /**
@@ -363,6 +387,17 @@ export class Ontologize {
     // if we got nothing, and its a property label we're looking for
     if (property) {
       return property;
+    }
+
+    // Application-specific label resolver — runs before ID-based fallback
+    if (this._labelResolver) {
+      try {
+        const resolved = await this._labelResolver(resource, opts);
+        if (resolved != null) return resolved;
+      }
+      catch (err) {
+        console.error("[Ontologize] labelResolver threw:", err);
+      }
     }
 
     const _id = resource._id ? "_id" : "@id";
