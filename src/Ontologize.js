@@ -106,7 +106,7 @@ export class Ontologize {
     this.version = "0.1.0";
 
     // Optional: per-resource info-component resolver. Used by GeoView's
-    // NodeInfoPlugin (docs/geo-view-spec.md §17.8) — applications register a
+    // NodeInfoPlugin (geo-plugins-spec.md §4.2) — applications register a
     // function that picks a Vue component to render info for a given
     // resource. Constructor opt is accepted for completeness; most apps
     // register post-init via setInfoComponentResolver() so the function can

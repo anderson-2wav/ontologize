@@ -1,5 +1,5 @@
 /**
- * @license MIT
+ * @license LGPL-3.0-or-later
  * @copyright 2025 2wav inc, Anderson Wiese
  */
 

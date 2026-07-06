@@ -27,7 +27,7 @@ import { h3FieldName } from "./h3.js";
 const TOP_GROUPS_LIMIT = 10;
 
 /**
- * Number of time buckets per groupClusters entry (geo-view-spec.md §18.10).
+ * Number of time buckets per groupClusters entry (geo-view-spec.md §5.4).
  * Each bucket covers (endMs - startMs) / N of the per-group timeRange and
  * holds the count of docs in that sub-interval. Powers TimePathPlugin's
  * bucket-aware "isActive" check, which fixes §18.7 #7's "before-and-after
