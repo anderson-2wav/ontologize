@@ -2057,6 +2057,24 @@ export class Ontologize {
   }
 
   /**
+   * Reverse-map a collection object to the logical key under which it is
+   * registered in this.collections. Instance queries must reference this
+   * logical key — it is what clients resolve against
+   * (ontologize.collections[query.collection]) — not the physical Mongo
+   * collection name. The two coincide for the shared singleton but diverge
+   * for private per-visitor collections (e.g. logical "species" backed by a
+   * physical "species_<key>" collection). Falls back to the physical name if
+   * the object isn't a registered collection.
+   * @private
+   * @param {object} collection
+   * @returns {string}
+   */
+  _logicalCollectionName(collection) {
+    return Object.keys(this.collections).find(k => this.collections[k] === collection)
+      || collection.collectionName || collection._name || "unknown";
+  }
+
+  /**
    * Get properties found on instances grouped by their @type, and count individuals per type.
    * Works with both MongoDB raw collections (toArray) and Meteor Minimongo (fetch).
    * @private
@@ -2086,7 +2104,7 @@ export class Ontologize {
     };
 
     for (const collection of collections) {
-      const collectionName = collection.collectionName || collection._name || "unknown";
+      const collectionName = this._logicalCollectionName(collection);
       const cursor = collection.find();
       const documents = cursor.toArray ? await cursor.toArray() : cursor.fetch();
       console.log(`processing ${documents.length} documents from ${collectionName}`);
@@ -2201,7 +2219,7 @@ export class Ontologize {
     const locationsCt = {};
 
     for (const collection of collections) {
-      const collectionName = collection.collectionName || collection._name || "unknown";
+      const collectionName = this._logicalCollectionName(collection);
 
       // Single aggregation: unwind @type, group by type, count documents
       const rawCol = collection.rawCollection
