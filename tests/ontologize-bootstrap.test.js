@@ -209,12 +209,14 @@ describe("OntologizeServer Bootstrap", function () {
       assert.isFunction(ontologizeServer.bootstrapReasoner);
     });
 
-    it("should load ontology resources without HyLAR server", async function () {
-      // Run bootstrap without HyLAR server (no reasoning)
-      const result = await ontologizeServer.bootstrapReasoner({
-        classify: false, // Skip classification since no HyLAR
-        updateResources: false,
-        persistStatements: false
+    it("should have warmReasoner method", function () {
+      assert.isFunction(ontologizeServer.warmReasoner);
+    });
+
+    it("warmReasoner should load ontology resources without HyLAR server", async function () {
+      // Warm without HyLAR server (no classification) — should load + triple-ify only
+      const result = await ontologizeServer.warmReasoner({
+        classify: false // Skip classification since no HyLAR
       });
 
       assert.isObject(result);
@@ -229,8 +231,15 @@ describe("OntologizeServer Bootstrap", function () {
       assert.isAbove(result.triplesGenerated, 0);
     });
 
-    it("should generate triples from ontology resources", async function () {
-      const result = await ontologizeServer.bootstrapReasoner({
+    it("warmReasoner should not persist statements or update resources", async function () {
+      const before = insertedStatements.length;
+      await ontologizeServer.warmReasoner({ classify: false });
+      // warmReasoner has no write-back path at all
+      assert.equal(insertedStatements.length, before);
+    });
+
+    it("warmReasoner should generate triples from ontology resources", async function () {
+      const result = await ontologizeServer.warmReasoner({
         classify: false
       });
 
@@ -374,16 +383,14 @@ describe("OntologizeServer Bootstrap", function () {
       assert.isAbove(importResult.processedResources, 0);
       console.log(`Imported ${importResult.processedResources} BFO resources`);
 
-      // Now bootstrap without HyLAR (just test loading)
-      const bootstrapResult = await ontologizeServer.bootstrapReasoner({
-        classify: false,
-        updateResources: false,
-        persistStatements: false
+      // Now warm without HyLAR (just test loading)
+      const warmResult = await ontologizeServer.warmReasoner({
+        classify: false
       });
 
-      assert.isObject(bootstrapResult);
-      assert.equal(bootstrapResult.resourcesLoaded, insertedOntologyResources.length);
-      assert.isAbove(bootstrapResult.triplesGenerated, bootstrapResult.resourcesLoaded);
+      assert.isObject(warmResult);
+      assert.equal(warmResult.resourcesLoaded, insertedOntologyResources.length);
+      assert.isAbove(warmResult.triplesGenerated, warmResult.resourcesLoaded);
     });
   });
 

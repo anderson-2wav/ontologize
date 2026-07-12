@@ -2712,15 +2712,116 @@ INSERT DATA {
   }
 
   /**
-   * Ensure HyLAR is running, healthy, and bootstrapped with ontology triples.
-   * Uses a promise lock so concurrent callers await the same bootstrap.
+   * Warm the reasoner: load THIS instance's live ontology collection into HyLAR
+   * and classify, so the in-memory store holds the current closure and subsequent
+   * updateOne() calls reason incrementally and correctly.
+   *
+   * Unlike bootstrapReasoner, warmReasoner:
+   *   - never restores an archive (so it can never `mongorestore --drop` and clobber
+   *     shared collections), and
+   *   - never persists — it writes nothing back to Mongo (no resource updates, no
+   *     Statements). It only primes HyLAR's in-memory store.
+   *
+   * The ontology collection already contains its materialized inferences; loading
+   * that already-reasoned state and re-classifying is idempotent (it re-derives no
+   * substantive new facts — see ontologize-tour-spec.md "Empirical finding: double-
+   * reasoning is idempotent"), so warming from live materialized facts is safe.
+   *
+   * This is the method ensureReasoner() calls. For discovering and *persisting*
+   * inferences (initial classify / deliberate re-classify) see bootstrapReasoner.
+   *
+   * @param {object} [opts] - Configuration options
+   * @param {string} [opts.hylarUrl] - HyLAR server URL
+   * @param {number} [opts.hylarPort] - Port for HyLAR server if starting
+   * @param {boolean} [opts.classify=true] - Load into HyLAR and classify (needs HyLAR)
+   * @param {number} [opts.batchSize=1000] - Triples to insert per batch
+   * @param {boolean} [opts.blankNodes=false] - include blank nodes
+   * @returns {Promise<object>} { duration, resourcesLoaded, triplesGenerated }
+   */
+  async warmReasoner(opts = {}) {
+    opts.hylarUrl = opts.hylarUrl || this.hylarUrl;
+    opts.classify = opts.classify !== false;
+    opts.batchSize = opts.batchSize || 1000;
+
+    console.log("🔥 Warming reasoner from live ontology...");
+    const startTime = Date.now();
+
+    // 1. Ensure HyLAR is running and healthy (only if we intend to classify)
+    let hylarAvailable = false;
+    if (opts.classify) {
+      await this.checkHylar(opts);
+      hylarAvailable = true;
+    }
+
+    // 2. Turn off classification for bulk loading
+    if (hylarAvailable) {
+      const classifyOffResponse = await fetch(`${opts.hylarUrl}/classify/off`, {
+        method: "GET",
+        headers: { "Content-Type": "application/json" }
+      });
+      if (!classifyOffResponse.ok) {
+        throw new Error(`Failed to turn off classification: ${classifyOffResponse.statusText}`);
+      }
+    }
+
+    // 3. Load the live ontology resources (materialized closure included) and
+    //    convert to triples. These docs are fetched fresh and discarded, so it is
+    //    safe that getTriplesForResources mutates them.
+    const ontologyResources = await this.collections.ontology.find({}).toArray();
+    const triples = await this.getTriplesForResources(ontologyResources, {
+      blankNodes: opts.blankNodes,
+      includeStatements: false
+    });
+    console.log(`Warming HyLAR with ${ontologyResources.length} resources / ${triples.length} triples`);
+
+    // 4. Bulk insert into HyLAR, then classify on to establish the closure and
+    //    leave the store classified for subsequent incremental /update calls.
+    if (hylarAvailable) {
+      for (let i = 0; i < triples.length; i += opts.batchSize) {
+        const batch = triples.slice(i, i + opts.batchSize);
+        const sparqlInsert = await this.createSparqlInsert(batch);
+        const insertResponse = await fetch(`${opts.hylarUrl}/query`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: sparqlInsert })
+        });
+        if (!insertResponse.ok) {
+          throw new Error(`Failed to insert triples while warming: ${insertResponse.statusText}`);
+        }
+      }
+
+      const classifyOnResponse = await fetch(`${opts.hylarUrl}/classify/on`, {
+        method: "GET",
+        headers: { "Content-Type": "application/json" }
+      });
+      if (!classifyOnResponse.ok) {
+        throw new Error(`Failed to turn on classification: ${classifyOnResponse.statusText}`);
+      }
+    }
+
+    const duration = Date.now() - startTime;
+    console.log(`✅ warmReasoner completed in ${Math.round(duration / 1000)} seconds`);
+
+    this._hylarInitialized = true;
+    this._hylarCrashCount = 0;
+
+    return {
+      duration,
+      resourcesLoaded: ontologyResources.length,
+      triplesGenerated: triples.length
+    };
+  }
+
+  /**
+   * Ensure HyLAR is running, healthy, and warmed with the current ontology closure.
+   * Uses a promise lock so concurrent callers await the same warm-up.
    */
   async ensureReasoner(opts = {}) {
     await this.checkHylar(opts);
     if (!this._hylarInitialized) {
       if (!this._initializingPromise) {
         console.warn("ensureReasoner initializing");
-        this._initializingPromise = this.bootstrapReasoner(opts)
+        this._initializingPromise = this.warmReasoner(opts)
           .then((result) => {
             this._hylarInitialized = true;
             this._hylarCrashCount = 0;
