@@ -19,7 +19,7 @@ describe("ontologize/readme", function() {
   });
 
   it("should contain license information", function() {
-    assert.include(README, "Mozilla Public License 2.0");
+    assert.include(README, "LGPL-3.0-or-later");
   });
 
   it("should contain BOLD stack reference", function() {
