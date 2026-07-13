@@ -20,7 +20,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "../../..");
-const MONGO_HOST = "mongodb://127.0.0.1:3201";
+const MONGO_HOST = process.env.MONGO || "mongodb://127.0.0.1:3201";
 const TEST_DB = "warm_verify";
 const HYLAR_URL = "http://localhost:4000";
 
@@ -91,5 +91,12 @@ describe("warmReasoner + updateOne (throwaway, live HyLAR)", function () {
     const persisted = await db.collection("ontology").findOne({ _id: "bfo:Foo" });
     const persistedSup = [].concat(persisted["rdfs:subClassOf"] || []);
     assert.include(persistedSup, "bfo:entity", "inferred superclass should be persisted to the ontology collection");
+
+    // updateOne should also persist inferred rdf:Statements queryable by rdf:subject.
+    // This is exactly the mechanism tests/reasoner.app-tests.js "Inference Verification"
+    // now relies on (counting statements with rdf:subject === the reasoned resource).
+    const stmtCount = await db.collection("statements").countDocuments({ "rdf:subject": "bfo:Foo" });
+    console.log("persisted statements with rdf:subject bfo:Foo:", stmtCount);
+    assert.isAbove(stmtCount, 0, "updateOne should persist inferred statements queryable by rdf:subject");
   });
 });
