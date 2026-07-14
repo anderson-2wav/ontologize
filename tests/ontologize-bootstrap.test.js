@@ -368,6 +368,42 @@ describe("OntologizeServer Bootstrap", function () {
       assert.include(entityResource["@type"], "owl:Thing");
       assert.property(entityResource, "owl:sameAs");
     });
+
+    it("_mergeAndUpdateResources inserts missing resources by default", async function () {
+      const docs = { "ex:Exists": { _id: "ex:Exists", "@type": ["owl:Class"] } };
+      let inserted = 0, replaced = 0;
+      const mockCol = {
+        findOne: async ({ _id }) => docs[_id] || null,
+        replaceOne: async ({ _id }, doc) => { docs[_id] = doc; replaced++; return { modifiedCount: 1 }; },
+        insertOne: async (doc) => { docs[doc._id] = doc; inserted++; return { insertedId: doc._id }; }
+      };
+      const assembled = {
+        "ex:Exists": { "rdfs:subClassOf": ["bfo:entity"] },
+        "ex:Missing": { "rdfs:subClassOf": ["bfo:entity"] }
+      };
+      const count = await ontologizeServer._mergeAndUpdateResources(assembled, mockCol, { singleCollection: true });
+      assert.equal(count, 2, "both resources written by default");
+      assert.equal(inserted, 1, "missing resource inserted by default");
+      assert.equal(replaced, 1, "existing resource replaced");
+    });
+
+    it("_mergeAndUpdateResources updateOnly skips inserts for missing resources", async function () {
+      const docs = { "ex:Exists": { _id: "ex:Exists", "@type": ["owl:Class"] } };
+      let inserted = 0, replaced = 0;
+      const mockCol = {
+        findOne: async ({ _id }) => docs[_id] || null,
+        replaceOne: async ({ _id }, doc) => { docs[_id] = doc; replaced++; return { modifiedCount: 1 }; },
+        insertOne: async (doc) => { docs[doc._id] = doc; inserted++; return { insertedId: doc._id }; }
+      };
+      const assembled = {
+        "ex:Exists": { "rdfs:subClassOf": ["bfo:entity"] },
+        "ex:Missing": { "rdfs:subClassOf": ["bfo:entity"] }
+      };
+      const count = await ontologizeServer._mergeAndUpdateResources(assembled, mockCol, { singleCollection: true, updateOnly: true });
+      assert.equal(count, 1, "only the existing resource is written under updateOnly");
+      assert.equal(replaced, 1, "existing resource replaced");
+      assert.equal(inserted, 0, "missing resource NOT inserted under updateOnly");
+    });
   });
 
   describe("bootstrapReasoner with BFO data", function () {

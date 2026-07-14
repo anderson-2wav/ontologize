@@ -3015,6 +3015,7 @@ INSERT DATA {
    * @param {object} [opts]
    * @param {boolean} [opts.includeBlankNodes=true]
    * @param {boolean} [opts.singleCollection=false] - if true, skip per-resource resolution
+   * @param {boolean} [opts.updateOnly=false] - merge into existing resources only; never insert new ones
    * @private
    */
   async _mergeAndUpdateResources(assembledResources, collection, opts = {}) {
@@ -3058,6 +3059,11 @@ INSERT DATA {
         updateCount++;
       }
       else {
+        // updateOnly: don't create new documents for inferred-but-unknown subjects
+        // (e.g. owl:Nothing / ontology-level URIs that shouldn't become resources).
+        if (opts.updateOnly) {
+          continue;
+        }
         // Insert new resource
         const newResource = { ...assembledResource, _id: resourceId, "bold:reasoned": new Date().toISOString() };
         await targetCollection.insertOne(newResource);
