@@ -46,7 +46,9 @@ describe("warmReasoner + updateOne (throwaway, live HyLAR)", function () {
       { _id: "bfo:entity", "@type": ["owl:Class"], "rdfs:label": "entity" },
       { _id: "bfo:continuant", "@type": ["owl:Class"], "rdfs:subClassOf": ["bfo:entity"] },
       { _id: "bfo:Foo", "@type": ["owl:Class"], "rdfs:label": "Foo" },
-      { _id: "bfo:Bar", "@type": ["owl:Class"], "rdfs:subClassOf": ["bfo:Foo"] }
+      { _id: "bfo:Bar", "@type": ["owl:Class"], "rdfs:subClassOf": ["bfo:Foo"] },
+      { _id: "bfo:Baz", "@type": ["owl:Class"], "rdfs:label": "Baz" },
+      { _id: "bfo:Qux", "@type": ["owl:Class"], "rdfs:subClassOf": ["bfo:Baz"] }
     ]);
 
     server = new OntologizeServer(
@@ -68,7 +70,7 @@ describe("warmReasoner + updateOne (throwaway, live HyLAR)", function () {
   it("warms from live ontology, then updateOne infers the transitive superclass", async function () {
     // Warm primes HyLAR with the live ontology closure (spawns HyLAR).
     const warm = await server.warmReasoner({});
-    assert.equal(warm.resourcesLoaded, 4, "warm should load all 4 ontology resources");
+    assert.equal(warm.resourcesLoaded, 6, "warm should load all 6 ontology resources");
 
     // Now add bfo:Foo ⊑ bfo:continuant. HyLAR should transitively infer bfo:Foo ⊑ bfo:entity.
     const res = await server.updateOne(
@@ -92,11 +94,38 @@ describe("warmReasoner + updateOne (throwaway, live HyLAR)", function () {
     const persistedSup = [].concat(persisted["rdfs:subClassOf"] || []);
     assert.include(persistedSup, "bfo:entity", "inferred superclass should be persisted to the ontology collection");
 
+    // Default (single-subject) behavior: bfo:Bar is DERIVED but not persisted.
+    const barDefault = await db.collection("ontology").findOne({ _id: "bfo:Bar" });
+    const barDefaultSup = [].concat(barDefault["rdfs:subClassOf"] || []);
+    assert.notInclude(barDefaultSup, "bfo:continuant", "without persistAllSubjects, bfo:Bar is not persisted");
+
     // updateOne should also persist inferred rdf:Statements queryable by rdf:subject.
     // This is exactly the mechanism tests/reasoner.app-tests.js "Inference Verification"
     // now relies on (counting statements with rdf:subject === the reasoned resource).
     const stmtCount = await db.collection("statements").countDocuments({ "rdf:subject": "bfo:Foo" });
     console.log("persisted statements with rdf:subject bfo:Foo:", stmtCount);
     assert.isAbove(stmtCount, 0, "updateOne should persist inferred statements queryable by rdf:subject");
+  });
+
+  it("persistAllSubjects persists inferences on all affected subjects", async function () {
+    // bfo:Qux ⊑ bfo:Baz. Updating bfo:Baz ⊑ bfo:continuant should transitively give
+    // bfo:Qux ⊑ {bfo:continuant, bfo:entity}, persisted because persistAllSubjects is set.
+    const res = await server.updateOne(
+      "bfo:Baz",
+      { "rdfs:subClassOf": "bfo:continuant" },
+      { collection: "ontology", persistAllSubjects: true, includeStatements: true }
+    );
+    console.log("affectedSubjects:", res.affectedSubjects);
+    assert.include(res.affectedSubjects, "bfo:Qux", "bfo:Qux should be reported as an affected subject");
+
+    const qux = await db.collection("ontology").findOne({ _id: "bfo:Qux" });
+    const quxSup = [].concat(qux["rdfs:subClassOf"] || []);
+    console.log("bfo:Qux rdfs:subClassOf:", quxSup);
+    assert.include(quxSup, "bfo:continuant", "bfo:Qux should inherit bfo:continuant transitively");
+    assert.include(quxSup, "bfo:entity", "bfo:Qux should inherit bfo:entity transitively");
+
+    // Inferred statements for the other subject should be persisted too.
+    const quxStmts = await db.collection("statements").countDocuments({ "rdf:subject": "bfo:Qux" });
+    assert.isAbove(quxStmts, 0, "inferred statements for bfo:Qux should be persisted");
   });
 });

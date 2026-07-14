@@ -2508,6 +2508,9 @@ INSERT DATA {
    * @param {boolean} [opts.saveHylar=false] - save triples in HyLAR
    * @param {string} [opts.userId] - User ID for provenance
    * @param {boolean} [opts.includeStatements=false] - Include statements in response
+   * @param {boolean} [opts.persistAllSubjects=false] - persist inferences for ALL affected
+   *   subjects (e.g. transitively-affected subclasses), not just resourceId. Other subjects
+   *   are merged into their existing resources only (never inserted).
    * @returns {Promise<object>} Update result with resource and metadata
    */
   async updateOne(resourceId, update, opts = {}) {
@@ -2552,6 +2555,7 @@ INSERT DATA {
     // 3. If reasoning enabled, send to HyLAR
     let inferredProperties = {};
     let statements = [];
+    let affectedSubjects = [];
 
     if (opts.reasoning) {
       await this.ensureReasoner(opts);
@@ -2602,23 +2606,42 @@ INSERT DATA {
         const derivations = responseData.derivations ?? responseData;
         if (derivations.additions) {
           const facts = this._derivationsToFacts(derivations.additions);
-
-          // Filter facts for this resource only
           const context = await this.getContext();
-          const expandedResourceId = this.ld().expandQName(resourceId,context);
-          const resourceFacts = facts.filter(f =>
-            f.subject === expandedResourceId
-          );
 
-          if (resourceFacts.length > 0) {
-            // Assemble facts into properties
-            const context = await this.getContext();
-            const assembled = await this.assembleFactsIntoResources(resourceFacts, { context });
+          // By default capture inferences only for the updated resource. With
+          // persistAllSubjects, capture inferences for EVERY affected subject (e.g. a
+          // subclass that inherits new superclasses transitively).
+          let selectedFacts;
+          if (opts.persistAllSubjects) {
+            selectedFacts = facts;
+          }
+          else {
+            const expandedResourceId = this.ld().expandQName(resourceId, context);
+            selectedFacts = facts.filter(f => f.subject === expandedResourceId);
+          }
+
+          if (selectedFacts.length > 0) {
+            // Assemble facts into resources (keyed by compacted id)
+            const assembled = await this.assembleFactsIntoResources(selectedFacts, { context });
             inferredProperties = assembled[resourceId] || {};
+
+            // Persist inferences for OTHER affected subjects. The updated resource is
+            // written below via finalResource, so exclude it here. updateOnly: never
+            // insert new documents for inferred-but-unknown subjects.
+            if (opts.persistAllSubjects && opts.updateResources !== false) {
+              const others = { ...assembled };
+              delete others[resourceId];
+              const otherIds = Object.keys(others);
+              if (otherIds.length > 0) {
+                await this._mergeAndUpdateResources(others, collection, { updateOnly: true });
+                affectedSubjects = otherIds;
+                console.log(`Persisted inferences for ${otherIds.length} other affected subject(s): ${otherIds.join(", ")}`);
+              }
+            }
 
             // Create statements for inferred facts
             // TODO problem with inserting new statements each time the ontology reasoner is bootstrapped
-            statements = await this.createStatementsForFacts(resourceFacts, {
+            statements = await this.createStatementsForFacts(selectedFacts, {
               onlyInferred: true,
               metaPropsByPredicate: {
                 "*": {
@@ -2658,6 +2681,7 @@ INSERT DATA {
       resource: finalResource,
       updateResult,
       inferredCount: statements.length,
+      affectedSubjects,
       statements: opts.includeStatements ? statements : undefined
     };
   }
