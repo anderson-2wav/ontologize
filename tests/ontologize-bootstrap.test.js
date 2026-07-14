@@ -360,8 +360,8 @@ describe("OntologizeServer Bootstrap", function () {
         }
       };
 
-      const updateCount = await ontologizeServer._mergeAndUpdateResources(assembledResources);
-      assert.equal(updateCount, 2);
+      const updated = await ontologizeServer._mergeAndUpdateResources(assembledResources);
+      assert.equal(updated.length, 2);
 
       // Check that resources were updated
       const entityResource = insertedOntologyResources.find(r => r._id === "bfo:entity");
@@ -381,8 +381,8 @@ describe("OntologizeServer Bootstrap", function () {
         "ex:Exists": { "rdfs:subClassOf": ["bfo:entity"] },
         "ex:Missing": { "rdfs:subClassOf": ["bfo:entity"] }
       };
-      const count = await ontologizeServer._mergeAndUpdateResources(assembled, mockCol, { singleCollection: true });
-      assert.equal(count, 2, "both resources written by default");
+      const written = await ontologizeServer._mergeAndUpdateResources(assembled, mockCol, { singleCollection: true });
+      assert.equal(written.length, 2, "both resources written by default");
       assert.equal(inserted, 1, "missing resource inserted by default");
       assert.equal(replaced, 1, "existing resource replaced");
     });
@@ -399,8 +399,10 @@ describe("OntologizeServer Bootstrap", function () {
         "ex:Exists": { "rdfs:subClassOf": ["bfo:entity"] },
         "ex:Missing": { "rdfs:subClassOf": ["bfo:entity"] }
       };
-      const count = await ontologizeServer._mergeAndUpdateResources(assembled, mockCol, { singleCollection: true, updateOnly: true });
-      assert.equal(count, 1, "only the existing resource is written under updateOnly");
+      const written = await ontologizeServer._mergeAndUpdateResources(assembled, mockCol, { singleCollection: true, updateOnly: true });
+      assert.equal(written.length, 1, "only the existing resource is written under updateOnly");
+      assert.include(written, "ex:Exists", "existing subject reported as written");
+      assert.notInclude(written, "ex:Missing", "skipped subject is NOT reported as written");
       assert.equal(replaced, 1, "existing resource replaced");
       assert.equal(inserted, 0, "missing resource NOT inserted under updateOnly");
     });

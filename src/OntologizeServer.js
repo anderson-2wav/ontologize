@@ -2474,8 +2474,8 @@ INSERT DATA {
 
       // 11. Merge assembled resources with existing ones
       if (opts.updateResources && Object.keys(assembledResources).length > 0) {
-        const updateCount = await this._mergeAndUpdateResources(assembledResources, this.collections.ontology);
-        console.log(`Updated ${updateCount} resources with inferred properties`);
+        const updated = await this._mergeAndUpdateResources(assembledResources, this.collections.ontology);
+        console.log(`Updated ${updated.length} resources with inferred properties`);
       }
     }
 
@@ -2511,6 +2511,8 @@ INSERT DATA {
    * @param {boolean} [opts.persistAllSubjects=false] - persist inferences for ALL affected
    *   subjects (e.g. transitively-affected subclasses), not just resourceId. Other subjects
    *   are merged into their existing resources only (never inserted).
+   * @param {boolean} [opts.updateResources=true] - when persistAllSubjects is set, also
+   *   persist the other affected subjects; set false to compute them without writing.
    * @returns {Promise<object>} Update result with resource and metadata
    */
   async updateOne(resourceId, update, opts = {}) {
@@ -2631,11 +2633,9 @@ INSERT DATA {
             if (opts.persistAllSubjects && opts.updateResources !== false) {
               const others = { ...assembled };
               delete others[resourceId];
-              const otherIds = Object.keys(others);
-              if (otherIds.length > 0) {
-                await this._mergeAndUpdateResources(others, collection, { updateOnly: true });
-                affectedSubjects = otherIds;
-                console.log(`Persisted inferences for ${otherIds.length} other affected subject(s): ${otherIds.join(", ")}`);
+              if (Object.keys(others).length > 0) {
+                affectedSubjects = await this._mergeAndUpdateResources(others, collection, { updateOnly: true });
+                console.log(`Persisted inferences for ${affectedSubjects.length} other affected subject(s): ${affectedSubjects.join(", ")}`);
               }
             }
 
@@ -3040,10 +3040,11 @@ INSERT DATA {
    * @param {boolean} [opts.includeBlankNodes=true]
    * @param {boolean} [opts.singleCollection=false] - if true, skip per-resource resolution
    * @param {boolean} [opts.updateOnly=false] - merge into existing resources only; never insert new ones
+   * @returns {Promise<string[]>} ids of the resources actually written (merged/inserted)
    * @private
    */
   async _mergeAndUpdateResources(assembledResources, collection, opts = {}) {
-    let updateCount = 0;
+    const written = [];
     // TODO impl this opt up the line
     const includeBlankNodes = opts.includeBlankNodes !== false;
 
@@ -3080,7 +3081,7 @@ INSERT DATA {
           merged,
           { upsert: false }
         );
-        updateCount++;
+        written.push(resourceId);
       }
       else {
         // updateOnly: don't create new documents for inferred-but-unknown subjects
@@ -3091,11 +3092,11 @@ INSERT DATA {
         // Insert new resource
         const newResource = { ...assembledResource, _id: resourceId, "bold:reasoned": new Date().toISOString() };
         await targetCollection.insertOne(newResource);
-        updateCount++;
+        written.push(resourceId);
       }
     }
 
-    return updateCount;
+    return written;
   }
 
   /**
@@ -3285,8 +3286,8 @@ INSERT DATA {
         }
 
         if (opts.updateResources && Object.keys(assembledResources).length > 0) {
-          const updateCount = await this._mergeAndUpdateResources(assembledResources, collection);
-          totalUpdated += updateCount;
+          const updated = await this._mergeAndUpdateResources(assembledResources, collection);
+          totalUpdated += updated.length;
         }
 
         console.log(`  Batch ${i + 1}: persisted ${facts.length} facts, ${statements.length} statements, ${Object.keys(assembledResources).length} resources`);
