@@ -661,7 +661,7 @@ describe("OntologizeServer Import", function () {
     it("should ensure @type is array after import", async function () {
 
       // Test with actual ontology if available
-      const filePath = "../../data/bootstrap/ontology.json";
+      const filePath = "../../bold-assets/bootstrap/ontology.json";
 
       let fileData;
       try {

@@ -71,7 +71,7 @@ export class OntologizeServer extends Ontologize {
   constructor(ontologyCollection, contextCollection, statementsCollection, opts = {}) {
     super(ontologyCollection, contextCollection, statementsCollection, opts);
     this.bootstrapFiles = opts.bootstrapFiles || [];
-    this.bootstrapPath = opts.bootstrapPath || path.join((process.env.APP_DIR || process.cwd()),"data/bootstrap");
+    this.bootstrapPath = opts.bootstrapPath || path.join((process.env.APP_DIR || process.cwd()),"./bold-assets/bootstrap");
     this.opts = opts;
 
     // Archive restore config for bootstrapReasoner
