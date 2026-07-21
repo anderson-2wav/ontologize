@@ -138,6 +138,74 @@ export class OntologizeServer extends Ontologize {
   }
 
   /**
+   * Dump the MongoDB database to a mongorestore-compatible archive file.
+   * The mirror of restoreFromArchive — same path/URL resolution, same spawn
+   * shape, no gzip so the result can be fed straight back to
+   * restoreFromArchive. Pure Node.js — no Meteor dependency.
+   *
+   * The dump is written to `<archive>.tmp` and renamed on success, so a crashed
+   * or killed mongodump never leaves a truncated file that later looks like the
+   * most recent good backup.
+   *
+   * @param {object} opts
+   * @param {string} opts.archive - Archive filename or absolute path
+   * @param {string} [opts.archivePath] - Base path for relative archive filenames (defaults to this.archivePath)
+   * @param {string} [opts.mongoUrl] - MongoDB connection URL (defaults to this.mongoUrl)
+   * @returns {Promise<object>} { success, message, archivePath, bytes }
+   */
+  async dumpToArchive(opts = {}) {
+    const archive = opts.archive;
+    if (!archive) {
+      throw new Error("No dump archive specified. Pass opts.archive.");
+    }
+
+    const archivePath = path.isAbsolute(archive)
+      ? archive
+      : path.join(opts.archivePath || this.archivePath, archive);
+    const tmpPath = `${archivePath}.tmp`;
+
+    const mongoUrl = opts.mongoUrl || this.mongoUrl;
+
+    console.log(`dumpToArchive: mongodump --archive=${archivePath} ${mongoUrl}`);
+
+    await new Promise((resolve, reject) => {
+      const args = [`--archive=${tmpPath}`, mongoUrl];
+      const proc = spawn("mongodump", args);
+      let stderr = "";
+
+      // mongodump writes its progress to stderr even on success, so stderr is
+      // only reported when the exit code says the dump actually failed.
+      proc.stderr.on("data", (data) => {
+        stderr += data.toString();
+      });
+      proc.on("close", (code) => {
+        if (code === 0) {
+          resolve();
+        }
+        else {
+          reject(new Error(`mongodump exit code ${code}: ${stderr}`));
+        }
+      });
+      proc.on("error", (err) => {
+        reject(new Error(`mongodump spawn failed: ${err.message}`));
+      });
+    }).catch(async (err) => {
+      await fs.promises.rm(tmpPath, { force: true });
+      throw err;
+    });
+
+    await fs.promises.rename(tmpPath, archivePath);
+    const { size } = await fs.promises.stat(archivePath);
+
+    return {
+      success: true,
+      message: `mongodump finished (${size} bytes)`,
+      archivePath,
+      bytes: size,
+    };
+  }
+
+  /**
    * Bootstrap data from configured files.
    * Imports all files specified in opts.bootstrapFiles
    *

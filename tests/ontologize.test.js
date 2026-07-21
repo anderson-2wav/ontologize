@@ -244,6 +244,98 @@ describe("Ontologize", function () {
     });
   });
 
+  describe("getDescription", function () {
+    it("should return dcterms:description when present", async function () {
+      const resource = {
+        "@id": "ex:Thing",
+        "dcterms:description": "A described thing."
+      };
+      const description = await ontologize.getDescription(resource);
+      assert.equal(description, "A described thing.");
+    });
+
+    it("should prefer dcterms:description over rdfs:comment", async function () {
+      const resource = {
+        "@id": "ex:Thing",
+        "dcterms:description": "The description.",
+        "rdfs:comment": "The comment."
+      };
+      const description = await ontologize.getDescription(resource);
+      assert.equal(description, "The description.");
+    });
+
+    it("should fall back to rdfs:comment when dcterms:description is absent", async function () {
+      const resource = {
+        "@id": "ex:Thing",
+        "rdfs:comment": "The comment."
+      };
+      const description = await ontologize.getDescription(resource);
+      assert.equal(description, "The comment.");
+    });
+
+    it("should return the first description from an array", async function () {
+      const resource = {
+        "@id": "ex:Thing",
+        "dcterms:description": ["First.", "Second."]
+      };
+      const description = await ontologize.getDescription(resource);
+      assert.equal(description, "First.");
+    });
+
+    it("should use fallback when no description property is present", async function () {
+      const resource = { "@id": "ex:Thing" };
+      const description = await ontologize.getDescription(resource, "Fallback");
+      assert.equal(description, "Fallback");
+    });
+
+    it("should return an empty string when no description and no fallback", async function () {
+      const resource = { "@id": "ex:Thing" };
+      const description = await ontologize.getDescription(resource);
+      assert.equal(description, "");
+    });
+
+    it("should honor a class schema descriptionProperties override", async function () {
+      ontologize.getSchema = async () => ({ descriptionProperties: ["skos:definition", "rdfs:comment"] });
+      const resource = {
+        "@id": "ex:Thing",
+        "skos:definition": "The definition.",
+        "rdfs:comment": "The comment."
+      };
+      const description = await ontologize.getDescription(resource);
+      assert.equal(description, "The definition.");
+    });
+
+    it("should select the property via getDescriptionProperty", async function () {
+      // getDescription must not re-implement the preference walk; it delegates.
+      const calls = [];
+      ontologize.getDescriptionProperty = async (resource) => {
+        calls.push(resource);
+        return "rdfs:comment";
+      };
+      const resource = {
+        "@id": "ex:Thing",
+        "dcterms:description": "Ignored — getDescriptionProperty chose the comment.",
+        "rdfs:comment": "The comment."
+      };
+      const description = await ontologize.getDescription(resource);
+      assert.equal(description, "The comment.");
+      assert.deepEqual(calls, [resource]);
+    });
+
+    it("should not pass its text fallback through as a property name", async function () {
+      // getDescription's fallback is description text; getDescriptionProperty's
+      // is a property name. Passing one as the other would return the text itself.
+      let received;
+      ontologize.getDescriptionProperty = async (resource, fallback) => {
+        received = fallback;
+        return "rdfs:comment";
+      };
+      const description = await ontologize.getDescription({ "@id": "ex:Thing" }, "Fallback text");
+      assert.isUndefined(received);
+      assert.equal(description, "Fallback text");
+    });
+  });
+
   describe("setLabelResolver", function () {
     afterEach(function () {
       ontologize.setLabelResolver(null);
