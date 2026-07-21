@@ -8,3 +8,4 @@
 
 export { CollectionAdapter } from "./CollectionAdapter.js";
 export { MeteorCollectionAdapter } from "./MeteorCollectionAdapter.js";
+export { HttpCollectionAdapter } from "./HttpCollectionAdapter.js";

@@ -15,6 +15,12 @@
       "import": "./src/OntologizeServer.js",
       "types": "./src/OntologizeServer.d.ts"
     },
+    "./adapters": {
+      "import": "./src/adapters/index.js"
+    },
+    "./http": {
+      "import": "./src/adapters/httpCollectionHandler.js"
+    },
     "./geo": {
       "import": "./src/geo/index.js"
     },
