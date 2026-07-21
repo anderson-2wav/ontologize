@@ -11,7 +11,7 @@ Ontologize is a component of the BOLD stack (Bridge Ontology Linked Data). It ha
 - **RDF Statements:** Reification support for property metadata (provenance, timestamps, etc.)
 - **Resource normalization:** All resources compacted to MongoDB-safe format via the `bold-ld` module
 
-The Ontologize module provides two distinct imports: `Ontologize` is intended for use on both client and server, `OntologizeServer` is only available on the server. The client-side implementation of `Ontologize` is largely intended for MeteorJS applications, where mini-mongo collections are available on the client. For other frameworks, the complete Ontologize API is available to `OntologizeServer`.
+The Ontologize module provides two distinct imports: `Ontologize` is intended for use on both client and server, `OntologizeServer` is only available on the server. The client-side implementation of `Ontologize` is largely intended for MeteorJS applications, where mini-mongo collections are available on the client. For other frameworks, the complete Ontologize API is available to `OntologizeServer` — and the client-side `Ontologize` can be run in a non-Meteor browser (e.g. a Nuxt SPA) by backing its collections with HTTP. See [Using Ontologize in a non-Meteor client](#using-ontologize-in-a-non-meteor-client-nuxt).
 
 ## License
 
@@ -293,6 +293,147 @@ await ontologize.importContext({
 const context = await ontologize.getContext();
 // context.myapp -> "https://example.org/myapp#"
 ```
+
+## Using Ontologize in a non-Meteor client (Nuxt)
+
+The client-side `Ontologize` needs collections, but a non-Meteor browser has no
+Minimongo to give it. `HttpCollectionAdapter` fills that gap: it presents the
+collection interface Ontologize expects while fetching documents from a small
+HTTP service instead of a local store. This is what lets the `bold-vue`
+resource-display components (`ResourceViewer`, `ResourceList`, `ResourceBrowser`,
+…) render in a Nuxt SPA.
+
+The adapter is deliberately narrow. Every read the display components make bottoms
+out in `findOne({ _id })` — label and schema resolution walk the class hierarchy by
+id, and resource lookups are by id — so the wire contract is **id-addressed and
+read-only**. There are no caller-supplied selectors, and therefore no
+query-injection surface. Cursor and aggregate methods throw rather than degrade.
+
+Two pieces cooperate:
+
+- **`ontologize/http`** — `createCollectionHandler`, a host-agnostic request
+  handler you mount on your server.
+- **`ontologize/adapters`** — `HttpCollectionAdapter`, the client-side collection
+  that talks to it.
+
+### Server: mount the document handler (Nitro)
+
+`createCollectionHandler` takes an allowlist of collections and returns a plain
+`async ({ method, kind, collection, id }) => { status, body }`. It knows nothing
+about H3, Express, or Connect, so you adapt it to your server in a few lines. In
+Nuxt, a catch-all Nitro route does it:
+
+```javascript
+// server/api/bold/[...].js  (Nitro)
+import { createCollectionHandler } from "ontologize/http";
+import { getMongoCollection } from "../../utils/mongo"; // your driver handle
+
+const handle = createCollectionHandler({
+  collections: {
+    ontology:   () => getMongoCollection("ontology"),
+    context:    () => getMongoCollection("context"),
+    statements: () => getMongoCollection("statements"),
+    species:    () => getMongoCollection("species"),
+    // …your ABox collections
+  },
+  // Only these may be dumped whole (see seedAll below). Keep it to the small,
+  // near-immutable TBox collections.
+  allowBulk: ["ontology", "context"],
+});
+
+export default defineEventHandler(async (event) => {
+  // URL shape: /api/bold/doc/:collection/:id  |  /api/bold/docs/:collection
+  const [kind, collection, id] = event.context.params._.split("/").map(decodeURIComponent);
+  const { status, body } = await handle({ method: event.method, kind, collection, id });
+  setResponseStatus(event, status);
+  return body;
+});
+```
+
+The wire contract is two routes:
+
+| Request | Returns |
+|---|---|
+| `GET /api/bold/doc/:collection/:id` | `{ doc }`, or `404` |
+| `GET /api/bold/docs/:collection` | `{ docs: [...] }` (bulk; opt-in per collection via `allowBulk`) |
+
+An allowlist entry may be a collection handle or a thunk returning one (deferred
+resolution, handy when the driver connects lazily). The handler adds no
+authentication — put your auth in front of it.
+
+### Client: build Ontologize from HTTP adapters (Nuxt plugin)
+
+Construct one adapter per collection, seed the TBox once, then initialize
+Ontologize and wait for its context to load. A Nuxt plugin is the natural home,
+so the instance is ready before any component renders:
+
+```javascript
+// plugins/ontologize.client.js
+import Ontologize from "ontologize";
+import { HttpCollectionAdapter } from "ontologize/adapters";
+
+export default defineNuxtPlugin(async () => {
+  // One shared cache Map backs every adapter, keyed by collection+id.
+  const cache = new Map();
+  const opts = { baseUrl: "/api/bold", cache };
+
+  const ontology   = new HttpCollectionAdapter("ontology",   opts);
+  const context    = new HttpCollectionAdapter("context",    opts);
+  const statements = new HttpCollectionAdapter("statements", opts);
+
+  // Pull the whole TBox in one request each. Afterwards, class-hierarchy
+  // walks (getLabel, getSchema, …) resolve from memory — zero network traffic.
+  await ontology.seedAll();
+  await context.seedAll();
+
+  const ontologize = Ontologize.initialize(ontology, context, statements, {
+    collections: {
+      species: new HttpCollectionAdapter("species", opts),
+      // …your ABox collections
+    },
+  });
+
+  // REQUIRED: the context loads asynchronously over HTTP, and ld() throws
+  // until it has. Always await ready() before rendering.
+  await ontologize.ready();
+
+  return { provide: { ontologize } };
+});
+```
+
+Then pass `$ontologize` as the `ontologize` prop to the display components.
+
+### Three things to get right
+
+1. **Always `await ontologize.ready()`.** Because `findOne` is asynchronous over
+   HTTP, the JSON-LD context — and therefore the internal `LD` instance — loads a
+   tick after `initialize()`. `ld()` throws a clear error if called before then,
+   rather than silently producing uncompacted output. (In Meteor, where Minimongo
+   answers synchronously, `ready()` resolves immediately and this is a no-op.)
+
+2. **Seed the TBox; don't fetch it per id.** `seedAll()` on `ontology` and
+   `context` turns a deep class-hierarchy walk into memory hits. Without it, the
+   first render of a resource is a waterfall of per-class round trips. The one
+   caveat: RDF meta-classes not present in your ontology dump (e.g. `rdfs:Class`)
+   still incur a single lookup each, which is then negatively cached — so a second
+   render is free either way.
+
+3. **`ResourceList` needs its `resources` prop.** That component runs its own
+   collection cursors for server-side pagination, which `HttpCollectionAdapter`
+   does not support (`find`/`aggregate` throw). In a non-Meteor host, fetch and
+   paginate in your page and hand the page's slice to `ResourceList` via the
+   `resources` prop; it then skips collection access entirely.
+
+### Server methods (JsonViewer save, etc.)
+
+A few `bold-vue` components invoke named server methods (e.g. `JsonViewer`'s save).
+That is a `bold-vue` concern rather than an Ontologize one: register a transport
+once at startup with `setRpcTransport` from `bold-vue/rpc.js`, pointing it at your
+Nitro endpoints. Ontologize itself has no such dependency.
+
+The complete design — wire contract, caching and coalescing semantics, and the
+readiness rationale — is documented in
+`.private/specs/http-collection-adapter-spec.md`.
 
 ## TypeScript Support
 

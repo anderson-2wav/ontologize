@@ -124,42 +124,71 @@ export class Ontologize {
       this.setLabelResolver(this.opts.labelResolver);
     }
 
-    // Initialize singleton LD instance for this Ontologize instance
+    // Initialize the singleton LD instance for this Ontologize instance.
+    //
+    // The context collection may answer synchronously (a plain in-memory store)
+    // or asynchronously (MeteorCollectionAdapter and HttpCollectionAdapter both
+    // declare findOne async, so both always hand back a Promise). Synchronous
+    // answers build LD immediately so `ld()` works without ceremony;
+    // asynchronous ones are tracked by `_ldReady`, which `ready()` exposes.
+    //
+    // Callers must `await ontologize.ready()` before touching `ld()` in the
+    // async case. `ld()` throws rather than fabricating a context-less LD —
+    // that fallback silently produced uncompacted results and hid the race.
     this._ld = null;
-    // TODO THERE WERE CLIENT/SERVER PROBLEMS HERE...
-    // that derive from using Meteor collections instead of MeteorCollectionAdapter
-    // if we're doing it the right way I don't think this promise stuff is needed any more
-    const wat = this.collections.context.findOne({ _id: "@id" });
-    if (wat instanceof Promise) {
-      wat.then((context) => {
-        const ld = new LD({
-          context,
-          proxy: this.opts.proxy,
-          sortTypesFn: this.sortTypesFn.bind(this)
-        });
-        this._ld = ld;
+    const pendingContext = this.collections.context.findOne({ _id: "@id" });
+    if (pendingContext instanceof Promise) {
+      this._ldReady = pendingContext.then((context) => {
+        this._ld = this._buildLD(context);
+        return this;
       });
     }
-    else if (wat) {
-      const ld = new LD({
-        context,
-        proxy: this.opts.proxy,
-        sortTypesFn: this.sortTypesFn.bind(this)
-      });
-      this._ld = ld;
+    else {
+      this._ld = this._buildLD(pendingContext);
+      this._ldReady = Promise.resolve(this);
     }
   }
 
   /**
+   * Build the LD instance for a fetched context document.
+   *
+   * @param {object|null} context - the `@id` context doc, or null if absent
+   * @returns {LD}
+   * @private
+   */
+  _buildLD(context) {
+    return new LD({
+      context: context ?? {},
+      proxy: this.opts.proxy,
+      sortTypesFn: this.sortTypesFn.bind(this)
+    });
+  }
+
+  /**
+   * Resolve once the JSON-LD context has loaded and `ld()` is usable.
+   *
+   * Required before any use of a collection whose `findOne` is asynchronous —
+   * which is every adapter. Safe and cheap to call repeatedly.
+   *
+   * @returns {Promise<Ontologize>} this instance
+   */
+  async ready() {
+    await this._ldReady;
+    return this;
+  }
+
+  /**
    * Get the singleton LD instance for this Ontologize instance.
-   * Creates the instance on first access.
    *
    * @returns {LD} The LD instance
+   * @throws {Error} If the context has not loaded yet — `await ready()` first
    */
   ld() {
     if (!this._ld) {
-      // this is a problem if it happens because there is no context
-      this._ld = new LD();
+      throw new Error(
+        "Ontologize.ld() called before the JSON-LD context finished loading. " +
+        "Await ontologize.ready() after initialize() before rendering."
+      );
     }
     return this._ld;
   }
@@ -462,25 +491,22 @@ export class Ontologize {
     check(resource, Object);
     check(fallback, Match.Optional(String));
 
-    // Get the assembled class schema to check for descriptionProperties override
-    const classSchema = await this.getSchema(undefined, resource);
-    const descriptionProperties = classSchema?.descriptionProperties || this.opts.descriptionProperties;
+    // Note: fallback is description *text*, while getDescriptionProperty's fallback
+    // is a property *name*, so it is deliberately not passed through.
+    const prop = await this.getDescriptionProperty(resource);
+    const value = resource[prop];
 
-    // Check description properties in order of preference
-    for (const prop of descriptionProperties) {
-      if (resource[prop]) {
-        if (this.ld().isProxy(resource)) {
-          return resource[prop];
-        }
-        else {
-          return Array.isArray(resource[prop]) ?
-            resource[prop][0] :
-            resource[prop];
-        }
-      }
+    // getDescriptionProperty returns the most generic property even when the
+    // resource carries no description, so the value may be undefined.
+    if (value === undefined || value === null) {
+      return fallback || "";
     }
 
-    return fallback || "";
+    if (this.ld().isProxy(resource)) {
+      return value;
+    }
+
+    return Array.isArray(value) ? value[0] : value;
   }
 
   /**
