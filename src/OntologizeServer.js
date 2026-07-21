@@ -25,6 +25,33 @@ export class OntologizeServer extends Ontologize {
   static _instance = null;
 
   /**
+   * How many resources a long loop processes before handing the event loop back,
+   * and how many are expanded per ld.expand() call.
+   *
+   * ld.expand does not yield internally, so a single call over a 1,000-resource
+   * batch blocks the process for its whole duration. Measured on the track
+   * collection: one call = 226 ms with the event loop never running; chunked by
+   * 250 = 46 ms worst block; by 100 = 22 ms, at the same total cost (chunking is
+   * marginally faster, so there is nothing to trade off).
+   */
+  static YIELD_EVERY = 100;
+
+  /**
+   * Hand control back to the event loop so queued I/O can run.
+   *
+   * `setImmediate`, deliberately, NOT `process.nextTick`: nextTick callbacks are
+   * drained before the event loop continues, so a nextTick "yield" inside a hot
+   * loop still starves every socket and timer. setImmediate schedules on the
+   * check phase, after pending I/O callbacks have had their turn.
+   *
+   * @returns {Promise<void>}
+   * @private
+   */
+  _yieldToEventLoop() {
+    return new Promise(resolve => setImmediate(resolve));
+  }
+
+  /**
    * Initialize the singleton OntologizeServer instance.
    * Must be called before using get().
    *
@@ -1412,30 +1439,74 @@ export class OntologizeServer extends Ontologize {
     opts.blankNodes = opts.blankNodes !== false;
     opts.includeStatements = opts.includeStatements ?? false;
 
+    console.log(`Converting ${resources.length} resources to triples...`);
     // For BOLD, we generally don't want to create triples for embedded statements
     // In BOLD, we use "bold:" namespace instead of "ctb:"
     if (!opts.includeStatements) {
+      let stripped = 0;
       for (const r of resources) {
         this._stripEmbeddedStatements(r);
+        if (++stripped % OntologizeServer.YIELD_EVERY === 0) await this._yieldToEventLoop();
       }
     }
 
-    // Strip properties with JSON values — they cannot be represented as triples
+    // Strip properties with JSON values — they cannot be represented as triples.
+    //
+    // Resolve the question once per DISTINCT KEY, not once per resource-key
+    // pair. _isJsonProperty deliberately does not cache a negative answer (the
+    // ontology may not be loaded yet, so "unknown property" now can become
+    // "JSON property" later), which means every key without an ontology
+    // definition costs a findOne — and a collar report carries ten of them
+    // (_h3, _h3_3.._h3_11, _geohash, _whenMs, geohash). Per 1,000-resource
+    // batch that was ~10,000 sequential round trips; it is now one per key.
+    const candidateKeys = new Set();
     for (const r of resources) {
       for (const key of Object.keys(r)) {
         if (key[0] === "@" || key === "_id") continue;
-        if (await this._isJsonProperty(key)) {
-          delete r[key];
+        candidateKeys.add(key);
+      }
+    }
+
+    const jsonKeys = [];
+    for (const key of candidateKeys) {
+      if (await this._isJsonProperty(key)) jsonKeys.push(key);
+    }
+
+    if (jsonKeys.length) {
+      let checked = 0;
+      for (const r of resources) {
+        for (const key of jsonKeys) {
+          if (key in r) delete r[key];
         }
+        if (++checked % OntologizeServer.YIELD_EVERY === 0) await this._yieldToEventLoop();
       }
     }
 
     // Get the context from the Context collection (which should have _id: "@id" mapping)
     const contextForExpansion = await this.getContext(opts.context);
 
+    console.log(`Expand ${resources.length} resources...`);
+    let ct = 0;
     const ld = this.ld();
-    const expanded = await ld.expand(resources, contextForExpansion, { flatten: true });
-    expanded.forEach((resource) => {
+
+    // Expand in chunks with a yield between them. ld.expand runs to completion
+    // without yielding, so expanding a whole batch in one call blocks every
+    // socket and timer in the process for the duration.
+    const expanded = [];
+    for (let i = 0; i < resources.length; i += OntologizeServer.YIELD_EVERY) {
+      const chunk = resources.slice(i, i + OntologizeServer.YIELD_EVERY);
+      expanded.push(...await ld.expand(chunk, contextForExpansion, { flatten: true }));
+      if (i + OntologizeServer.YIELD_EVERY < resources.length) await this._yieldToEventLoop();
+    }
+    // for..of rather than forEach: this loop is pure CPU over every property of
+    // every resource, and without an await inside it the process cannot answer
+    // an HTTP request or a DDP message until the whole batch is triplified.
+    for (const resource of expanded) {
+      ct++;
+      if (ct % 100 === 0) {
+        console.log(`Triplified ${ct} resources...`);
+      }
+      if (ct % OntologizeServer.YIELD_EVERY === 0) await this._yieldToEventLoop();
       for (const key in resource) {
         let p = key;
         if (key === "@type") {
@@ -1477,7 +1548,7 @@ export class OntologizeServer extends Ontologize {
           });
         });
       }
-    });
+    }
     return triples;
   }
 
@@ -3190,6 +3261,9 @@ INSERT DATA {
    * @param {boolean} [opts.persistStatements=true] - Persist statements to collection
    * @param {boolean} [opts.saveHylar=false] - save triples in HyLAR
    * @param {boolean} [opts.onlyUnReasoned=true] - only reason resources without bold:reasoned
+   * @param {object} [opts.selector] - extra MongoDB query terms, merged with the
+   *   unreasoned filter, to restrict the run to part of a collection
+   *   (e.g. `{ "dcterms:isPartOf": "track:track-2025" }`)
    * @param {number} [opts.batchSize=1000] - Number of triples to insert per batch
    * @param {boolean} [opts.blankNodes=false] - include blank nodes
    * @param {number} [opts.retries=5] - if hylar call fails, try again [5] times
@@ -3230,6 +3304,12 @@ INSERT DATA {
     console.log(`Loading resources from "${collectionName}" collection...`);
     const allCount = await collection.countDocuments({});
     const selector = opts.onlyUnReasoned ? { "bold:reasoned": { $exists: false } } : {};
+    // opts.selector narrows the run to part of a collection — e.g. one
+    // dcterms:isPartOf partition. Without it, reasoning is all-or-nothing over
+    // everything unreasoned, which makes it impossible to reason a newly
+    // imported partition without also picking up every resource that was
+    // deliberately left unreasoned.
+    if (opts.selector) Object.assign(selector, opts.selector);
     const resources = await collection.find(selector).toArray();
     if (resources.length < allCount) {
       console.log(`Skipping ${allCount - resources.length} already-reasoned resources`);
@@ -3250,7 +3330,6 @@ INSERT DATA {
     }
 
     // 4. Convert resources to triples
-    console.log("Converting resources to triples...");
     const triples = await this.getTriplesForResources(resources, {
       blankNodes: opts.blankNodes,
       includeStatements: false
