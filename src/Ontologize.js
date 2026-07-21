@@ -462,25 +462,22 @@ export class Ontologize {
     check(resource, Object);
     check(fallback, Match.Optional(String));
 
-    // Get the assembled class schema to check for descriptionProperties override
-    const classSchema = await this.getSchema(undefined, resource);
-    const descriptionProperties = classSchema?.descriptionProperties || this.opts.descriptionProperties;
+    // Note: fallback is description *text*, while getDescriptionProperty's fallback
+    // is a property *name*, so it is deliberately not passed through.
+    const prop = await this.getDescriptionProperty(resource);
+    const value = resource[prop];
 
-    // Check description properties in order of preference
-    for (const prop of descriptionProperties) {
-      if (resource[prop]) {
-        if (this.ld().isProxy(resource)) {
-          return resource[prop];
-        }
-        else {
-          return Array.isArray(resource[prop]) ?
-            resource[prop][0] :
-            resource[prop];
-        }
-      }
+    // getDescriptionProperty returns the most generic property even when the
+    // resource carries no description, so the value may be undefined.
+    if (value === undefined || value === null) {
+      return fallback || "";
     }
 
-    return fallback || "";
+    if (this.ld().isProxy(resource)) {
+      return value;
+    }
+
+    return Array.isArray(value) ? value[0] : value;
   }
 
   /**
