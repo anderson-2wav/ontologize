@@ -429,11 +429,12 @@ Then pass `$ontologize` as the `ontologize` prop to the display components.
 A few `bold-vue` components invoke named server methods (e.g. `JsonViewer`'s save).
 That is a `bold-vue` concern rather than an Ontologize one: register a transport
 once at startup with `setRpcTransport` from `bold-vue/rpc.js`, pointing it at your
-Nitro endpoints. Ontologize itself has no such dependency.
+own endpoints. Ontologize itself has no such dependency.
 
-The complete design — wire contract, caching and coalescing semantics, and the
-readiness rationale — is documented in
-`.private/specs/http-collection-adapter-spec.md`.
+See **"Using bold-vue outside Meteor"** in the
+[bold-vue README](https://github.com/anderson-2wav/bold-vue) for the RPC seam's
+API, a Nitro route implementing it, the method-signature reference, and which
+components are ported.
 
 ## TypeScript Support
 
