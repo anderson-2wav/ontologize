@@ -30,6 +30,12 @@ export class Ontologize {
   // Default properties for getDescription (in order of preference)
   static DEFAULT_DESCRIPTION_PROPERTIES = ["dcterms:description", "rdfs:comment"];
 
+  // A zone-less ISO 8601 value: a date, optionally followed by a wall-clock time,
+  // with no trailing "Z" and no ±hh:mm offset. Field ranges are bounded here so
+  // impossible values (month 13, hour 25) never reach the date constructor.
+  static ZONELESS_ISO =
+    /^(\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])(?:[T ]([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d)(?:\.(\d+))?)?)?$/;
+
   // Singleton instance
   static _instance = null;
 
@@ -541,6 +547,54 @@ export class Ontologize {
   }
 
   /**
+   * Parse a zone-less ISO 8601 string as wall-clock fields in a given timezone.
+   *
+   * "2026-08-10" and "2026-08-10T14:30:00" carry no offset, so they name calendar
+   * fields rather than an instant. ECMA-262 resolves the first against UTC and the
+   * second against the machine's zone; both readings can land on a different day
+   * once the value is rendered in a display timezone. This resolves either against
+   * the timezone it will be displayed in, so the date survives the round trip.
+   *
+   * Values that are already instants (offset- or Z-bearing strings, timestamps,
+   * Date objects) do not match and are left to the caller.
+   *
+   * @param {*} value - The candidate value
+   * @param {string} timeZone - IANA timezone the wall-clock fields belong to
+   * @returns {{matched: boolean, date: TZDate|null}} `matched` is false when the
+   *   value is not a zone-less ISO string; when it is, `date` is null if the fields
+   *   name no real date (e.g. "2026-02-30")
+   */
+  static parseZonelessISO(value, timeZone) {
+    const match = typeof value === "string" ? Ontologize.ZONELESS_ISO.exec(value.trim()) : null;
+    if (!match) {
+      return { matched: false, date: null };
+    }
+
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    const hour = Number(match[4] || 0);
+    const minute = Number(match[5] || 0);
+    const second = Number(match[6] || 0);
+    // Fractional seconds may carry any precision; scale to milliseconds.
+    const ms = match[7] ? Math.round(Number("0." + match[7]) * 1000) : 0;
+
+    const date = new TZDate(year, month - 1, day, hour, minute, second, ms, timeZone);
+
+    // The component constructor rolls overflow over rather than failing (Feb 30
+    // becomes Mar 2), so confirm the calendar date survived. Only the date fields
+    // are checked: a DST spring-forward legitimately moves the clock time, but
+    // always forward within the same day.
+    if (isNaN(date.getTime()) ||
+        date.getFullYear() !== year ||
+        date.getMonth() !== month - 1 ||
+        date.getDate() !== day) {
+      return { matched: true, date: null };
+    }
+    return { matched: true, date };
+  }
+
+  /**
    * Format a date value into a human-friendly string.
    *
    * Handles various input formats:
@@ -584,7 +638,22 @@ export class Ontologize {
       dateObj = dateValue;
     }
     else if (typeof dateValue === "string" || typeof dateValue === "number") {
-      dateObj = new Date(dateValue);
+      // A zone-less ISO string names wall-clock fields, not an instant. Resolve it
+      // against dateTimeZone so the day that was written is the day that displays;
+      // Date's own parser would resolve it against UTC (date-only) or the machine's
+      // zone (date-time), either of which can shift it across midnight on the way in.
+      const zoneless = Ontologize.parseZonelessISO(dateValue, dateTimeZone);
+      if (zoneless.matched) {
+        // Well-formed but not a real date (e.g. Feb 30). Stop here rather than
+        // falling back to Date's parser, which would roll it into another day.
+        if (!zoneless.date) {
+          return "";
+        }
+        dateObj = zoneless.date;
+      }
+      else {
+        dateObj = new Date(dateValue);
+      }
     }
     else {
       return "";
