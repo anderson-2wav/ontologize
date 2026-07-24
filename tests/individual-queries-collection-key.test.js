@@ -80,7 +80,7 @@ describe("individualQueries collection key", function () {
     const speciesCol = makeMockCollection("species_abc123", speciesDocs);
     const ont = makeOntologizeWithSpecies(speciesCol);
 
-    const { individualQueries } = await ont._getInstanceCountsByType([speciesCol]);
+    const { individualQueries } = await ont.explore._getInstanceCountsByType([speciesCol]);
 
     assert.isArray(individualQueries["ex:Species"]);
     assert.equal(individualQueries["ex:Species"][0].collection, "species");
@@ -90,7 +90,7 @@ describe("individualQueries collection key", function () {
     const speciesCol = makeMockCollection("species_abc123", speciesDocs);
     const ont = makeOntologizeWithSpecies(speciesCol);
 
-    const { individualQueries } = await ont._getInstanceInfoByType([speciesCol], {});
+    const { individualQueries } = await ont.explore._getInstanceInfoByType([speciesCol], {});
 
     assert.isArray(individualQueries["ex:Species"]);
     assert.equal(individualQueries["ex:Species"][0].collection, "species");

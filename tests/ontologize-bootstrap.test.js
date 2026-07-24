@@ -206,16 +206,16 @@ describe("OntologizeServer Bootstrap", function () {
     });
 
     it("should have bootstrapReasoner method", function () {
-      assert.isFunction(ontologizeServer.bootstrapReasoner);
+      assert.isFunction(ontologizeServer.reasoner.bootstrapReasoner);
     });
 
     it("should have warmReasoner method", function () {
-      assert.isFunction(ontologizeServer.warmReasoner);
+      assert.isFunction(ontologizeServer.reasoner.warmReasoner);
     });
 
     it("warmReasoner should load ontology resources without HyLAR server", async function () {
       // Warm without HyLAR server (no classification) — should load + triple-ify only
-      const result = await ontologizeServer.warmReasoner({
+      const result = await ontologizeServer.reasoner.warmReasoner({
         classify: false // Skip classification since no HyLAR
       });
 
@@ -233,13 +233,13 @@ describe("OntologizeServer Bootstrap", function () {
 
     it("warmReasoner should not persist statements or update resources", async function () {
       const before = insertedStatements.length;
-      await ontologizeServer.warmReasoner({ classify: false });
+      await ontologizeServer.reasoner.warmReasoner({ classify: false });
       // warmReasoner has no write-back path at all
       assert.equal(insertedStatements.length, before);
     });
 
     it("warmReasoner should generate triples from ontology resources", async function () {
-      const result = await ontologizeServer.warmReasoner({
+      const result = await ontologizeServer.reasoner.warmReasoner({
         classify: false
       });
 
@@ -255,7 +255,7 @@ describe("OntologizeServer Bootstrap", function () {
       const resources = await mockOntologyCollection.find({}).toArray();
 
       // Convert to triples
-      const triples = await ontologizeServer.getTriplesForResources(resources, {
+      const triples = await ontologizeServer.rdf.getTriplesForResources(resources, {
         blankNodes: true,
         includeStatements: false
       });
@@ -264,7 +264,7 @@ describe("OntologizeServer Bootstrap", function () {
       assert.isAbove(triples.length, 0);
 
       // Create SPARQL INSERT
-      const sparqlInsert = await ontologizeServer.createSparqlInsert(triples);
+      const sparqlInsert = await ontologizeServer.rdf.createSparqlInsert(triples);
 
       assert.isString(sparqlInsert);
       assert.include(sparqlInsert, "INSERT DATA");
@@ -278,7 +278,7 @@ describe("OntologizeServer Bootstrap", function () {
       // This test requires HyLAR server to be running on port 4000
       // Skip it in CI or when HyLAR is not available
 
-      const result = await ontologizeServer.bootstrapReasoner({
+      const result = await ontologizeServer.reasoner.bootstrapReasoner({
         hylarUrl: "http://localhost:4000",
         classify: true,
         updateResources: true,
@@ -309,15 +309,15 @@ describe("OntologizeServer Bootstrap", function () {
         }
       ];
 
-      const facts = ontologizeServer._derivationsToFacts(derivations);
+      const facts = ontologizeServer.rdf._derivationsToFacts(derivations);
       assert.isArray(facts);
       assert.equal(facts.length, 1);
       assert.equal(facts[0].subject, "bfo:entity");
       assert.equal(facts[0].explicit, false);
 
       // Test _derivationsToFacts with empty input
-      assert.deepEqual(ontologizeServer._derivationsToFacts(null), []);
-      assert.deepEqual(ontologizeServer._derivationsToFacts([]), []);
+      assert.deepEqual(ontologizeServer.rdf._derivationsToFacts(null), []);
+      assert.deepEqual(ontologizeServer.rdf._derivationsToFacts([]), []);
     });
 
     it("should persist statements when collection available", async function () {
@@ -337,7 +337,7 @@ describe("OntologizeServer Bootstrap", function () {
         }
       ];
 
-      const count = await ontologizeServer._persistStatements(testStatements);
+      const count = await ontologizeServer.reasoner._persistStatements(testStatements);
       assert.equal(count, 2);
       assert.equal(insertedStatements.length, 2);
 
@@ -360,7 +360,7 @@ describe("OntologizeServer Bootstrap", function () {
         }
       };
 
-      const updated = await ontologizeServer._mergeAndUpdateResources(assembledResources);
+      const updated = await ontologizeServer.reasoner._mergeAndUpdateResources(assembledResources);
       assert.equal(updated.length, 2);
 
       // Check that resources were updated
@@ -381,7 +381,7 @@ describe("OntologizeServer Bootstrap", function () {
         "ex:Exists": { "rdfs:subClassOf": ["bfo:entity"] },
         "ex:Missing": { "rdfs:subClassOf": ["bfo:entity"] }
       };
-      const written = await ontologizeServer._mergeAndUpdateResources(assembled, mockCol, { singleCollection: true });
+      const written = await ontologizeServer.reasoner._mergeAndUpdateResources(assembled, mockCol, { singleCollection: true });
       assert.equal(written.length, 2, "both resources written by default");
       assert.equal(inserted, 1, "missing resource inserted by default");
       assert.equal(replaced, 1, "existing resource replaced");
@@ -399,7 +399,7 @@ describe("OntologizeServer Bootstrap", function () {
         "ex:Exists": { "rdfs:subClassOf": ["bfo:entity"] },
         "ex:Missing": { "rdfs:subClassOf": ["bfo:entity"] }
       };
-      const written = await ontologizeServer._mergeAndUpdateResources(assembled, mockCol, { singleCollection: true, updateOnly: true });
+      const written = await ontologizeServer.reasoner._mergeAndUpdateResources(assembled, mockCol, { singleCollection: true, updateOnly: true });
       assert.equal(written.length, 1, "only the existing resource is written under updateOnly");
       assert.include(written, "ex:Exists", "existing subject reported as written");
       assert.notInclude(written, "ex:Missing", "skipped subject is NOT reported as written");
@@ -412,7 +412,7 @@ describe("OntologizeServer Bootstrap", function () {
     it("should import and bootstrap BFO ontology", async function () {
       // First import BFO data
       const bfoPath = path.join(__dirname, "data", "bold-bfo.jsonld");
-      const importResult = await ontologizeServer.importFromFile(
+      const importResult = await ontologizeServer.io.importFromFile(
         bfoPath,
         // mockOntologyCollection,
         { ontologize: true } // Merge TBox resources to ontology collection
@@ -422,7 +422,7 @@ describe("OntologizeServer Bootstrap", function () {
       console.log(`Imported ${importResult.processedResources} BFO resources`);
 
       // Now warm without HyLAR (just test loading)
-      const warmResult = await ontologizeServer.warmReasoner({
+      const warmResult = await ontologizeServer.reasoner.warmReasoner({
         classify: false
       });
 
@@ -434,12 +434,12 @@ describe("OntologizeServer Bootstrap", function () {
 
   describe("bootstrap() method", function () {
     it("should have bootstrap method", function () {
-      assert.isFunction(ontologizeServer.bootstrap);
+      assert.isFunction(ontologizeServer.io.bootstrap);
     });
 
     it("should throw error when no bootstrap files configured", async function () {
       try {
-        await ontologizeServer.bootstrap();
+        await ontologizeServer.io.bootstrap();
         assert.fail("Should have thrown error");
       }
       catch (error) {
@@ -474,7 +474,7 @@ describe("OntologizeServer Bootstrap", function () {
     });
 
     it("should bootstrap from opts.files parameter", async function () {
-      const result = await ontologizeServer.bootstrap({
+      const result = await ontologizeServer.io.bootstrap({
         bootstrapFiles: ["bold-bfo.jsonld"],
         basePath: path.join(__dirname, "data")
       });
@@ -487,7 +487,7 @@ describe("OntologizeServer Bootstrap", function () {
     it("should handle absolute file paths", async function () {
       const absolutePath = path.join(__dirname, "data", "bold-bfo.jsonld");
 
-      const result = await ontologizeServer.bootstrap({
+      const result = await ontologizeServer.io.bootstrap({
         bootstrapFiles: [absolutePath]
       });
 
@@ -499,7 +499,7 @@ describe("OntologizeServer Bootstrap", function () {
     it("should fail on first file error but continue on subsequent file errors", async function () {
       // First file missing should throw
       try {
-        await ontologizeServer.bootstrap({
+        await ontologizeServer.io.bootstrap({
           bootstrapFiles: ["nonexistent.jsonld"],
           basePath: path.join(__dirname, "data")
         });
@@ -510,7 +510,7 @@ describe("OntologizeServer Bootstrap", function () {
       }
 
       // Second file missing should be skipped
-      const result = await ontologizeServer.bootstrap({
+      const result = await ontologizeServer.io.bootstrap({
         bootstrapFiles: ["bold-bfo.jsonld", "nonexistent.jsonld"],
         basePath: path.join(__dirname, "data")
       });
@@ -532,7 +532,7 @@ describe("OntologizeServer Bootstrap", function () {
       assert.equal(initialCount, 1);
 
       // Bootstrap with removeAll=true (default)
-      const result = await ontologizeServer.bootstrap({
+      const result = await ontologizeServer.io.bootstrap({
         bootstrapFiles: ["bold-bfo.jsonld"],
         basePath: path.join(__dirname, "data"),
         removeAll: true
@@ -551,7 +551,7 @@ describe("OntologizeServer Bootstrap", function () {
       });
 
       // Bootstrap with removeAll=false
-      const result = await ontologizeServer.bootstrap({
+      const result = await ontologizeServer.io.bootstrap({
         bootstrapFiles: ["bold-bfo.jsonld"],
         basePath: path.join(__dirname, "data"),
         removeAll: false

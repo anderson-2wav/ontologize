@@ -1,6 +1,6 @@
 {
   "name": "ontologize",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Ontology processing utilities for JSON-LD and MongoDB",
   "main": "index.js",
   "type": "module",
@@ -38,8 +38,8 @@
     "src/**/*"
   ],
   "scripts": {
-    "test": "mocha tests/**/*.test.js --timeout 10000",
-    "test:watch": "mocha tests/**/*.test.js --watch --timeout 10000",
+    "test": "NODE_ENV=test mocha tests/**/*.test.js --timeout 10000",
+    "test:watch": "NODE_ENV=test mocha tests/**/*.test.js --watch --timeout 10000",
     "build": "echo \"No build step needed - using source directly\""
   },
   "keywords": [

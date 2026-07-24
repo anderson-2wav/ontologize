@@ -69,7 +69,7 @@ describe("warmReasoner + updateOne (throwaway, live HyLAR)", function () {
 
   it("warms from live ontology, then updateOne infers the transitive superclass", async function () {
     // Warm primes HyLAR with the live ontology closure (spawns HyLAR).
-    const warm = await server.warmReasoner({});
+    const warm = await server.reasoner.warmReasoner({});
     assert.equal(warm.resourcesLoaded, 6, "warm should load all 6 ontology resources");
 
     // Now add bfo:Foo ⊑ bfo:continuant. HyLAR should transitively infer bfo:Foo ⊑ bfo:entity.

@@ -115,6 +115,49 @@ export interface MongoCollection {
  *
  * This class provides client/server safe functions for ontology processing.
  */
+
+/** `ontologize.display` — UI presentation helpers (labels, descriptions, dates). */
+export declare class DisplayApi {
+  setLabelResolver(resolver: LabelResolver | null): void;
+  setInfoComponentResolver(resolver: ((resource: Resource, hint?: any) => any) | null): void;
+  getInfoComponent(resource: Resource, hint?: any): any;
+  getLabel(resource: Resource, property?: string, fallback?: string): Promise<string>;
+  getLabel(resource: Resource, property?: string, opts?: GetLabelOptions): Promise<string>;
+  getLabel(resource: Resource, property?: string, fallback?: string, opts?: GetLabelOptions): Promise<string>;
+  getLabelProperty(resource: Resource, fallback?: string): Promise<string>;
+  getLabelFromId(resourceId: string, fallback?: string): Promise<string>;
+  getDescription(resource: Resource, fallback?: string): Promise<string>;
+  getDescriptionProperty(resource: Resource, fallback?: string): Promise<string>;
+  formatDate(date: Date | string | number | { "@value": string; "@type"?: string } | null | undefined, opts?: FormatDateOptions): string;
+  formatDateTime(date: Date | string | number | { "@value": string; "@type"?: string } | null | undefined, opts?: FormatDateOptions): string;
+  assignIndividualColors(ids: string[], scheme?: string[]): Map<string, string>;
+  fetchIndividualLabels(ids: string[]): Promise<Map<string, string>>;
+  groupResources(resources: Resource[], group: { label: string; property: string }, opts?: { includeUngrouped?: boolean }): Map<string | null, Resource[]>;
+  buildGroupOptions(resources: Resource[], group: { label: string; property: string }, colorScheme?: string[]): Promise<Array<{ _id: string | null; label: string; color: string; count: number }>>;
+}
+
+/** `ontologize.schema` — TBox schema introspection. */
+export declare class SchemaApi {
+  getSchema(property?: string, resource?: Resource, opts?: { ontologyCache?: Map<string, any> }): Promise<Record<string, any>>;
+  isArrayProperty(property: string | Resource, opts?: { context?: Record<string, any>; cached?: boolean }): Promise<boolean>;
+  sortTypesFn(types: string[], opts?: { cached?: boolean }): Promise<string[]>;
+  getGroupStrategies(resource: Resource, opts?: { ontologyCache?: Map<string, any> }): Promise<Array<{ label: string; property: string }>>;
+}
+
+/** `ontologize.geo` — instance-bound geospatial helpers. */
+export declare class GeoApi {
+  getGeoJSON(resource: Resource, opts?: GetLocationOptions): Promise<GeoJSONGeometry | null>;
+  getSunriseSunset(longLat: [number, number], date: Date | string | number | { "@value": string; "@type"?: string }, opts?: Record<string, any>): Promise<SunriseSunsetResponse>;
+}
+
+/**
+ * `ontologize.explore` — scan the ontology structure and ABox collections.
+ * Returns **raw** resources (serialization-safe), not LD proxies.
+ */
+export declare class ExploreApi {
+  run(collections?: Array<object> | Array<string>, opts?: { recurse?: boolean; classFilter?: string[] }): Promise<Record<string, any>>;
+}
+
 export declare class Ontologize {
   /** MongoDB collections */
   collections: {
@@ -127,6 +170,15 @@ export declare class Ontologize {
   opts: OntologizeOptions;
   /** Module version */
   version: string;
+
+  /** `display` namespace — labels, descriptions, date formatting, colors/grouping. */
+  readonly display: DisplayApi;
+  /** `schema` namespace — TBox schema introspection. */
+  readonly schema: SchemaApi;
+  /** `geo` namespace — instance-bound geospatial helpers. */
+  readonly geo: GeoApi;
+  /** `explore` namespace — scan ontology structure and ABox collections (raw resources). */
+  readonly explore: ExploreApi;
 
   /**
    * Create a new Ontologize instance
@@ -148,35 +200,6 @@ export declare class Ontologize {
   isStatementResource(resource: Resource): boolean;
 
   /**
-   * Register an application-specific label resolver. Called by `getLabel`
-   * when no standard label property is found, before falling back to ID
-   * parsing. Return a non-null string to supply the label; return
-   * null/undefined to decline. Pass `null` to clear.
-   */
-  setLabelResolver(resolver: LabelResolver | null): void;
-
-  /**
-   * Get the label for a resource, checking properties in order of preference.
-   * Property order can be overridden by bui:schema.labelProperties on the resource's class,
-   * otherwise uses opts.labelProperties (default: dcterms:title, foaf:name, rdfs:label)
-   */
-  getLabel(resource: Resource, property?: string, fallback?: string): Promise<string>;
-  getLabel(resource: Resource, property?: string, opts?: GetLabelOptions): Promise<string>;
-  getLabel(resource: Resource, property?: string, fallback?: string, opts?: GetLabelOptions): Promise<string>;
-
-  /**
-   * Get the geospatial location for a resource as a GeoJSON object.
-   *
-   * Checks for location data in this order of preference:
-   * 1. `geo:lat` and `geo:long` properties - returns a GeoPoint
-   * 2. Any property with `rdfs:range` of `bold:GeoPoint`
-   * 3. Any property with `rdfs:range` of `bold:GeoJSON`
-   *
-   * @returns GeoJSON object (typically a Point), or null if no location found
-   */
-  getGeoJSON(resource: Resource, opts?: GetLocationOptions): Promise<GeoJSONGeometry | null>;
-
-  /**
    * Get context for compaction from provided context, Context collection, or default
    */
   getContext(providedContext?: Record<string, any> | null): Promise<Record<string, any>>;
@@ -186,42 +209,32 @@ export declare class Ontologize {
    */
   getVersion(): string;
 
-  /**
-   * Format a date value for display.
-   *
-   * Accepts Date objects, ISO strings, timestamps (numbers), or JSON-LD @value wrappers.
-   * Uses configured timezone (opts.dateTimeZone) for consistent formatting.
-   *
-   * @param date - The date to format (Date, string, number, or { "@value": string })
-   * @param opts - Optional format overrides
-   * @returns Formatted date string, or empty string if invalid
-   */
+  // ---------------------------------------------------------------------------
+  // Deprecated flat API. These forward to their namespace method and will be
+  // removed in a later release. Prefer the namespace form shown in @deprecated.
+  // ---------------------------------------------------------------------------
+
+  /** @deprecated Use `ontologize.display.setLabelResolver`. */
+  setLabelResolver(resolver: LabelResolver | null): void;
+  /** @deprecated Use `ontologize.display.getLabel`. */
+  getLabel(resource: Resource, property?: string, fallback?: string): Promise<string>;
+  getLabel(resource: Resource, property?: string, opts?: GetLabelOptions): Promise<string>;
+  getLabel(resource: Resource, property?: string, fallback?: string, opts?: GetLabelOptions): Promise<string>;
+  /** @deprecated Use `ontologize.geo.getGeoJSON`. */
+  getGeoJSON(resource: Resource, opts?: GetLocationOptions): Promise<GeoJSONGeometry | null>;
+  /** @deprecated Use `ontologize.display.formatDate`. */
   formatDate(date: Date | string | number | { "@value": string; "@type"?: string } | null | undefined, opts?: FormatDateOptions): string;
-
-  /**
-   * Format a date value with time for display (shorthand for formatDate with includeTime: true)
-   *
-   * @param date - The date to format (Date, string, number, or { "@value": string })
-   * @param opts - Optional format overrides (same as formatDate)
-   * @returns Formatted date-time string, or empty string if invalid
-   */
+  /** @deprecated Use `ontologize.display.formatDateTime`. */
   formatDateTime(date: Date | string | number | { "@value": string; "@type"?: string } | null | undefined, opts?: FormatDateOptions): string;
-
-  /**
-   * Get sunrise and sunset times for a location and date.
-   *
-   * Uses the sunrise-sunset.org API to get solar event times.
-   *
-   * @param longLat - Array of [longitude, latitude]
-   * @param date - The date (accepts same formats as formatDate)
-   * @param opts - Options (reserved for future use)
-   * @returns Sunrise/sunset info with ISO date strings
-   * @throws Error if the API call fails or parameters are invalid
-   */
+  /** @deprecated Use `ontologize.geo.getSunriseSunset`. */
   getSunriseSunset(longLat: [number, number], date: Date | string | number | { "@value": string; "@type"?: string }, opts?: Record<string, any>): Promise<SunriseSunsetResponse>;
+  /** @deprecated Use `ontologize.explore.run`. */
+  explorer(collections?: Array<object> | Array<string>, opts?: { recurse?: boolean; classFilter?: string[] }): Promise<Record<string, any>>;
 
   /** Default context with common namespace mappings */
   static DEFAULT_CONTEXT: Record<string, any>;
+  /** Default color scheme for individuals (re-exported from DisplayApi). */
+  static DEFAULT_COLOR_SCHEME: string[];
 }
 
 export default Ontologize;

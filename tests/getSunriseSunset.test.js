@@ -38,7 +38,7 @@ describe("Ontologize.getSunriseSunset", function() {
   describe("parameter validation", function() {
     it("should throw error for non-array longLat", async function() {
       try {
-        await ontologize.getSunriseSunset("not-an-array", new Date());
+        await ontologize.geo.getSunriseSunset("not-an-array", new Date());
         assert.fail("Should have thrown an error");
       }
       catch (error) {
@@ -48,7 +48,7 @@ describe("Ontologize.getSunriseSunset", function() {
 
     it("should throw error for array with wrong length", async function() {
       try {
-        await ontologize.getSunriseSunset([1], new Date());
+        await ontologize.geo.getSunriseSunset([1], new Date());
         assert.fail("Should have thrown an error");
       }
       catch (error) {
@@ -58,7 +58,7 @@ describe("Ontologize.getSunriseSunset", function() {
 
     it("should throw error for non-numeric coordinates", async function() {
       try {
-        await ontologize.getSunriseSunset(["a", "b"], new Date());
+        await ontologize.geo.getSunriseSunset(["a", "b"], new Date());
         assert.fail("Should have thrown an error");
       }
       catch (error) {
@@ -68,7 +68,7 @@ describe("Ontologize.getSunriseSunset", function() {
 
     it("should throw error for invalid date", async function() {
       try {
-        await ontologize.getSunriseSunset([-122.4194, 37.7749], "not-a-date");
+        await ontologize.geo.getSunriseSunset([-122.4194, 37.7749], "not-a-date");
         assert.fail("Should have thrown an error");
       }
       catch (error) {
@@ -78,7 +78,7 @@ describe("Ontologize.getSunriseSunset", function() {
 
     it("should throw error for null date", async function() {
       try {
-        await ontologize.getSunriseSunset([-122.4194, 37.7749], null);
+        await ontologize.geo.getSunriseSunset([-122.4194, 37.7749], null);
         assert.fail("Should have thrown an error");
       }
       catch (error) {
@@ -96,7 +96,7 @@ describe("Ontologize.getSunriseSunset", function() {
       const date = new Date(2024, 5, 15); // June 15, 2024
       try {
         // This may fail due to network, but shouldn't fail on date parsing
-        await ontologize.getSunriseSunset([-122.4194, 37.7749], date);
+        await ontologize.geo.getSunriseSunset([-122.4194, 37.7749], date);
       }
       catch (error) {
         // If error is about date, fail the test
@@ -109,7 +109,7 @@ describe("Ontologize.getSunriseSunset", function() {
 
     it("should accept ISO date string", async function() {
       try {
-        await ontologize.getSunriseSunset([-122.4194, 37.7749], "2024-06-15");
+        await ontologize.geo.getSunriseSunset([-122.4194, 37.7749], "2024-06-15");
       }
       catch (error) {
         if (error.message.includes("Invalid date")) {
@@ -121,7 +121,7 @@ describe("Ontologize.getSunriseSunset", function() {
     it("should accept timestamp number", async function() {
       const timestamp = new Date(2024, 5, 15).getTime();
       try {
-        await ontologize.getSunriseSunset([-122.4194, 37.7749], timestamp);
+        await ontologize.geo.getSunriseSunset([-122.4194, 37.7749], timestamp);
       }
       catch (error) {
         if (error.message.includes("Invalid date")) {
@@ -136,7 +136,7 @@ describe("Ontologize.getSunriseSunset", function() {
         "@type": "xsd:date"
       };
       try {
-        await ontologize.getSunriseSunset([-122.4194, 37.7749], jsonLdDate);
+        await ontologize.geo.getSunriseSunset([-122.4194, 37.7749], jsonLdDate);
       }
       catch (error) {
         if (error.message.includes("Invalid date")) {
@@ -154,7 +154,7 @@ describe("Ontologize.getSunriseSunset", function() {
       this.timeout(10000); // Allow 10 seconds for API call
 
       try {
-        const result = await ontologize.getSunriseSunset(
+        const result = await ontologize.geo.getSunriseSunset(
           [-122.4194, 37.7749], // San Francisco [long, lat]
           new Date(2024, 5, 15) // June 15, 2024
         );
@@ -185,12 +185,12 @@ describe("Ontologize.getSunriseSunset", function() {
       this.timeout(15000); // Allow 15 seconds for two API calls
 
       try {
-        const sfResult = await ontologize.getSunriseSunset(
+        const sfResult = await ontologize.geo.getSunriseSunset(
           [-122.4194, 37.7749], // San Francisco
           new Date(2024, 5, 15)
         );
 
-        const nyResult = await ontologize.getSunriseSunset(
+        const nyResult = await ontologize.geo.getSunriseSunset(
           [-74.006, 40.7128], // New York
           new Date(2024, 5, 15)
         );
