@@ -98,7 +98,7 @@ describe("reasoner idempotency (throwaway)", function () {
 
     // 3. Bring HyLAR up (spawns the child process, waits until ready).
     console.log("Starting / verifying HyLAR...");
-    await server.checkHylar({ hylarUrl: HYLAR_URL, hylarPort: 4000 });
+    await server.reasoner.checkHylar({ hylarUrl: HYLAR_URL, hylarPort: 4000 });
   });
 
   after(async function () {
@@ -124,7 +124,7 @@ describe("reasoner idempotency (throwaway)", function () {
 
     // getTriplesForResources mutates its input — deep clone first.
     const clones = resources.map((r) => structuredClone(r));
-    const triples = await server.getTriplesForResources(clones, {
+    const triples = await server.rdf.getTriplesForResources(clones, {
       blankNodes: false,
       includeStatements: false
     });
@@ -150,7 +150,7 @@ describe("reasoner idempotency (throwaway)", function () {
     const BATCH = 1000;
     for (let i = 0; i < triples.length; i += BATCH) {
       const batch = triples.slice(i, i + BATCH);
-      const sparql = await server.createSparqlInsert(batch);
+      const sparql = await server.rdf.createSparqlInsert(batch);
       resp = await fetch(`${HYLAR_URL}/query`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -166,7 +166,7 @@ describe("reasoner idempotency (throwaway)", function () {
     console.log(`classify/on returned ${additions.length} additions`);
 
     // --- categorize ---
-    const facts = server._derivationsToFacts(additions, { blankNodes: false });
+    const facts = server.rdf._derivationsToFacts(additions, { blankNodes: false });
 
     const cats = { echoedExplicit: [], alreadyRecorded: [], novel: [] };
     for (const f of facts) {

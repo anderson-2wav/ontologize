@@ -127,7 +127,7 @@ describe("OntologizeServer Import", function () {
 
   describe("importFromFile", function () {
     it("should exist as a method", function () {
-      assert.isFunction(ontologizeServer.importFromFile);
+      assert.isFunction(ontologizeServer.io.importFromFile);
     });
 
     it("should import simple ontology array", async function () {
@@ -187,9 +187,9 @@ describe("OntologizeServer Import", function () {
       ];
 
       // Mock file loading
-      ontologizeServer.loadJsonFile = async (filePath) => testData;
+      ontologizeServer.io.loadJsonFile = async (filePath) => testData;
 
-      const result = await ontologizeServer.importFromFile(
+      const result = await ontologizeServer.io.importFromFile(
         "test.json",
         // mockOntologyCollection
       );
@@ -228,9 +228,9 @@ describe("OntologizeServer Import", function () {
         ]
       };
 
-      ontologizeServer.loadJsonFile = async (filePath) => testData;
+      ontologizeServer.io.loadJsonFile = async (filePath) => testData;
 
-      const result = await ontologizeServer.importFromFile(
+      const result = await ontologizeServer.io.importFromFile(
         "test.json",
         // mockOntologyCollection
       );
@@ -261,9 +261,9 @@ describe("OntologizeServer Import", function () {
         }
       ];
 
-      ontologizeServer.loadJsonFile = async (filePath) => testData;
+      ontologizeServer.io.loadJsonFile = async (filePath) => testData;
 
-      const result = await ontologizeServer.importFromFile(
+      const result = await ontologizeServer.io.importFromFile(
         "test.json",
         // mockOntologyCollection,
         { clearCollection: true }
@@ -339,7 +339,7 @@ describe("OntologizeServer Import", function () {
       // Test loading the file
       let fileData;
       try {
-        fileData = await ontologizeServer.loadJsonFile(filePath);
+        fileData = await ontologizeServer.io.loadJsonFile(filePath);
       }
       catch (error) {
         // Skip test if file doesn't exist
@@ -360,7 +360,7 @@ describe("OntologizeServer Import", function () {
       assert.isTrue(ontologyResources.length > 0);
 
       // Test actual import
-      const result = await ontologizeServer.importFromFile(
+      const result = await ontologizeServer.io.importFromFile(
         filePath,
         // mockOntologyCollection
       );
@@ -391,11 +391,11 @@ describe("OntologizeServer Import", function () {
 
   describe("New Import Methods", function () {
     it("should have importFromFile method", function () {
-      assert.isFunction(ontologizeServer.importFromFile);
+      assert.isFunction(ontologizeServer.io.importFromFile);
     });
 
     it("should have importData method", function () {
-      assert.isFunction(ontologizeServer.importData);
+      assert.isFunction(ontologizeServer.io.importData);
     });
 
     it("should import from array using importData", async function () {
@@ -412,7 +412,7 @@ describe("OntologizeServer Import", function () {
         }
       ];
 
-      const result = await ontologizeServer.importData(
+      const result = await ontologizeServer.io.importData(
         testData
         // this should be unnecessary because ontologizeServer will use the mockOntologyCollection it was ctor'd with
         // { collection: mockOntologyCollection }
@@ -435,7 +435,7 @@ describe("OntologizeServer Import", function () {
         }
       ];
 
-      const result = await ontologizeServer.importData(
+      const result = await ontologizeServer.io.importData(
         testData,
         // mockOntologyCollection,
         { ensureArrayTypes: true }
@@ -462,7 +462,7 @@ describe("OntologizeServer Import", function () {
           "@type": "rdfs:Class"
         }
       ];
-      const result = await ontologizeServer.importData(
+      const result = await ontologizeServer.io.importData(
         testData,
         // mockOntologyCollection,
         { clearCollection: true }
@@ -484,7 +484,7 @@ describe("OntologizeServer Import", function () {
         }
       ];
 
-      const result = await ontologizeServer.importData(
+      const result = await ontologizeServer.io.importData(
         testData,
         // mockOntologyCollection
       );
@@ -503,7 +503,7 @@ describe("OntologizeServer Import", function () {
         }
       ];
 
-      const result = await ontologizeServer.importData(
+      const result = await ontologizeServer.io.importData(
         testData,
         // mockOntologyCollection,
         { normalize: false }
@@ -527,7 +527,7 @@ describe("OntologizeServer Import", function () {
         }
       ];
 
-      const result = await ontologizeServer.importData(
+      const result = await ontologizeServer.io.importData(
         testData,
         // mockOntologyCollection,
         { context: customContext }
@@ -552,8 +552,8 @@ describe("OntologizeServer Import", function () {
         }
       ];
 
-      ontologizeServer.loadJsonFile = async (filePath) => firstData;
-      await ontologizeServer.importFromFile("first.json" /*, mockOntologyCollection */);
+      ontologizeServer.io.loadJsonFile = async (filePath) => firstData;
+      await ontologizeServer.io.importFromFile("first.json" /*, mockOntologyCollection */);
 
       // Second import with additional context
       const secondData = [
@@ -566,8 +566,8 @@ describe("OntologizeServer Import", function () {
         }
       ];
 
-      ontologizeServer.loadJsonFile = async (filePath) => secondData;
-      await ontologizeServer.importFromFile("second.json" /*, mockOntologyCollection*/);
+      ontologizeServer.io.loadJsonFile = async (filePath) => secondData;
+      await ontologizeServer.io.importFromFile("second.json" /*, mockOntologyCollection*/);
 
       // Check that both contexts were merged
       // incoming @vocab can't override default @vocab
@@ -601,8 +601,8 @@ describe("OntologizeServer Import", function () {
         }
       ];
 
-      ontologizeServer.loadJsonFile = async (filePath) => multiContextData;
-      const result = await ontologizeServer.importFromFile("multi.json" /*, mockOntologyCollection */);
+      ontologizeServer.io.loadJsonFile = async (filePath) => multiContextData;
+      const result = await ontologizeServer.io.importFromFile("multi.json" /*, mockOntologyCollection */);
 
       assert.isTrue(result.success);
       assert.isTrue(result.contextImported);
@@ -635,8 +635,8 @@ describe("OntologizeServer Import", function () {
         }
       ];
 
-      ontologizeServer.loadJsonFile = async (filePath) => testData;
-      await ontologizeServer.importFromFile("test.json" /*, mockOntologyCollection */);
+      ontologizeServer.io.loadJsonFile = async (filePath) => testData;
+      await ontologizeServer.io.importFromFile("test.json" /*, mockOntologyCollection */);
 
       // Check that keys are properly sorted (excluding _id)
       const allKeys = Object.keys(contextData);
@@ -665,7 +665,7 @@ describe("OntologizeServer Import", function () {
 
       let fileData;
       try {
-        fileData = await ontologizeServer.loadJsonFile(filePath);
+        fileData = await ontologizeServer.io.loadJsonFile(filePath);
       }
       catch (error) {
         this.skip("ontology.json file not found");
@@ -673,7 +673,7 @@ describe("OntologizeServer Import", function () {
       }
 
       // Import with BOLD normalization
-      const result = await ontologizeServer.importFromFile(
+      const result = await ontologizeServer.io.importFromFile(
         filePath,
         // mockOntologyCollection,
         {
@@ -714,7 +714,7 @@ describe("OntologizeServer Import", function () {
         }
       ];
 
-      const result1 = await ontologizeServer.importData(
+      const result1 = await ontologizeServer.io.importData(
         firstData,
         // mockOntologyCollection
       );
@@ -734,7 +734,7 @@ describe("OntologizeServer Import", function () {
         }
       ];
 
-      const result2 = await ontologizeServer.importData(
+      const result2 = await ontologizeServer.io.importData(
         secondData,
         // mockOntologyCollection
       );
@@ -768,7 +768,7 @@ describe("OntologizeServer Import", function () {
         }
       ];
 
-      await ontologizeServer.importData(firstData /* , mockOntologyCollection */);
+      await ontologizeServer.io.importData(firstData /* , mockOntologyCollection */);
 
       // Second import with additional array items
       const secondData = [
@@ -779,7 +779,7 @@ describe("OntologizeServer Import", function () {
         }
       ];
 
-      await ontologizeServer.importData(secondData /*, mockOntologyCollection*/);
+      await ontologizeServer.io.importData(secondData /*, mockOntologyCollection*/);
 
       // Check that arrays were merged using union (no duplicates)
       const finalResource = ontologyData.find(r => r._id === "ex:TestClass");
@@ -801,7 +801,7 @@ describe("OntologizeServer Import", function () {
         }
       ];
 
-      await ontologizeServer.importData(firstData /* , mockOntologyCollection */);
+      await ontologizeServer.io.importData(firstData /* , mockOntologyCollection */);
 
       // Second import with mergeResources=false
       const secondData = [
@@ -812,7 +812,7 @@ describe("OntologizeServer Import", function () {
         }
       ];
 
-      await ontologizeServer.importData(
+      await ontologizeServer.io.importData(
         secondData,
         // mockOntologyCollection,
         { mergeResources: false }
@@ -837,7 +837,7 @@ describe("OntologizeServer Import", function () {
         }
       ];
 
-      const result = await ontologizeServer.importData(
+      const result = await ontologizeServer.io.importData(
         testData,
         // mockOntologyCollection,
         {
@@ -863,7 +863,7 @@ describe("OntologizeServer Import", function () {
         }
       ];
 
-      const result = await ontologizeServer.importData(
+      const result = await ontologizeServer.io.importData(
         testData,
         // mockOntologyCollection,
         {
@@ -895,7 +895,7 @@ describe("OntologizeServer Import", function () {
         }
       ];
 
-      const result = await ontologizeServer.importData(
+      const result = await ontologizeServer.io.importData(
         testData,
         // mockOntologyCollection,
         {
@@ -931,7 +931,7 @@ describe("OntologizeServer Import", function () {
         }
       ];
 
-      const result = await ontologizeServer.importData(
+      const result = await ontologizeServer.io.importData(
         testData,
         // mockOntologyCollection,
         {
@@ -967,7 +967,7 @@ describe("OntologizeServer Import", function () {
         }
       ];
 
-      const result = await ontologizeServer.importData(
+      const result = await ontologizeServer.io.importData(
         testData,
         // mockOntologyCollection,
         {
@@ -989,7 +989,7 @@ describe("OntologizeServer Import", function () {
         }
       ];
 
-      const result = await ontologizeServer.importData(
+      const result = await ontologizeServer.io.importData(
         testData,
         // mockOntologyCollection,
         {
@@ -1040,7 +1040,7 @@ describe("OntologizeServer Import", function () {
         }
       ];
 
-      const result = await ontologizeServer.importData(
+      const result = await ontologizeServer.io.importData(
         testData,
         // mockAboxCollection,
         {
@@ -1081,9 +1081,9 @@ describe("OntologizeServer Import", function () {
         ]
       };
 
-      ontologizeServer.loadJsonFile = async () => testData;
+      ontologizeServer.io.loadJsonFile = async () => testData;
 
-      const result = await ontologizeServer.importFromFile(
+      const result = await ontologizeServer.io.importFromFile(
         "test.json",
         // mockOntologyCollection,
         {
@@ -1149,7 +1149,7 @@ describe("OntologizeServer Import", function () {
       const filePath = "./tests/data/foaf.jsonld";
 
       // Test import of FOAF ontology
-      const result = await ontologizeServer.importFromFile(
+      const result = await ontologizeServer.io.importFromFile(
         filePath,
         // mockFoafCollection,
         {
@@ -1225,7 +1225,7 @@ describe("OntologizeServer Import", function () {
 
       const filePath = "./tests/data/foaf.jsonld";
 
-      const result = await ontologizeServer.importFromFile(
+      const result = await ontologizeServer.io.importFromFile(
         filePath,
         // mockFoafCollection,
         {
@@ -1275,7 +1275,7 @@ describe("OntologizeServer Import", function () {
         }
       ];
 
-      const result = await ontologizeServer.importData(
+      const result = await ontologizeServer.io.importData(
         mixedData,
         {
           collection: mockFoafCollection
@@ -1326,7 +1326,7 @@ describe("OntologizeServer Import", function () {
         }
       ];
 
-      const result = await ontologizeServer.importData(data);
+      const result = await ontologizeServer.io.importData(data);
 
       assert.isTrue(result.success);
       assert.equal(result.processedResources, 3);
@@ -1367,7 +1367,7 @@ describe("OntologizeServer Import", function () {
         }
       ];
 
-      const result = await ontologizeServer.importData(data);
+      const result = await ontologizeServer.io.importData(data);
       assert.isTrue(result.success);
 
       const classResource = ontologyData.find(r => r._id === "ex:SomeClass");
@@ -1397,7 +1397,7 @@ describe("OntologizeServer Import", function () {
         }
       ];
 
-      const result = await ontologizeServer.importData(data);
+      const result = await ontologizeServer.io.importData(data);
       assert.isTrue(result.success);
 
       // SomeClass should only have the leading ontology
@@ -1427,7 +1427,7 @@ describe("OntologizeServer Import", function () {
         }
       ];
 
-      const result = await ontologizeServer.importData(data, { addIsPartOf: false });
+      const result = await ontologizeServer.io.importData(data, { addIsPartOf: false });
       assert.isTrue(result.success);
 
       const classResource = ontologyData.find(r => r._id === "ex:MyClass");
@@ -1449,7 +1449,7 @@ describe("OntologizeServer Import", function () {
         }
       ];
 
-      const result = await ontologizeServer.importData(data);
+      const result = await ontologizeServer.io.importData(data);
       assert.isTrue(result.success);
 
       const classResource = ontologyData.find(r => r._id === "ex:MyClass");
@@ -1476,7 +1476,7 @@ describe("OntologizeServer Import", function () {
         }
       ];
 
-      await ontologizeServer.importData(firstData);
+      await ontologizeServer.io.importData(firstData);
 
       // Verify after first import
       let classResource = ontologyData.find(r => r._id === "ex:SharedClass");
@@ -1497,7 +1497,7 @@ describe("OntologizeServer Import", function () {
         }
       ];
 
-      await ontologizeServer.importData(secondData);
+      await ontologizeServer.io.importData(secondData);
 
       // After merge, dcterms:isPartOf should include both ontologies
       classResource = ontologyData.find(r => r._id === "ex:SharedClass");
@@ -1526,7 +1526,7 @@ describe("OntologizeServer Import", function () {
         }
       ];
 
-      const result = await ontologizeServer.importData(data);
+      const result = await ontologizeServer.io.importData(data);
       assert.isTrue(result.success);
 
       const classResource = ontologyData.find(r => r._id === "ex:MyClass");

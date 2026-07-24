@@ -204,7 +204,7 @@ describe("Ontologize", function () {
         "@type": "owl:Class",
         "rdfs:label": "Test Class"
       };
-      const label = await ontologize.getLabel(resource);
+      const label = await ontologize.display.getLabel(resource);
       assert.equal(label, "Test Class");
     });
 
@@ -214,7 +214,7 @@ describe("Ontologize", function () {
         "@type": "owl:Class",
         "rdfs:label": ["Test Class", "Another Label"]
       };
-      const label = await ontologize.getLabel(resource);
+      const label = await ontologize.display.getLabel(resource);
       assert.equal(label, "Test Class");
     });
 
@@ -223,7 +223,7 @@ describe("Ontologize", function () {
         "@id": "ex:TestClass",
         "@type": "owl:Class"
       };
-      const label = await ontologize.getLabel(resource);
+      const label = await ontologize.display.getLabel(resource);
       assert.equal(label, "TestClass");
     });
 
@@ -231,7 +231,7 @@ describe("Ontologize", function () {
       const resource = {
         "@type": "owl:Class"
       };
-      const label = await ontologize.getLabel(resource, "Fallback");
+      const label = await ontologize.display.getLabel(resource, "Fallback");
       assert.equal(label, "Fallback");
     });
 
@@ -239,7 +239,7 @@ describe("Ontologize", function () {
       const resource = {
         "@type": "owl:Class"
       };
-      const label = await ontologize.getLabel(resource);
+      const label = await ontologize.display.getLabel(resource);
       assert.equal(label, "Unknown");
     });
   });
@@ -250,7 +250,7 @@ describe("Ontologize", function () {
         "@id": "ex:Thing",
         "dcterms:description": "A described thing."
       };
-      const description = await ontologize.getDescription(resource);
+      const description = await ontologize.display.getDescription(resource);
       assert.equal(description, "A described thing.");
     });
 
@@ -260,7 +260,7 @@ describe("Ontologize", function () {
         "dcterms:description": "The description.",
         "rdfs:comment": "The comment."
       };
-      const description = await ontologize.getDescription(resource);
+      const description = await ontologize.display.getDescription(resource);
       assert.equal(description, "The description.");
     });
 
@@ -269,7 +269,7 @@ describe("Ontologize", function () {
         "@id": "ex:Thing",
         "rdfs:comment": "The comment."
       };
-      const description = await ontologize.getDescription(resource);
+      const description = await ontologize.display.getDescription(resource);
       assert.equal(description, "The comment.");
     });
 
@@ -278,37 +278,37 @@ describe("Ontologize", function () {
         "@id": "ex:Thing",
         "dcterms:description": ["First.", "Second."]
       };
-      const description = await ontologize.getDescription(resource);
+      const description = await ontologize.display.getDescription(resource);
       assert.equal(description, "First.");
     });
 
     it("should use fallback when no description property is present", async function () {
       const resource = { "@id": "ex:Thing" };
-      const description = await ontologize.getDescription(resource, "Fallback");
+      const description = await ontologize.display.getDescription(resource, "Fallback");
       assert.equal(description, "Fallback");
     });
 
     it("should return an empty string when no description and no fallback", async function () {
       const resource = { "@id": "ex:Thing" };
-      const description = await ontologize.getDescription(resource);
+      const description = await ontologize.display.getDescription(resource);
       assert.equal(description, "");
     });
 
     it("should honor a class schema descriptionProperties override", async function () {
-      ontologize.getSchema = async () => ({ descriptionProperties: ["skos:definition", "rdfs:comment"] });
+      ontologize.schema.getSchema = async () => ({ descriptionProperties: ["skos:definition", "rdfs:comment"] });
       const resource = {
         "@id": "ex:Thing",
         "skos:definition": "The definition.",
         "rdfs:comment": "The comment."
       };
-      const description = await ontologize.getDescription(resource);
+      const description = await ontologize.display.getDescription(resource);
       assert.equal(description, "The definition.");
     });
 
     it("should select the property via getDescriptionProperty", async function () {
       // getDescription must not re-implement the preference walk; it delegates.
       const calls = [];
-      ontologize.getDescriptionProperty = async (resource) => {
+      ontologize.display.getDescriptionProperty = async (resource) => {
         calls.push(resource);
         return "rdfs:comment";
       };
@@ -317,7 +317,7 @@ describe("Ontologize", function () {
         "dcterms:description": "Ignored — getDescriptionProperty chose the comment.",
         "rdfs:comment": "The comment."
       };
-      const description = await ontologize.getDescription(resource);
+      const description = await ontologize.display.getDescription(resource);
       assert.equal(description, "The comment.");
       assert.deepEqual(calls, [resource]);
     });
@@ -326,11 +326,11 @@ describe("Ontologize", function () {
       // getDescription's fallback is description text; getDescriptionProperty's
       // is a property name. Passing one as the other would return the text itself.
       let received;
-      ontologize.getDescriptionProperty = async (resource, fallback) => {
+      ontologize.display.getDescriptionProperty = async (resource, fallback) => {
         received = fallback;
         return "rdfs:comment";
       };
-      const description = await ontologize.getDescription({ "@id": "ex:Thing" }, "Fallback text");
+      const description = await ontologize.display.getDescription({ "@id": "ex:Thing" }, "Fallback text");
       assert.isUndefined(received);
       assert.equal(description, "Fallback text");
     });
@@ -338,50 +338,50 @@ describe("Ontologize", function () {
 
   describe("setLabelResolver", function () {
     afterEach(function () {
-      ontologize.setLabelResolver(null);
+      ontologize.display.setLabelResolver(null);
     });
 
     it("should use resolver result when no label property is found", async function () {
-      ontologize.setLabelResolver(async (resource) => {
+      ontologize.display.setLabelResolver(async (resource) => {
         if (resource["@id"] === "ex:NoLabel") return "Resolver Label";
         return null;
       });
       const resource = { "@id": "ex:NoLabel", "@type": "owl:Class" };
-      const label = await ontologize.getLabel(resource);
+      const label = await ontologize.display.getLabel(resource);
       assert.equal(label, "Resolver Label");
     });
 
     it("should skip resolver when a label property is already found", async function () {
-      ontologize.setLabelResolver(async () => "Should Not Be Used");
+      ontologize.display.setLabelResolver(async () => "Should Not Be Used");
       const resource = { "@id": "ex:HasLabel", "@type": "owl:Class", "rdfs:label": "Direct Label" };
-      const label = await ontologize.getLabel(resource);
+      const label = await ontologize.display.getLabel(resource);
       assert.equal(label, "Direct Label");
     });
 
     it("should fall through to ID parsing when resolver returns null", async function () {
-      ontologize.setLabelResolver(async () => null);
+      ontologize.display.setLabelResolver(async () => null);
       const resource = { "@id": "ex:FallThrough", "@type": "owl:Class" };
-      const label = await ontologize.getLabel(resource);
+      const label = await ontologize.display.getLabel(resource);
       assert.equal(label, "FallThrough");
     });
 
     it("should fall through to ID parsing when resolver throws", async function () {
-      ontologize.setLabelResolver(async () => { throw new Error("boom"); });
+      ontologize.display.setLabelResolver(async () => { throw new Error("boom"); });
       const resource = { "@id": "ex:ErrorCase", "@type": "owl:Class" };
-      const label = await ontologize.getLabel(resource);
+      const label = await ontologize.display.getLabel(resource);
       assert.equal(label, "ErrorCase");
     });
 
     it("should clear resolver when passed null", async function () {
-      ontologize.setLabelResolver(async () => "Resolver Label");
-      ontologize.setLabelResolver(null);
+      ontologize.display.setLabelResolver(async () => "Resolver Label");
+      ontologize.display.setLabelResolver(null);
       const resource = { "@id": "ex:AfterClear", "@type": "owl:Class" };
-      const label = await ontologize.getLabel(resource);
+      const label = await ontologize.display.getLabel(resource);
       assert.equal(label, "AfterClear");
     });
 
     it("should throw when given a non-function non-null value", function () {
-      assert.throws(() => ontologize.setLabelResolver("not a function"), /must be a function or null/);
+      assert.throws(() => ontologize.display.setLabelResolver("not a function"), /must be a function or null/);
     });
   });
 
@@ -421,29 +421,29 @@ describe("Ontologize", function () {
       const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "statements");
       const testOntologize = new Ontologize(ontologyAdapter, contextAdapter, statementsAdapter);
 
-      const label = await testOntologize.getLabelFromId("ex:TestClass");
+      const label = await testOntologize.display.getLabelFromId("ex:TestClass");
       assert.equal(label, "Test Class");
     });
 
     it("should extract label from ID when resource not found", async function () {
-      const label = await ontologize.getLabelFromId("ex:UnknownClass");
+      const label = await ontologize.display.getLabelFromId("ex:UnknownClass");
       assert.equal(label, "UnknownClass");
     });
 
     it("should use fallback when extraction fails", async function () {
-      const label = await ontologize.getLabelFromId("", "Custom Fallback");
+      const label = await ontologize.display.getLabelFromId("", "Custom Fallback");
       assert.equal(label, "Custom Fallback");
     });
   });
 
   describe("isArrayProperty", function () {
     it("should return false for special properties", async function () {
-      assert.isFalse(await ontologize.isArrayProperty("__proto__"));
-      assert.isFalse(await ontologize.isArrayProperty("123"));
+      assert.isFalse(await ontologize.schema.isArrayProperty("__proto__"));
+      assert.isFalse(await ontologize.schema.isArrayProperty("123"));
     });
 
     it("should return true when current context has @container @list", async function () {
-      const result = await ontologize.isArrayProperty("test:property", {
+      const result = await ontologize.schema.isArrayProperty("test:property", {
         context: {
           "test:property": {
             "@container": "@list"
@@ -454,7 +454,7 @@ describe("Ontologize", function () {
     });
 
     it("should return true when current context has @container @set", async function () {
-      const result = await ontologize.isArrayProperty("test:property", {
+      const result = await ontologize.schema.isArrayProperty("test:property", {
         context: {
           "test:property": {
             "@container": "@set"
@@ -465,7 +465,7 @@ describe("Ontologize", function () {
     });
 
     it("should return false when current context has other @container values", async function () {
-      const result = await ontologize.isArrayProperty("test:property", {
+      const result = await ontologize.schema.isArrayProperty("test:property", {
         context: {
           "test:property": {
             "@container": "@language"
@@ -511,7 +511,7 @@ describe("Ontologize", function () {
       const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "statements");
       const testOntologize = new Ontologize(ontologyAdapter, contextAdapter, statementsAdapter);
 
-      const result = await testOntologize.isArrayProperty("test:property");
+      const result = await testOntologize.schema.isArrayProperty("test:property");
       assert.isTrue(result);
     });
 
@@ -549,7 +549,7 @@ describe("Ontologize", function () {
       const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "statements");
       const testOntologize = new Ontologize(ontologyAdapter, contextAdapter, statementsAdapter);
 
-      const result = await testOntologize.isArrayProperty("test:property");
+      const result = await testOntologize.schema.isArrayProperty("test:property");
       assert.isTrue(result);
     });
 
@@ -587,12 +587,12 @@ describe("Ontologize", function () {
       const statementsAdapter = new MeteorCollectionAdapter(mockStatementsCollection, "statements");
       const testOntologize = new Ontologize(ontologyAdapter, contextAdapter, statementsAdapter);
 
-      const result = await testOntologize.isArrayProperty("test:property");
+      const result = await testOntologize.schema.isArrayProperty("test:property");
       assert.isTrue(result);
     });
 
     it("should return false when no array indicators found", async function () {
-      const result = await ontologize.isArrayProperty("unknown:property");
+      const result = await ontologize.schema.isArrayProperty("unknown:property");
       assert.isFalse(result);
     });
 
@@ -632,7 +632,7 @@ describe("Ontologize", function () {
       const testOntologize = new Ontologize(ontologyAdapter, contextAdapter, statementsAdapter);
 
       // Current context says false, global context says true - should return false
-      const result = await testOntologize.isArrayProperty("test:property", {
+      const result = await testOntologize.schema.isArrayProperty("test:property", {
         context: {
           "test:property": {
             "@container": "@language"
@@ -708,7 +708,7 @@ describe("Ontologize", function () {
       const mockStatementsCollection = createMockStatementsCollection();
 
       const testOntologize = new Ontologize(mockOntologyCollection, mockContextCollection, mockStatementsCollection);
-      const sortedTypes = await testOntologize.sortTypesFn(inputTypes);
+      const sortedTypes = await testOntologize.schema.sortTypesFn(inputTypes);
 
       assert.isArray(sortedTypes);
       assert.equal(sortedTypes.length, inputTypes.length);
@@ -807,7 +807,7 @@ describe("Ontologize", function () {
       const mockStatementsCollection = createMockStatementsCollection();
 
       const testOntologize = new Ontologize(mockOntologyCollection, mockContextCollection, mockStatementsCollection);
-      const sortedTypes = await testOntologize.sortTypesFn(inputTypes);
+      const sortedTypes = await testOntologize.schema.sortTypesFn(inputTypes);
 
       console.log("bfo:bearer-of input:", inputTypes);
       console.log("bfo:bearer-of sorted:", sortedTypes);
@@ -821,13 +821,13 @@ describe("Ontologize", function () {
     });
 
     it("should handle empty array", async function () {
-      const sorted = await ontologize.sortTypesFn([]);
+      const sorted = await ontologize.schema.sortTypesFn([]);
       assert.isArray(sorted);
       assert.equal(sorted.length, 0);
     });
 
     it("should handle single type", async function () {
-      const sorted = await ontologize.sortTypesFn(["bfo:entity"]);
+      const sorted = await ontologize.schema.sortTypesFn(["bfo:entity"]);
       assert.isArray(sorted);
       assert.equal(sorted.length, 1);
       assert.equal(sorted[0], "bfo:entity");
@@ -835,7 +835,7 @@ describe("Ontologize", function () {
 
     it("should separate named classes from blank nodes", async function () {
       const types = ["bfo:entity", "_:blank1", "owl:Thing", "_:blank2"];
-      const sorted = await ontologize.sortTypesFn(types);
+      const sorted = await ontologize.schema.sortTypesFn(types);
 
       assert.isArray(sorted);
       assert.equal(sorted.length, 4);
@@ -870,7 +870,7 @@ describe("Ontologize", function () {
         "@type": "ex:Thing",
         "rdfs:label": "No Location"
       };
-      const location = await ontologize.getGeoJSON(resource);
+      const location = await ontologize.geo.getGeoJSON(resource);
       assert.isNull(location);
     });
 
@@ -881,7 +881,7 @@ describe("Ontologize", function () {
         "geo:lat": 34.0598954,
         "geo:long": -118.4464607
       };
-      const location = await ontologize.getGeoJSON(resource);
+      const location = await ontologize.geo.getGeoJSON(resource);
       assert.isObject(location);
       assert.equal(location.type, "Point");
       assert.isArray(location.coordinates);
@@ -896,7 +896,7 @@ describe("Ontologize", function () {
         "geo:lat": { "@value": "34.0598954", "@type": "xsd:decimal" },
         "geo:long": { "@value": "-118.4464607", "@type": "xsd:decimal" }
       };
-      const location = await ontologize.getGeoJSON(resource);
+      const location = await ontologize.geo.getGeoJSON(resource);
       assert.isObject(location);
       assert.equal(location.type, "Point");
       assert.closeTo(location.coordinates[0], -118.4464607, 0.0001);
@@ -910,7 +910,7 @@ describe("Ontologize", function () {
         "geo:lat": "34.0598954",
         "geo:long": "-118.4464607"
       };
-      const location = await ontologize.getGeoJSON(resource);
+      const location = await ontologize.geo.getGeoJSON(resource);
       assert.isObject(location);
       assert.equal(location.type, "Point");
       assert.closeTo(location.coordinates[0], -118.4464607, 0.0001);
@@ -961,7 +961,7 @@ describe("Ontologize", function () {
         }
       };
 
-      const location = await testOntologize.getGeoJSON(resource);
+      const location = await testOntologize.geo.getGeoJSON(resource);
       assert.isObject(location);
       assert.equal(location.type, "Point");
       assert.deepEqual(location.coordinates, [-118.4464607, 34.0598954]);
@@ -1011,7 +1011,7 @@ describe("Ontologize", function () {
         }
       };
 
-      const location = await testOntologize.getGeoJSON(resource);
+      const location = await testOntologize.geo.getGeoJSON(resource);
       assert.isObject(location);
       assert.equal(location.type, "Polygon");
       assert.isArray(location.coordinates);
@@ -1060,7 +1060,7 @@ describe("Ontologize", function () {
         })
       };
 
-      const location = await testOntologize.getGeoJSON(resource);
+      const location = await testOntologize.geo.getGeoJSON(resource);
       assert.isObject(location);
       assert.equal(location.type, "Point");
       assert.deepEqual(location.coordinates, [-118.4464607, 34.0598954]);
@@ -1112,7 +1112,7 @@ describe("Ontologize", function () {
         }
       };
 
-      const location = await testOntologize.getGeoJSON(resource);
+      const location = await testOntologize.geo.getGeoJSON(resource);
       assert.isObject(location);
       assert.equal(location.type, "Point");
       assert.deepEqual(location.coordinates, [-118.4464607, 34.0598954]);
@@ -1164,7 +1164,7 @@ describe("Ontologize", function () {
         }
       };
 
-      const location = await testOntologize.getGeoJSON(resource);
+      const location = await testOntologize.geo.getGeoJSON(resource);
       assert.isObject(location);
       assert.equal(location.type, "Point");
       // Should use geo:lat/geo:long values, not ex:hasLocation
@@ -1179,7 +1179,7 @@ describe("Ontologize", function () {
         "geo:lat": 34.0598954
         // geo:long is missing
       };
-      const location = await ontologize.getGeoJSON(resource);
+      const location = await ontologize.geo.getGeoJSON(resource);
       assert.isNull(location);
     });
 
@@ -1190,7 +1190,7 @@ describe("Ontologize", function () {
         "geo:long": -118.4464607
         // geo:lat is missing
       };
-      const location = await ontologize.getGeoJSON(resource);
+      const location = await ontologize.geo.getGeoJSON(resource);
       assert.isNull(location);
     });
   });

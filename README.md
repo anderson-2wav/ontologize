@@ -13,6 +13,48 @@ Ontologize is a component of the BOLD stack (Bridge Ontology Linked Data). It ha
 
 The Ontologize module provides two distinct imports: `Ontologize` is intended for use on both client and server, `OntologizeServer` is only available on the server. The client-side implementation of `Ontologize` is largely intended for MeteorJS applications, where mini-mongo collections are available on the client. For other frameworks, the complete Ontologize API is available to `OntologizeServer` — and the client-side `Ontologize` can be run in a non-Meteor browser (e.g. a Nuxt SPA) by backing its collections with HTTP. See [Using Ontologize in a non-Meteor client](#using-ontologize-in-a-non-meteor-client-nuxt).
 
+## API Namespaces
+
+As of `0.3.0` the Ontologize API is organized into **namespaces** grouping related
+methods, so the surface is discoverable and each area is documented and tested on its own:
+
+| Namespace | Available on | Purpose |
+|-----------|--------------|---------|
+| `ontologize.display.*` | client + server | Labels, descriptions, date formatting, info-component / label resolvers, individual colors and grouping |
+| `ontologize.schema.*` | client + server | TBox schema introspection (`getSchema`, `sortTypesFn`, `isArrayProperty`, `getGroupStrategies`) |
+| `ontologize.geo.*` | client + server | Instance-bound geospatial helpers (`getGeoJSON`, `getSunriseSunset`) |
+| `ontologize.explore.*` | client + server | Scan ontology structure + ABox collections (`explore.run()`) |
+| `ontologizeServer.io.*` | server | JSON-LD import/export and `bootstrap` |
+| `ontologizeServer.archive.*` | server | `mongodump` / `mongorestore` |
+| `ontologizeServer.rdf.*` | server | RDF/SPARQL serialization and HyLAR fact assembly |
+| `ontologizeServer.reasoner.*` | server | HyLAR reasoning integration and process management |
+
+Lifecycle and cross-cutting members stay on the instance directly: `ready()`, `ld()`,
+`getContext()`, `getResourceForId()`, `mergeResources()`, `getVersion()`, and (server)
+`updateOne()`, `isTBoxResource()`, `getCollectionForResource()`.
+
+> **`explore.run()` returns raw resources, not LD proxies.** Its output is designed to be
+> serialized (e.g. over DDP to a UI), and LD proxies do not survive serialization intact.
+> Call `ontologize.ld().proxy(resource)` yourself if you want proxy access.
+
+### Migrating from the flat API (deprecated)
+
+The former flat methods still work as thin **deprecated delegates** that forward to their
+namespace method and log a one-time deprecation warning, so existing code keeps running
+while you migrate. They will be removed in a later release. Move each call to its namespace:
+
+| Deprecated | Use |
+|------------|-----|
+| `ontologize.getLabel(...)` | `ontologize.display.getLabel(...)` |
+| `ontologize.formatDate(...)` / `formatDateTime(...)` | `ontologize.display.formatDate(...)` |
+| `ontologize.getSchema(...)` | `ontologize.schema.getSchema(...)` |
+| `ontologize.getGeoJSON(...)` | `ontologize.geo.getGeoJSON(...)` |
+| `ontologize.explorer(...)` | `ontologize.explore.run(...)` |
+| `ontologizeServer.importData(...)` / `importFromFile(...)` / `bootstrap(...)` | `ontologizeServer.io.importData(...)` etc. |
+| `ontologizeServer.reasonCollection(...)` / `bootstrapReasoner(...)` | `ontologizeServer.reasoner.reasonCollection(...)` etc. |
+| `ontologizeServer.getTriplesForResources(...)` / `createSparqlInsert(...)` | `ontologizeServer.rdf.getTriplesForResources(...)` etc. |
+| `ontologizeServer.restoreFromArchive(...)` / `dumpToArchive(...)` | `ontologizeServer.archive.restoreFromArchive(...)` etc. |
+
 ## License
 
 Ontologize is licensed under the **GNU Lesser General Public License v3.0 or later (LGPL-3.0-or-later)**.

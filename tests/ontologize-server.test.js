@@ -77,9 +77,9 @@ describe("OntologizeServer", function () {
       assert.isFunction(ontologizeServer.getVersion);
 
       // Should have new server-only methods
-      assert.isFunction(ontologizeServer.loadJsonFile);
-      assert.isFunction(ontologizeServer.importFromFile);
-      assert.isFunction(ontologizeServer.importData);
+      assert.isFunction(ontologizeServer.io.loadJsonFile);
+      assert.isFunction(ontologizeServer.io.importFromFile);
+      assert.isFunction(ontologizeServer.io.importData);
     });
 
     it("should have same version as parent class", function () {
@@ -101,23 +101,23 @@ describe("OntologizeServer", function () {
 
   describe("server methods", function () {
     it("should have loadJsonFile method", function () {
-      assert.isFunction(ontologizeServer.loadJsonFile);
+      assert.isFunction(ontologizeServer.io.loadJsonFile);
     });
 
     it("should have importFromFile method", function () {
-      assert.isFunction(ontologizeServer.importFromFile);
+      assert.isFunction(ontologizeServer.io.importFromFile);
     });
 
     it("should have importData method", function () {
-      assert.isFunction(ontologizeServer.importData);
+      assert.isFunction(ontologizeServer.io.importData);
     });
 
     it("should have exportToFile method", function () {
-      assert.isFunction(ontologizeServer.exportToFile);
+      assert.isFunction(ontologizeServer.io.exportToFile);
     });
 
     it("should have exportData method", function () {
-      assert.isFunction(ontologizeServer.exportData);
+      assert.isFunction(ontologizeServer.io.exportData);
     });
 
     it("should have explorer method", function () {
@@ -233,7 +233,7 @@ describe("OntologizeServer", function () {
       }
 
       // Export the data
-      const result = await ontologizeServer.exportData(testCollection, {
+      const result = await ontologizeServer.io.exportData(testCollection, {
         normalize: false // Skip normalization for simple test
       });
 
@@ -267,7 +267,7 @@ describe("OntologizeServer", function () {
 
       // Export to file
       const filePath = "/tmp/test-export.jsonld";
-      const result = await ontologizeServer.exportToFile(filePath, testCollection, {
+      const result = await ontologizeServer.io.exportToFile(filePath, testCollection, {
         normalize: false
       });
 
@@ -292,7 +292,7 @@ describe("OntologizeServer", function () {
       const bfoPath = path.resolve(process.cwd(), "../../bold-assets/bootstrap/bfo-core.jsonld");
 
       try {
-        const importResult = await ontologizeServer.importFromFile(
+        const importResult = await ontologizeServer.io.importFromFile(
           bfoPath,
           {
             collection: testCollection,
@@ -308,7 +308,7 @@ describe("OntologizeServer", function () {
 
         // Then export to /tmp/bfo.jsonld
         const exportPath = "/tmp/bfo.jsonld";
-        const exportResult = await ontologizeServer.exportToFile(
+        const exportResult = await ontologizeServer.io.exportToFile(
           exportPath,
           testCollection,
           {
@@ -499,6 +499,27 @@ describe("OntologizeServer", function () {
       });
     });
 
+    // Raw-resource contract (see ExploreApi): explore.run() output is serialized over
+    // DDP to the OntologyExplorer, so it must return raw resources, not LD proxies.
+    // A proxy serializes lossily — multi-valued class metadata not declared as an
+    // @container collapses to its first element. This asserts the full array survives.
+    it("should return raw (non-proxy) resources with multi-valued metadata intact", async function () {
+      await ontologyCollection.insertOne({
+        _id: "ex:UnionClass",
+        "@type": ["owl:Class"],
+        "rdfs:label": "Union Class",
+        "owl:unionOf": ["ex:MemberA", "ex:MemberB"]
+      });
+
+      const result = await ontologizeServer.explore.run([testCollection1]);
+
+      const classInfo = result.Classes["ex:UnionClass"].classInfo;
+      // Not a proxy — safe to serialize
+      assert.isFalse(ontologizeServer.ld().isProxy(classInfo), "classInfo must be raw, not a proxy");
+      // Both union members survive (a proxy would have collapsed this to "ex:MemberA")
+      assert.deepEqual(classInfo["owl:unionOf"], ["ex:MemberA", "ex:MemberB"]);
+    });
+
     // TODO(explorer regression, ce44dd6): explorer() dropped instanceProperties when it
     // switched to the aggregation fast path (_getInstanceCountsByType returns {}), but the
     // OntologyExplorer UI (ClassExpandedContent.vue, ResourceList.vue) still consumes it.
@@ -520,7 +541,7 @@ describe("OntologizeServer", function () {
         "rdfs:comment": "A test property"
       });
 
-      const result = await ontologizeServer.explorer([testCollection1, testCollection2]);
+      const result = await ontologizeServer.explore.run([testCollection1, testCollection2]);
 
       // Check basic structure
       assert.isObject(result);
@@ -560,7 +581,7 @@ describe("OntologizeServer", function () {
         "rdfs:label": "Resource without type"
       });
 
-      const result = await ontologizeServer.explorer([testCollection1]);
+      const result = await ontologizeServer.explore.run([testCollection1]);
 
       // Explorer only processes resources with valid @type, so this resource should be ignored
       // Verify basic structure still works
@@ -589,7 +610,7 @@ describe("OntologizeServer", function () {
         }
       });
 
-      const result = await ontologizeServer.explorer([testCollection1], { recurse: true });
+      const result = await ontologizeServer.explore.run([testCollection1], { recurse: true });
 
       // Should find owl:Class in Classes section
       assert.property(result, "Classes");
@@ -618,7 +639,7 @@ describe("OntologizeServer", function () {
         }
       });
 
-      const result = await ontologizeServer.explorer([testCollection1], { recurse: false });
+      const result = await ontologizeServer.explore.run([testCollection1], { recurse: false });
 
       // Should find owl:Class in Classes section
       assert.property(result, "Classes");
@@ -666,7 +687,7 @@ describe("OntologizeServer", function () {
         }
       });
 
-      const result = await ontologizeServer.explorer([bridgeCollection], { recurse: true });
+      const result = await ontologizeServer.explore.run([bridgeCollection], { recurse: true });
 
       // The top-level resource should be found (it has @type owl:Class)
       assert.property(result, "Classes");
@@ -705,7 +726,7 @@ describe("OntologizeServer", function () {
         }
       });
 
-      const result = await ontologizeServer.explorer([testCollection1], { recurse: true });
+      const result = await ontologizeServer.explore.run([testCollection1], { recurse: true });
 
       // Should find owl:Class from both parent and child
       assert.property(result, "Classes");
@@ -737,7 +758,7 @@ describe("OntologizeServer", function () {
         "rdfs:label": "Multi-type Resource"
       });
 
-      const result = await ontologizeServer.explorer([testCollection1]);
+      const result = await ontologizeServer.explore.run([testCollection1]);
 
       // Should find both owl:Class and rdfs:Class in Classes section
       assert.property(result, "Classes");
@@ -814,7 +835,7 @@ describe("OntologizeServer", function () {
         "rdfs:range": "ex:Person"
       };
 
-      await ontologizeServer.ensurePropertyContext(objectProperty, contextCollection);
+      await ontologizeServer.io.ensurePropertyContext(objectProperty, contextCollection);
 
       const context = await contextCollection.findOne({ _id: "@id" });
       assert.isObject(context["ex:hasParent"]);
@@ -828,7 +849,7 @@ describe("OntologizeServer", function () {
         "rdfs:range": "xsd:string"
       };
 
-      await ontologizeServer.ensurePropertyContext(datatypeProperty, contextCollection);
+      await ontologizeServer.io.ensurePropertyContext(datatypeProperty, contextCollection);
 
       const context = await contextCollection.findOne({ _id: "@id" });
       assert.isObject(context["ex:name"]);
@@ -842,7 +863,7 @@ describe("OntologizeServer", function () {
         "rdfs:range": "xsd:integer"
       };
 
-      await ontologizeServer.ensurePropertyContext(datatypeProperty, contextCollection);
+      await ontologizeServer.io.ensurePropertyContext(datatypeProperty, contextCollection);
 
       const context = await contextCollection.findOne({ _id: "@id" });
       assert.isObject(context["ex:age"]);
@@ -856,7 +877,7 @@ describe("OntologizeServer", function () {
         "rdfs:range": "xsd:dateTime"
       };
 
-      await ontologizeServer.ensurePropertyContext(datatypeProperty, contextCollection);
+      await ontologizeServer.io.ensurePropertyContext(datatypeProperty, contextCollection);
 
       const context = await contextCollection.findOne({ _id: "@id" });
       assert.isObject(context["ex:birthDate"]);
@@ -871,7 +892,7 @@ describe("OntologizeServer", function () {
         "bold:container": "@list"
       };
 
-      await ontologizeServer.ensurePropertyContext(arrayProperty, contextCollection);
+      await ontologizeServer.io.ensurePropertyContext(arrayProperty, contextCollection);
 
       const context = await contextCollection.findOne({ _id: "@id" });
       assert.isObject(context["ex:hasChildren"]);
@@ -886,7 +907,7 @@ describe("OntologizeServer", function () {
         "bold:container": "@set"
       };
 
-      await ontologizeServer.ensurePropertyContext(arrayProperty, contextCollection);
+      await ontologizeServer.io.ensurePropertyContext(arrayProperty, contextCollection);
 
       const context = await contextCollection.findOne({ _id: "@id" });
       assert.isObject(context["ex:hasTags"]);
@@ -901,7 +922,7 @@ describe("OntologizeServer", function () {
         "bold:container": "@list"
       };
 
-      await ontologizeServer.ensurePropertyContext(combinedProperty, contextCollection);
+      await ontologizeServer.io.ensurePropertyContext(combinedProperty, contextCollection);
 
       const context = await contextCollection.findOne({ _id: "@id" });
       assert.isObject(context["ex:hasMembers"]);
@@ -923,7 +944,7 @@ describe("OntologizeServer", function () {
         "bold:container": "@list"
       };
 
-      await ontologizeServer.ensurePropertyContext(arrayProperty, contextCollection);
+      await ontologizeServer.io.ensurePropertyContext(arrayProperty, contextCollection);
 
       const context = await contextCollection.findOne({ _id: "@id" });
       assert.isObject(context["ex:existingProp"]);
@@ -946,7 +967,7 @@ describe("OntologizeServer", function () {
         "@type": ["owl:DatatypeProperty"]
       };
 
-      await ontologizeServer.ensurePropertyContext(propertyWithoutRange, contextCollection);
+      await ontologizeServer.io.ensurePropertyContext(propertyWithoutRange, contextCollection);
 
       const context = await contextCollection.findOne({ _id: "@id" });
       assert.isObject(context["ex:lookupProp"]);
@@ -960,7 +981,7 @@ describe("OntologizeServer", function () {
       };
 
       // Should not throw, just skip
-      await ontologizeServer.ensurePropertyContext(propertyWithoutRange, contextCollection);
+      await ontologizeServer.io.ensurePropertyContext(propertyWithoutRange, contextCollection);
 
       const context = await contextCollection.findOne({ _id: "@id" });
       // Property should not be added since we can't determine @type or @container
@@ -988,7 +1009,7 @@ describe("OntologizeServer", function () {
         "bold:container": "@list"
       };
 
-      await ontologizeServer.ensurePropertyContext(property, contextCollection);
+      await ontologizeServer.io.ensurePropertyContext(property, contextCollection);
 
       // Should not call updateOne since nothing needs to change
       assert.equal(updateCount, 0);
@@ -997,67 +1018,67 @@ describe("OntologizeServer", function () {
 
   describe("_convertXsdLiteral", function () {
     it("should convert xsd:boolean 'true' to true", function () {
-      const result = ontologizeServer._convertXsdLiteral('"true"^^<http://www.w3.org/2001/XMLSchema#boolean>');
+      const result = ontologizeServer.rdf._convertXsdLiteral('"true"^^<http://www.w3.org/2001/XMLSchema#boolean>');
       assert.strictEqual(result, true);
     });
 
     it("should convert xsd:boolean 'false' to false", function () {
-      const result = ontologizeServer._convertXsdLiteral('"false"^^<http://www.w3.org/2001/XMLSchema#boolean>');
+      const result = ontologizeServer.rdf._convertXsdLiteral('"false"^^<http://www.w3.org/2001/XMLSchema#boolean>');
       assert.strictEqual(result, false);
     });
 
     it("should convert xsd:integer to number", function () {
-      const result = ontologizeServer._convertXsdLiteral('"42"^^<http://www.w3.org/2001/XMLSchema#integer>');
+      const result = ontologizeServer.rdf._convertXsdLiteral('"42"^^<http://www.w3.org/2001/XMLSchema#integer>');
       assert.strictEqual(result, 42);
     });
 
     it("should convert xsd:decimal to number", function () {
-      const result = ontologizeServer._convertXsdLiteral('"1.234"^^<http://www.w3.org/2001/XMLSchema#decimal>');
+      const result = ontologizeServer.rdf._convertXsdLiteral('"1.234"^^<http://www.w3.org/2001/XMLSchema#decimal>');
       assert.strictEqual(result, 1.234);
     });
 
     it("should convert xsd:double to number", function () {
-      const result = ontologizeServer._convertXsdLiteral('"3.14159"^^<http://www.w3.org/2001/XMLSchema#double>');
+      const result = ontologizeServer.rdf._convertXsdLiteral('"3.14159"^^<http://www.w3.org/2001/XMLSchema#double>');
       assert.strictEqual(result, 3.14159);
     });
 
     it("should convert xsd:float to number", function () {
-      const result = ontologizeServer._convertXsdLiteral('"2.5"^^<http://www.w3.org/2001/XMLSchema#float>');
+      const result = ontologizeServer.rdf._convertXsdLiteral('"2.5"^^<http://www.w3.org/2001/XMLSchema#float>');
       assert.strictEqual(result, 2.5);
     });
 
     it("should return string value for xsd:string", function () {
-      const result = ontologizeServer._convertXsdLiteral('"hello"^^<http://www.w3.org/2001/XMLSchema#string>');
+      const result = ontologizeServer.rdf._convertXsdLiteral('"hello"^^<http://www.w3.org/2001/XMLSchema#string>');
       assert.strictEqual(result, "hello");
     });
 
     it("should return string value for xsd:dateTime", function () {
-      const result = ontologizeServer._convertXsdLiteral('"2026-01-15T10:30:00Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>');
+      const result = ontologizeServer.rdf._convertXsdLiteral('"2026-01-15T10:30:00Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>');
       assert.strictEqual(result, "2026-01-15T10:30:00Z");
     });
 
     it("should handle literals without angle brackets", function () {
-      const result = ontologizeServer._convertXsdLiteral('"true"^^http://www.w3.org/2001/XMLSchema#boolean');
+      const result = ontologizeServer.rdf._convertXsdLiteral('"true"^^http://www.w3.org/2001/XMLSchema#boolean');
       assert.strictEqual(result, true);
     });
 
     it("should return non-literal values unchanged", function () {
       const uri = "http://example.org/thing";
-      assert.strictEqual(ontologizeServer._convertXsdLiteral(uri), uri);
+      assert.strictEqual(ontologizeServer.rdf._convertXsdLiteral(uri), uri);
     });
 
     it("should return null/undefined unchanged", function () {
-      assert.strictEqual(ontologizeServer._convertXsdLiteral(null), null);
-      assert.strictEqual(ontologizeServer._convertXsdLiteral(undefined), undefined);
+      assert.strictEqual(ontologizeServer.rdf._convertXsdLiteral(null), null);
+      assert.strictEqual(ontologizeServer.rdf._convertXsdLiteral(undefined), undefined);
     });
 
     it("should handle negative numbers", function () {
-      const result = ontologizeServer._convertXsdLiteral('"-7"^^<http://www.w3.org/2001/XMLSchema#integer>');
+      const result = ontologizeServer.rdf._convertXsdLiteral('"-7"^^<http://www.w3.org/2001/XMLSchema#integer>');
       assert.strictEqual(result, -7);
     });
 
     it("should handle zero", function () {
-      const result = ontologizeServer._convertXsdLiteral('"0"^^<http://www.w3.org/2001/XMLSchema#integer>');
+      const result = ontologizeServer.rdf._convertXsdLiteral('"0"^^<http://www.w3.org/2001/XMLSchema#integer>');
       assert.strictEqual(result, 0);
     });
   });

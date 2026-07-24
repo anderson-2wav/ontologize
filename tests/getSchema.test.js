@@ -146,12 +146,12 @@ describe("Ontologize.getSchema", function() {
 
   describe("basic functionality", function() {
     it("should return empty object when no schema exists", async function() {
-      const schema = await ontologize.getSchema("nonexistent");
+      const schema = await ontologize.schema.getSchema("nonexistent");
       assert.deepEqual(schema, {});
     });
 
     it("should return property schema when no resource provided", async function() {
-      const schema = await ontologize.getSchema("foo");
+      const schema = await ontologize.schema.getSchema("foo");
       assert.deepEqual(schema.enum, ["bar", "baz"]);
       assert.deepEqual(schema.enumLabels, ["BAR", "BAZzzzz..."]);
     });
@@ -162,7 +162,7 @@ describe("Ontologize.getSchema", function() {
         "@type": "SomeOtherClass",
         "foo": "bar"
       };
-      const schema = await ontologize.getSchema("foo", resource);
+      const schema = await ontologize.schema.getSchema("foo", resource);
       assert.deepEqual(schema.enum, ["bar", "baz"]);
       assert.deepEqual(schema.enumLabels, ["BAR", "BAZzzzz..."]);
     });
@@ -175,7 +175,7 @@ describe("Ontologize.getSchema", function() {
         "@type": "FooBar",
         "foo": "bop"
       };
-      const schema = await ontologize.getSchema("foo", resource);
+      const schema = await ontologize.schema.getSchema("foo", resource);
 
       // Class schema should override property schema for enum/enumLabels
       assert.deepEqual(schema.enum, ["bar", "baz", "bop"]);
@@ -188,7 +188,7 @@ describe("Ontologize.getSchema", function() {
         "@type": ["FooBar", "SomeOtherClass"],
         "foo": "bar"
       };
-      const schema = await ontologize.getSchema("foo", resource);
+      const schema = await ontologize.schema.getSchema("foo", resource);
       assert.deepEqual(schema.enum, ["bar", "baz", "bop"]);
     });
   });
@@ -200,7 +200,7 @@ describe("Ontologize.getSchema", function() {
         "@type": "DerivedClass",
         "foo": "z"
       };
-      const schema = await ontologize.getSchema("foo", resource);
+      const schema = await ontologize.schema.getSchema("foo", resource);
 
       // Should merge: property -> BaseClass -> DerivedClass
       // DerivedClass adds "z" to enum and adds "title"
@@ -216,7 +216,7 @@ describe("Ontologize.getSchema", function() {
         "@type": "DerivedClass",
         "foo": "z"
       };
-      const schema = await ontologize.getSchema("foo", resource);
+      const schema = await ontologize.schema.getSchema("foo", resource);
 
       // Property has ["bar", "baz"]
       // BaseClass has ["x", "y"]
@@ -246,7 +246,7 @@ describe("Ontologize.getSchema", function() {
           }
         }
       };
-      const schema = await ontologize.getSchema("foo", resource);
+      const schema = await ontologize.schema.getSchema("foo", resource);
 
       // Instance schema should be merged on top
       assert.include(schema.enum, "custom");
@@ -273,7 +273,7 @@ describe("Ontologize.getSchema", function() {
         }
       };
 
-      const schema = await ontologize.getSchema("dcterms:description", dwcOntology);
+      const schema = await ontologize.schema.getSchema("dcterms:description", dwcOntology);
       assert.equal(schema.format, "markdown");
     });
 
@@ -291,7 +291,7 @@ describe("Ontologize.getSchema", function() {
           }
         }
       };
-      const schema = await ontologize.getSchema("foo", resource);
+      const schema = await ontologize.schema.getSchema("foo", resource);
 
       // Should have class schema values
       assert.include(schema.enum, "bop");
@@ -311,7 +311,7 @@ describe("Ontologize.getSchema", function() {
           }
         }
       };
-      const schema = await ontologize.getSchema("foo", resource);
+      const schema = await ontologize.schema.getSchema("foo", resource);
 
       // Should only have property schema, not instance schema for otherProperty
       assert.deepEqual(schema.enum, ["bar", "baz"]);
@@ -321,23 +321,23 @@ describe("Ontologize.getSchema", function() {
 
   describe("_isClassResource", function() {
     it("should identify rdfs:Class", function() {
-      assert.isTrue(ontologize._isClassResource({ "@type": "rdfs:Class" }));
+      assert.isTrue(ontologize.schema._isClassResource({ "@type": "rdfs:Class" }));
     });
 
     it("should identify owl:Class", function() {
-      assert.isTrue(ontologize._isClassResource({ "@type": "owl:Class" }));
+      assert.isTrue(ontologize.schema._isClassResource({ "@type": "owl:Class" }));
     });
 
     it("should identify class in array of types", function() {
-      assert.isTrue(ontologize._isClassResource({ "@type": ["owl:Class", "other:Type"] }));
+      assert.isTrue(ontologize.schema._isClassResource({ "@type": ["owl:Class", "other:Type"] }));
     });
 
     it("should return false for non-class", function() {
-      assert.isFalse(ontologize._isClassResource({ "@type": "owl:DatatypeProperty" }));
+      assert.isFalse(ontologize.schema._isClassResource({ "@type": "owl:DatatypeProperty" }));
     });
 
     it("should return false for resource without @type", function() {
-      assert.isFalse(ontologize._isClassResource({ "_id": "test" }));
+      assert.isFalse(ontologize.schema._isClassResource({ "_id": "test" }));
     });
   });
 
@@ -345,42 +345,42 @@ describe("Ontologize.getSchema", function() {
     it("should merge simple objects", function() {
       const base = { a: 1, b: 2 };
       const override = { b: 3, c: 4 };
-      const result = ontologize._mergeSchemas(base, override);
+      const result = ontologize.schema._mergeSchemas(base, override);
       assert.deepEqual(result, { a: 1, b: 3, c: 4 });
     });
 
     it("should merge arrays using union", function() {
       const base = { arr: [1, 2] };
       const override = { arr: [2, 3] };
-      const result = ontologize._mergeSchemas(base, override);
+      const result = ontologize.schema._mergeSchemas(base, override);
       assert.sameMembers(result.arr, [1, 2, 3]);
     });
 
     it("should recursively merge nested objects", function() {
       const base = { nested: { a: 1, b: 2 } };
       const override = { nested: { b: 3, c: 4 } };
-      const result = ontologize._mergeSchemas(base, override);
+      const result = ontologize.schema._mergeSchemas(base, override);
       assert.deepEqual(result.nested, { a: 1, b: 3, c: 4 });
     });
 
     it("should handle array merged with single value", function() {
       const base = { arr: [1, 2] };
       const override = { arr: 3 };
-      const result = ontologize._mergeSchemas(base, override);
+      const result = ontologize.schema._mergeSchemas(base, override);
       assert.sameMembers(result.arr, [1, 2, 3]);
     });
   });
 
   describe("_findSchemasWithProperty", function() {
     it("should find property definition", async function() {
-      const schemas = await ontologize._findSchemasWithProperty(undefined, "foo", "bui:schema");
+      const schemas = await ontologize.schema._findSchemasWithProperty(undefined, "foo", "bui:schema");
       assert.lengthOf(schemas, 1);
       assert.equal(schemas[0]._id, "foo");
     });
 
     it("should find class schemas for resource", async function() {
       const resource = { "@type": "FooBar" };
-      const schemas = await ontologize._findSchemasWithProperty(resource, "foo", "bui:schema");
+      const schemas = await ontologize.schema._findSchemasWithProperty(resource, "foo", "bui:schema");
 
       // Should find: property "foo" and class "FooBar"
       const ids = schemas.map(s => s._id);
@@ -390,7 +390,7 @@ describe("Ontologize.getSchema", function() {
 
     it("should walk up class hierarchy", async function() {
       const resource = { "@type": "DerivedClass" };
-      const schemas = await ontologize._findSchemasWithProperty(resource, "foo", "bui:schema");
+      const schemas = await ontologize.schema._findSchemasWithProperty(resource, "foo", "bui:schema");
 
       const ids = schemas.map(s => s._id);
       assert.include(ids, "foo");
@@ -468,7 +468,7 @@ describe("Ontologize group methods", function() {
   describe("getGroupStrategies", function() {
     it("should return groups from class schema", async function() {
       const resource = { "@type": "bold:TrackingReport" };
-      const strategies = await ontologize.getGroupStrategies(resource);
+      const strategies = await ontologize.schema.getGroupStrategies(resource);
       assert.lengthOf(strategies, 2);
       assert.equal(strategies[0].label, "Individuals");
       assert.equal(strategies[0].property, "bold:animal");
@@ -478,7 +478,7 @@ describe("Ontologize group methods", function() {
 
     it("should inherit groups from superclass", async function() {
       const resource = { "@type": "track:CollarReport" };
-      const strategies = await ontologize.getGroupStrategies(resource);
+      const strategies = await ontologize.schema.getGroupStrategies(resource);
       assert.isAbove(strategies.length, 0);
       const props = strategies.map(s => s.property);
       assert.include(props, "bold:animal");
@@ -487,7 +487,7 @@ describe("Ontologize group methods", function() {
 
     it("should deduplicate by property name", async function() {
       const resource = { "@type": "track:CollarReport" };
-      const strategies = await ontologize.getGroupStrategies(resource);
+      const strategies = await ontologize.schema.getGroupStrategies(resource);
       const props = strategies.map(s => s.property);
       const uniqueProps = [...new Set(props)];
       assert.equal(props.length, uniqueProps.length);
@@ -495,7 +495,7 @@ describe("Ontologize group methods", function() {
 
     it("should return empty array when no groups defined", async function() {
       const resource = { "@type": "test:Plain" };
-      const strategies = await ontologize.getGroupStrategies(resource);
+      const strategies = await ontologize.schema.getGroupStrategies(resource);
       assert.isArray(strategies);
       assert.lengthOf(strategies, 0);
     });
@@ -504,7 +504,7 @@ describe("Ontologize group methods", function() {
   describe("groupResources", function() {
     it("should group by property", function() {
       const group = { label: "Individuals", property: "bold:animal" };
-      const map = ontologize.groupResources(resources, group);
+      const map = ontologize.display.groupResources(resources, group);
       assert.isTrue(map.has("animal:A"));
       assert.isTrue(map.has("animal:B"));
       assert.lengthOf(map.get("animal:A"), 2);
@@ -513,7 +513,7 @@ describe("Ontologize group methods", function() {
 
     it("should put ungrouped resources in null bucket", function() {
       const group = { label: "Individuals", property: "bold:animal" };
-      const map = ontologize.groupResources(resources, group);
+      const map = ontologize.display.groupResources(resources, group);
       assert.isTrue(map.has(null));
       // r4 has null animal, r5 has no animal
       assert.lengthOf(map.get(null), 2);
@@ -521,14 +521,14 @@ describe("Ontologize group methods", function() {
 
     it("should exclude ungrouped when includeUngrouped is false", function() {
       const group = { label: "Individuals", property: "bold:animal" };
-      const map = ontologize.groupResources(resources, group, { includeUngrouped: false });
+      const map = ontologize.display.groupResources(resources, group, { includeUngrouped: false });
       assert.isFalse(map.has(null));
       assert.equal(map.size, 2);
     });
 
     it("should group by species property", function() {
       const group = { label: "Species", property: "bold:species" };
-      const map = ontologize.groupResources(resources, group);
+      const map = ontologize.display.groupResources(resources, group);
       assert.isTrue(map.has("species:Coyote"));
       assert.isTrue(map.has("species:Fox"));
       assert.lengthOf(map.get("species:Coyote"), 2);
@@ -539,7 +539,7 @@ describe("Ontologize group methods", function() {
   describe("buildGroupOptions", function() {
     it("should return options with labels, colors, and counts", async function() {
       const group = { label: "Individuals", property: "bold:animal" };
-      const options = await ontologize.buildGroupOptions(resources, group);
+      const options = await ontologize.display.buildGroupOptions(resources, group);
       assert.isArray(options);
       // animal:A, animal:B, plus "No Group"
       assert.lengthOf(options, 3);
@@ -553,7 +553,7 @@ describe("Ontologize group methods", function() {
 
     it("should append 'No Group' entry with neutral color", async function() {
       const group = { label: "Individuals", property: "bold:animal" };
-      const options = await ontologize.buildGroupOptions(resources, group);
+      const options = await ontologize.display.buildGroupOptions(resources, group);
       const noGroup = options.find(o => o._id === null);
       assert.isOk(noGroup);
       assert.equal(noGroup.label, "No Group");
@@ -564,7 +564,7 @@ describe("Ontologize group methods", function() {
     it("should not include 'No Group' when all resources have group values", async function() {
       const groupedResources = resources.filter(r => r["bold:species"]);
       const group = { label: "Species", property: "bold:species" };
-      const options = await ontologize.buildGroupOptions(groupedResources, group);
+      const options = await ontologize.display.buildGroupOptions(groupedResources, group);
       const noGroup = options.find(o => o._id === null);
       assert.isNotOk(noGroup);
     });

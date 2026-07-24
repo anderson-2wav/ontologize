@@ -62,11 +62,11 @@ describe("Collection Adapter Demo", function () {
       const ontologize = new Ontologize(ontologyAdapter, contextAdapter, statementsAdapter);
 
       // Test the async getLabelFromId method
-      const label = await ontologize.getLabelFromId("ex:TestClass");
+      const label = await ontologize.display.getLabelFromId("ex:TestClass");
       assert.equal(label, "Test Class");
 
       // Test that non-existent resources fall back to ID extraction
-      const fallbackLabel = await ontologize.getLabelFromId("ex:UnknownClass");
+      const fallbackLabel = await ontologize.display.getLabelFromId("ex:UnknownClass");
       assert.equal(fallbackLabel, "UnknownClass");
     });
   });
@@ -101,11 +101,11 @@ describe("Collection Adapter Demo", function () {
       const ontologize = new Ontologize(serverOntologyCollection, serverContextCollection, serverStatementsCollection);
 
       // Test the async getLabelFromId method
-      const label = await ontologize.getLabelFromId("ex:TestClass");
+      const label = await ontologize.display.getLabelFromId("ex:TestClass");
       assert.equal(label, "Test Class");
 
       // Test that non-existent resources fall back to ID extraction
-      const fallbackLabel = await ontologize.getLabelFromId("ex:UnknownClass");
+      const fallbackLabel = await ontologize.display.getLabelFromId("ex:UnknownClass");
       assert.equal(fallbackLabel, "UnknownClass");
     });
   });

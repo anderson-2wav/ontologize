@@ -67,6 +67,40 @@ export interface ExplorerMap {
   [typeName: string]: any;
 }
 
+/** `ontologizeServer.io` — JSON-LD import/export and bootstrap. */
+export declare class IoApi {
+  bootstrap(opts?: Record<string, any>): Promise<Record<string, any>>;
+  loadJsonFile(filePath: string): Promise<Resource | Resource[]>;
+  importFromFile(filePath: string, opts?: ImportOptions): Promise<ImportResult>;
+  importData(data: Resource | Resource[], opts?: ImportOptions): Promise<ImportResult>;
+  exportToFile(filePath: string, collection: MongoCollection, opts?: ImportOptions): Promise<ImportResult>;
+  exportData(collection: MongoCollection, opts?: ImportOptions): Promise<ImportResult>;
+  ensurePropertyContext(propertyResource: Resource, contextCollection: MongoCollection): Promise<void>;
+}
+
+/** `ontologizeServer.archive` — mongodump / mongorestore. */
+export declare class ArchiveApi {
+  restoreFromArchive(opts?: { archive?: string; archivePath?: string; mongoUrl?: string }): Promise<{ success: boolean; message: string }>;
+  dumpToArchive(opts: { archive: string; archivePath?: string; mongoUrl?: string }): Promise<{ success: boolean; message: string; archivePath: string; bytes: number }>;
+}
+
+/** `ontologizeServer.rdf` — RDF/SPARQL serialization and HyLAR fact assembly. */
+export declare class RdfApi {
+  getTriplesForResources(resources: Resource | Resource[], opts?: Record<string, any>): Promise<Array<{ s: string; p: string; o: string }>>;
+  createSparqlInsert(triples: Array<{ s: string; p: string; o: string }>, opts?: Record<string, any>): Promise<string>;
+  assembleFactsIntoResources(facts: any[], opts?: Record<string, any>): Promise<Resource[]>;
+  createStatementsForFacts(facts: any[], opts?: Record<string, any>): Promise<Resource[]>;
+}
+
+/** `ontologizeServer.reasoner` — HyLAR reasoning integration and process management. */
+export declare class ReasonerApi {
+  bootstrapReasoner(opts?: Record<string, any>): Promise<Record<string, any>>;
+  warmReasoner(opts?: Record<string, any>): Promise<Record<string, any>>;
+  ensureReasoner(opts?: Record<string, any>): Promise<void>;
+  checkHylar(opts?: Record<string, any>): Promise<void>;
+  reasonCollection(collectionName: string, opts?: Record<string, any>): Promise<Record<string, any>>;
+}
+
 /**
  * Server-only extension of the Ontologize class
  * These methods require Node.js environment and should not be used in browser contexts
@@ -77,121 +111,43 @@ export declare class OntologizeServer extends Ontologize {
    */
   constructor(ontologyCollection: MongoCollection, contextCollection: MongoCollection, statementsCollection: MongoCollection, opts?: OntologizeOptions);
 
-  /**
-   * Load JSON-LD data from a file
-   */
-  loadJsonFile(filePath: string): Promise<Resource | Resource[]>;
+  /** `io` namespace — JSON-LD import/export and bootstrap. */
+  readonly io: IoApi;
+  /** `archive` namespace — mongodump / mongorestore. */
+  readonly archive: ArchiveApi;
+  /** `rdf` namespace — RDF/SPARQL serialization and HyLAR fact assembly. */
+  readonly rdf: RdfApi;
+  /** `reasoner` namespace — HyLAR reasoning integration and process management. */
+  readonly reasoner: ReasonerApi;
 
-  /**
-   * Import ontology from file path with BOLD resource normalization
-   * Loads JSON-LD file and imports with proper normalization using LD.compact
-   */
-  importFromFile(
-    filePath: string,
-    opts?: ImportOptions
-  ): Promise<ImportResult>;
-
-  /**
-   * Import ontology from parsed JSON-LD data with BOLD resource normalization
-   * Handles multiple JSON-LD formats and uses LD.compact for proper normalization
-   */
-  importData(
-    data: Resource | Resource[],
-    opts?: ImportOptions
-  ): Promise<ImportResult>;
-
-  /**
-   * Export collection to file path with BOLD resource normalization
-   */
-  exportToFile(
-    filePath: string,
-    collection: MongoCollection,
-    opts?: ImportOptions
-  ): Promise<ImportResult>;
-
-  /**
-   * Export collection data with BOLD resource normalization
-   */
-  exportData(
-    collection: MongoCollection,
-    opts?: ImportOptions
-  ): Promise<ImportResult>;
-
-  /**
-   * Create a JSON object that maps the ontology showing all @types and their properties
-   * found across collections, similar to CTB Ontology.explorer()
-   */
-  explorer(
-    collections: MongoCollection[],
-    opts?: ExplorerOptions
-  ): Promise<ExplorerMap>;
-
-  /**
-   * Determine if a resource is a TBox (ontology) resource
-   */
+  /** Determine if a resource is a TBox (ontology) resource. */
   isTBoxResource(resource: Resource): Promise<boolean>;
+  /** Resolve the collection a resource should be stored in. */
+  getCollectionForResource(resource: Resource, opts?: Record<string, any>): Promise<any>;
+  /** Update a resource, capturing HyLAR inferences as properties and statements. */
+  updateOne(resourceId: string, update: Record<string, any>, opts?: Record<string, any>): Promise<Record<string, any>>;
+  /** Clear the JSON-property caches (delegates to the shared JsonPropertyStore). */
+  clearJsonPropertyCache(): void;
 
-  /**
-   * Extract context and resources from JSON-LD input
-   * Handles both @graph format and array format
-   * Merges all contexts found in array items like CTB Ontology.importContext
-   * @private
-   */
-  private _extractContextAndResources(jsonldData: Resource | Resource[]): ContextAndResources;
+  // ---------------------------------------------------------------------------
+  // Deprecated flat API. These forward to their namespace method and will be
+  // removed in a later release. Prefer the namespace form shown in @deprecated.
+  // ---------------------------------------------------------------------------
 
-  /**
-   * Import context into Context collection with sophisticated merge strategy
-   * Merges new context data with existing context using specialized conflict resolution
-   * In BOLD, the context document contains the context data directly (no nested @context)
-   * @private
-   */
-  private _importContext(contextData: Record<string, any>, contextCollection: MongoCollection): Promise<void>;
-
-  /**
-   * Get context for compaction from provided context, Context collection, or default
-   * @private
-   */
-  private _getContextForCompaction(providedContext: Record<string, any> | null, contextCollection: MongoCollection): Promise<Record<string, any>>;
-
-  /**
-   * Process a single resource with BOLD normalization using LD.compact
-   * @private
-   */
-  private _normalizeAndSaveResource(
-    resource: Resource,
-    context: Record<string, any> | null,
-    collection: MongoCollection,
-    contextCollection: MongoCollection,
-    opts: ImportOptions
-  ): Promise<ProcessedResource>;
-
-  /**
-   * Customizer function for merging context objects with specialized conflict resolution
-   * Handles namespace conflicts intelligently based on BOLD/CTB patterns
-   * @private
-   */
-  private _contextAssignCustomizer(objValue: any, srcValue: any, key: string): any;
-
-  /**
-   * Schema merge customizer for handling array merging in contexts
-   * Ensures arrays are properly merged using union to avoid duplicates
-   * @private
-   */
-  private _schemaMergeCustomizer(objValue: any, srcValue: any, key: string, object: any, source: any, stack: any): any;
-
-  /**
-   * Save a resource to a collection with intelligent merge strategy
-   * Similar to CTB Ontology.updateOntology, merges with existing resources to preserve data
-   * @private
-   */
-  private _saveResourceWithMerge(resource: Resource, collection: MongoCollection, opts?: { mergeOntology?: boolean }): Promise<void>;
-
-  /**
-   * Sort context keys for consistent ordering
-   * Places @-prefixed keys first, then namespaces (no colon), then prefixed terms
-   * @private
-   */
-  private _sortContextKeys(context: Record<string, any>): Record<string, any>;
+  /** @deprecated Use `ontologizeServer.io.bootstrap`. */
+  bootstrap(opts?: Record<string, any>): Promise<Record<string, any>>;
+  /** @deprecated Use `ontologizeServer.io.loadJsonFile`. */
+  loadJsonFile(filePath: string): Promise<Resource | Resource[]>;
+  /** @deprecated Use `ontologizeServer.io.importFromFile`. */
+  importFromFile(filePath: string, opts?: ImportOptions): Promise<ImportResult>;
+  /** @deprecated Use `ontologizeServer.io.importData`. */
+  importData(data: Resource | Resource[], opts?: ImportOptions): Promise<ImportResult>;
+  /** @deprecated Use `ontologizeServer.io.exportToFile`. */
+  exportToFile(filePath: string, collection: MongoCollection, opts?: ImportOptions): Promise<ImportResult>;
+  /** @deprecated Use `ontologizeServer.io.exportData`. */
+  exportData(collection: MongoCollection, opts?: ImportOptions): Promise<ImportResult>;
+  /** @deprecated Use `ontologizeServer.reasoner.reasonCollection` / `.bootstrapReasoner`, etc. */
+  reasonCollection(collectionName: string, opts?: Record<string, any>): Promise<Record<string, any>>;
 }
 
 export default OntologizeServer;
