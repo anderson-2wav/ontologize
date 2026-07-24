@@ -26,6 +26,18 @@ export class OntologizeServer extends Ontologize {
   static _instance = null;
 
   /**
+   * How many resources a long loop processes before handing the event loop back,
+   * and how many are expanded per ld.expand() call.
+   *
+   * ld.expand does not yield internally, so a single call over a 1,000-resource
+   * batch blocks the process for its whole duration. Measured on the track
+   * collection: one call = 226 ms with the event loop never running; chunked by
+   * 250 = 46 ms worst block; by 100 = 22 ms, at the same total cost (chunking is
+   * marginally faster, so there is nothing to trade off).
+   */
+  static YIELD_EVERY = 100;
+
+  /**
    * BUI JSON type URIs that require special serialization handling.
    * Properties with these ranges store POJOs in MongoDB but serialize as JSON strings.
    * Consumed by the shared JsonPropertyStore (this._jsonProps).
@@ -49,6 +61,24 @@ export class OntologizeServer extends Ontologize {
   static BUI_JSON_PROPERTIES = [
     "bui:schema"
   ];
+
+  /**
+   * Hand control back to the event loop so queued I/O can run.
+   *
+   * `setImmediate`, deliberately, NOT `process.nextTick`: nextTick callbacks are
+   * drained before the event loop continues, so a nextTick "yield" inside a hot
+   * loop still starves every socket and timer. setImmediate schedules on the
+   * check phase, after pending I/O callbacks have had their turn.
+   *
+   * Held on the core instance rather than a namespace: it is shared plumbing that
+   * any long-running server loop may need, reached as `this.ontologize._yieldToEventLoop()`.
+   *
+   * @returns {Promise<void>}
+   * @private
+   */
+  _yieldToEventLoop() {
+    return new Promise(resolve => setImmediate(resolve));
+  }
 
   /**
    * Initialize the singleton OntologizeServer instance.

@@ -620,6 +620,9 @@ export class ReasonerApi extends ApiNamespace {
    * @param {boolean} [opts.persistStatements=true] - Persist statements to collection
    * @param {boolean} [opts.saveHylar=false] - save triples in HyLAR
    * @param {boolean} [opts.onlyUnReasoned=true] - only reason resources without bold:reasoned
+   * @param {object} [opts.selector] - extra MongoDB query terms, merged with the
+   *   unreasoned filter, to restrict the run to part of a collection
+   *   (e.g. `{ "dcterms:isPartOf": "track:track-2025" }`)
    * @param {number} [opts.batchSize=1000] - Number of triples to insert per batch
    * @param {boolean} [opts.blankNodes=false] - include blank nodes
    * @param {number} [opts.retries=5] - if hylar call fails, try again [5] times
@@ -660,6 +663,12 @@ export class ReasonerApi extends ApiNamespace {
     console.log(`Loading resources from "${collectionName}" collection...`);
     const allCount = await collection.countDocuments({});
     const selector = opts.onlyUnReasoned ? { "bold:reasoned": { $exists: false } } : {};
+    // opts.selector narrows the run to part of a collection — e.g. one
+    // dcterms:isPartOf partition. Without it, reasoning is all-or-nothing over
+    // everything unreasoned, which makes it impossible to reason a newly
+    // imported partition without also picking up every resource that was
+    // deliberately left unreasoned.
+    if (opts.selector) Object.assign(selector, opts.selector);
     const resources = await collection.find(selector).toArray();
     if (resources.length < allCount) {
       console.log(`Skipping ${allCount - resources.length} already-reasoned resources`);
@@ -680,7 +689,6 @@ export class ReasonerApi extends ApiNamespace {
     }
 
     // 4. Convert resources to triples
-    console.log("Converting resources to triples...");
     const triples = await this.ontologize.rdf.getTriplesForResources(resources, {
       blankNodes: opts.blankNodes,
       includeStatements: false

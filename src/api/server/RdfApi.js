@@ -36,30 +36,77 @@ export class RdfApi extends ApiNamespace {
     opts.blankNodes = opts.blankNodes !== false;
     opts.includeStatements = opts.includeStatements ?? false;
 
+    // The yield cadence lives on the owning server instance's class.
+    const yieldEvery = this.ontologize.constructor.YIELD_EVERY;
+
+    console.log(`Converting ${resources.length} resources to triples...`);
     // For BOLD, we generally don't want to create triples for embedded statements
     // In BOLD, we use "bold:" namespace instead of "ctb:"
     if (!opts.includeStatements) {
+      let stripped = 0;
       for (const r of resources) {
         this._stripEmbeddedStatements(r);
+        if (++stripped % yieldEvery === 0) await this.ontologize._yieldToEventLoop();
       }
     }
 
-    // Strip properties with JSON values — they cannot be represented as triples
+    // Strip properties with JSON values — they cannot be represented as triples.
+    //
+    // Resolve the question once per DISTINCT KEY, not once per resource-key
+    // pair. _isJsonProperty deliberately does not cache a negative answer (the
+    // ontology may not be loaded yet, so "unknown property" now can become
+    // "JSON property" later), which means every key without an ontology
+    // definition costs a findOne — and a collar report carries ten of them
+    // (_h3, _h3_3.._h3_11, _geohash, _whenMs, geohash). Per 1,000-resource
+    // batch that was ~10,000 sequential round trips; it is now one per key.
+    const candidateKeys = new Set();
     for (const r of resources) {
       for (const key of Object.keys(r)) {
         if (key[0] === "@" || key === "_id") continue;
-        if (await this.ontologize._jsonProps._isJsonProperty(key)) {
-          delete r[key];
+        candidateKeys.add(key);
+      }
+    }
+
+    const jsonKeys = [];
+    for (const key of candidateKeys) {
+      if (await this.ontologize._jsonProps._isJsonProperty(key)) jsonKeys.push(key);
+    }
+
+    if (jsonKeys.length) {
+      let checked = 0;
+      for (const r of resources) {
+        for (const key of jsonKeys) {
+          if (key in r) delete r[key];
         }
+        if (++checked % yieldEvery === 0) await this.ontologize._yieldToEventLoop();
       }
     }
 
     // Get the context from the Context collection (which should have _id: "@id" mapping)
     const contextForExpansion = await this.ontologize.getContext(opts.context);
 
+    console.log(`Expand ${resources.length} resources...`);
+    let ct = 0;
     const ld = this.ld();
-    const expanded = await ld.expand(resources, contextForExpansion, { flatten: true });
-    expanded.forEach((resource) => {
+
+    // Expand in chunks with a yield between them. ld.expand runs to completion
+    // without yielding, so expanding a whole batch in one call blocks every
+    // socket and timer in the process for the duration.
+    const expanded = [];
+    for (let i = 0; i < resources.length; i += yieldEvery) {
+      const chunk = resources.slice(i, i + yieldEvery);
+      expanded.push(...await ld.expand(chunk, contextForExpansion, { flatten: true }));
+      if (i + yieldEvery < resources.length) await this.ontologize._yieldToEventLoop();
+    }
+    // for..of rather than forEach: this loop is pure CPU over every property of
+    // every resource, and without an await inside it the process cannot answer
+    // an HTTP request or a DDP message until the whole batch is triplified.
+    for (const resource of expanded) {
+      ct++;
+      if (ct % 100 === 0) {
+        console.log(`Triplified ${ct} resources...`);
+      }
+      if (ct % yieldEvery === 0) await this.ontologize._yieldToEventLoop();
       for (const key in resource) {
         let p = key;
         if (key === "@type") {
@@ -101,7 +148,7 @@ export class RdfApi extends ApiNamespace {
           });
         });
       }
-    });
+    }
     return triples;
   }
 

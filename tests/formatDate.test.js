@@ -83,13 +83,86 @@ describe("Ontologize.formatDate", function() {
 
   describe("formatDate with ISO strings", function() {
     it("should format an ISO date string", function() {
-      const result = ontologize.display.formatDate("2024-01-15");
-      assert.match(result, /1\/1[45]\/2024/); // May be 14 or 15 depending on timezone
+      // Date-only is anchored in dateTimeZone, so the day is not timezone-dependent.
+      assert.equal(ontologize.display.formatDate("2024-01-15"), "1/15/2024");
     });
 
     it("should format an ISO datetime string", function() {
-      const result = ontologize.display.formatDate("2024-01-15T14:30:00Z");
-      assert.match(result, /1\/1[45]\/2024/);
+      // 14:30Z is 6:30 AM in the default America/Los_Angeles, same day.
+      assert.equal(ontologize.display.formatDate("2024-01-15T14:30:00Z"), "1/15/2024");
+    });
+  });
+
+  // A zone-less ISO string carries no instant of its own — only wall-clock fields.
+  // ECMA-262 would resolve those against UTC (date-only) or the machine's zone
+  // (date-time), either of which can land on a different calendar day once the value
+  // is rendered in dateTimeZone. Ontologize resolves them against dateTimeZone
+  // instead, so the day you wrote is the day that displays.
+  describe("formatDate with zone-less ISO strings", function() {
+    it("should render a date-only string as that calendar date", function() {
+      assert.equal(ontologize.display.formatDate("2026-08-10"), "8/10/2026");
+    });
+
+    it("should treat a date-only string as midnight in dateTimeZone", function() {
+      assert.equal(ontologize.display.formatDate("2026-08-10", { includeTime: true }), "8/10/2026 12:00 AM PDT");
+    });
+
+    it("should treat an offset-less datetime as wall clock in dateTimeZone", function() {
+      assert.equal(ontologize.display.formatDate("2026-08-10T14:30:00", { includeTime: true }), "8/10/2026 2:30 PM PDT");
+    });
+
+    it("should accept a space separator and fractional seconds", function() {
+      assert.equal(ontologize.display.formatDate("2026-08-10 14:30:00.123", { includeTime: true }), "8/10/2026 2:30 PM PDT");
+    });
+
+    it("should accept an hour:minute datetime with no seconds", function() {
+      assert.equal(ontologize.display.formatDate("2026-08-10T14:30", { includeTime: true }), "8/10/2026 2:30 PM PDT");
+    });
+
+    it("should resolve against a custom dateTimeZone", function() {
+      const mocks = createMockCollections();
+      const tokyo = new Ontologize(mocks.ontology, mocks.context, mocks.statements, {
+        dateTimeZone: "Asia/Tokyo"
+      });
+      // East of UTC, where the UTC-midnight reading would have landed on the same
+      // day — this pins that the date is anchored in the zone, not merely shifted.
+      assert.equal(tokyo.display.formatDate("2026-08-10"), "8/10/2026");
+      assert.equal(tokyo.display.formatDate("2026-08-10", { includeTime: true }), "8/10/2026 12:00 AM GMT+9");
+    });
+
+    it("should honor a dateTimeZone passed per call", function() {
+      assert.equal(ontologize.display.formatDate("2026-08-10", { includeTime: true, dateTimeZone: "UTC" }),
+        "8/10/2026 12:00 AM UTC");
+    });
+
+    it("should leave a Z-suffixed instant converted into dateTimeZone", function() {
+      assert.equal(ontologize.display.formatDate("2026-08-10T12:00:00Z", { includeTime: true }), "8/10/2026 5:00 AM PDT");
+    });
+
+    it("should leave an offset-bearing instant converted into dateTimeZone", function() {
+      // 23:30 +02:00 is 14:30 PDT the same day.
+      assert.equal(ontologize.display.formatDate("2026-08-10T23:30:00+02:00", { includeTime: true }), "8/10/2026 2:30 PM PDT");
+    });
+
+    it("should render a JSON-LD xsd:date literal as that calendar date", function() {
+      assert.equal(ontologize.display.formatDate({ "@value": "2026-08-10", "@type": "xsd:date" }), "8/10/2026");
+    });
+
+    it("should reject an out-of-range day rather than rolling it over", function() {
+      // Constructing from components would silently roll Feb 30 into March.
+      assert.equal(ontologize.display.formatDate("2026-02-30"), "");
+    });
+
+    it("should reject an out-of-range month", function() {
+      assert.equal(ontologize.display.formatDate("2026-13-01"), "");
+    });
+
+    it("should reject an out-of-range hour", function() {
+      assert.equal(ontologize.display.formatDate("2026-08-10T25:00:00"), "");
+    });
+
+    it("should accept a real leap day", function() {
+      assert.equal(ontologize.display.formatDate("2028-02-29"), "2/29/2028");
     });
   });
 
@@ -108,8 +181,7 @@ describe("Ontologize.formatDate", function() {
         "@value": "2024-01-15",
         "@type": "xsd:date"
       };
-      const result = ontologize.display.formatDate(jsonLdDate);
-      assert.match(result, /1\/1[45]\/2024/);
+      assert.equal(ontologize.display.formatDate(jsonLdDate), "1/15/2024");
     });
 
     it("should format a JSON-LD datetime @value", function() {
@@ -117,8 +189,7 @@ describe("Ontologize.formatDate", function() {
         "@value": "2024-01-15T14:30:00Z",
         "@type": "xsd:dateTime"
       };
-      const result = ontologize.display.formatDate(jsonLdDateTime);
-      assert.match(result, /1\/1[45]\/2024/);
+      assert.equal(ontologize.display.formatDate(jsonLdDateTime), "1/15/2024");
     });
   });
 
