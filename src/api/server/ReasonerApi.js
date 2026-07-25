@@ -398,7 +398,12 @@ export class ReasonerApi extends ApiNamespace {
    * @private
    */
   async _startHylarProcess(port = 4000) {
-    // First check if HyLAR is already responding on this port
+    // First check if HyLAR is already responding on this port.
+    //
+    // In normal operation HyLAR is always spawned and owned by the app process,
+    // so this branch is only reached when a developer has started HyLAR by hand.
+    // Returning null means no exit/error handlers are attached, so the crash
+    // auto-recovery below doesn't apply to that process — accepted, not a bug.
     try {
       const response = await fetch(`http://localhost:${port}/`);
       if (response.ok) {

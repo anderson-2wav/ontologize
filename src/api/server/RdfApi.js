@@ -498,7 +498,6 @@ INSERT DATA {
       ...opts
     };
     const subjectPartitions = opts.subjectPartitions || {};
-debugger;
     console.log(`Creating statements for ${facts.length} facts`);
 
     const context = opts.context || await this.ontologize.getContext();
