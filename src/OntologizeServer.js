@@ -526,10 +526,17 @@ export class OntologizeServer extends Ontologize {
               }
             }
 
-            // Create statements for inferred facts
-            // TODO problem with inserting new statements each time the ontology reasoner is bootstrapped
+            // Create statements for inferred facts. Statement ids are content
+            // hashes, so a repeat update over unchanged data upserts the same
+            // documents rather than accumulating copies. The single-entry
+            // partition map gives the updated resource's inferences the same
+            // dcterms:isPartOf the resource carries; inferences about OTHER
+            // affected subjects (persistAllSubjects) get none.
             statements = await this.rdf.createStatementsForFacts(selectedFacts, {
               onlyInferred: true,
+              subjectPartitions: updatedResource["dcterms:isPartOf"] !== undefined
+                ? { [resourceId]: updatedResource["dcterms:isPartOf"] }
+                : {},
               metaPropsByPredicate: {
                 "*": {
                   "bold:when": new Date().toISOString(),

@@ -144,6 +144,21 @@ describe("OntologizeServer Bootstrap", function () {
           insertedIds: docs.map(d => d._id)
         };
       },
+      // Statements are written as upserts keyed on their deterministic _id
+      // (statement-idempotency-spec.md §3). No bulkWrite here, so the adapter
+      // replays the operations one at a time through this.
+      updateOne: async (query, update, options = {}) => {
+        const existing = insertedStatements.find(s => s._id === query._id);
+        if (existing) {
+          Object.assign(existing, update.$set || {});
+          return { matchedCount: 1, modifiedCount: 1, upsertedCount: 0 };
+        }
+        if (options.upsert) {
+          insertedStatements.push({ _id: query._id, ...update.$set, ...update.$setOnInsert });
+          return { matchedCount: 0, modifiedCount: 0, upsertedCount: 1 };
+        }
+        return { matchedCount: 0, modifiedCount: 0, upsertedCount: 0 };
+      },
       deleteMany: async () => {
         const count = insertedStatements.length;
         insertedStatements = [];
@@ -341,9 +356,14 @@ describe("OntologizeServer Bootstrap", function () {
       assert.equal(count, 2);
       assert.equal(insertedStatements.length, 2);
 
-      // Check that IDs were generated
+      // Ids are content hashes of the reified triple + provenance, so a second
+      // persist of the same statements addresses the same documents.
       assert.property(insertedStatements[0], "_id");
-      assert.match(insertedStatements[0]._id, /bold:statement-/);
+      assert.match(insertedStatements[0]._id, /^bold:stmt-[0-9a-f]{16}$/);
+
+      const again = await ontologizeServer.reasoner._persistStatements(testStatements);
+      assert.equal(again, 2, "same documents, re-set in place");
+      assert.equal(insertedStatements.length, 2, "no duplicates");
     });
 
     it("should merge and update resources with inferred properties", async function () {

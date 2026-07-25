@@ -6,6 +6,7 @@
  * <https://www.gnu.org/licenses/lgpl-3.0.html>.
  */
 
+import crypto from "node:crypto";
 import { check, Match } from "../../lib/check.js";
 import _ from "lodash";
 import jsonPath from "../../lib/jsonpath.js";
@@ -359,6 +360,41 @@ INSERT DATA {
   }
 
   /**
+   * Build the deterministic `_id` for a reification statement.
+   *
+   * The id is a content hash of the reified triple plus a provenance
+   * discriminator, so re-reasoning the same data mints the same id and the write
+   * path can upsert instead of inserting a duplicate (see
+   * statement-idempotency-spec.md §1).
+   *
+   * `source` distinguishes statements that reify the *same* triple from
+   * different provenance — a hand-authored import statement and a reasoner
+   * inference about `dwc:Dataset rdfs:subClassOf bfo:immaterial-entity` stay
+   * separate documents rather than clobbering each other. Callers pass the
+   * subject's `dcterms:isPartOf` when it has one, else `bold:createdBy`, else
+   * nothing. Array sources are sorted before joining so the value is
+   * order-independent.
+   *
+   * 16 hex chars = 64 bits, ample against collision for this collection.
+   *
+   * @param {string} subject - compacted `rdf:subject`
+   * @param {string} predicate - compacted `rdf:predicate`
+   * @param {string|number|boolean} object - compacted `rdf:object`
+   * @param {string|string[]} [source] - provenance discriminator
+   * @returns {string} `bold:stmt-<16 hex chars>`
+   */
+  _statementId(subject, predicate, object, source) {
+    const src = Array.isArray(source)
+      ? [...source].map(String).sort().join(",")
+      : (source === undefined || source === null ? "" : String(source));
+    const hash = crypto.createHash("sha1")
+      .update(`${subject}|${predicate}|${object}|${src}`)
+      .digest("hex")
+      .slice(0, 16);
+    return `bold:stmt-${hash}`;
+  }
+
+  /**
    * Create Statement objects from HyLAR reasoning facts
 
    * @param {Object[]} facts - Array of HyLAR fact objects
@@ -367,7 +403,12 @@ INSERT DATA {
    * @param {Object} opts.metaPropsByPredicate - Additional metadata properties by predicate
    * @param {boolean} opts.onlyInferred - Only process inferred facts (default: true)
    * @param {string[]} opts.onlySubjects - Only process facts for these subjects
-   * @param {boolean} opts.onlyNew - Filter out existing statements (default: false)
+   * @param {Object} [opts.subjectPartitions] - map of compacted subject id →
+   *   the subject resource's `dcterms:isPartOf`. A reasoning statement inherits
+   *   the partition of the resource it describes, which is what makes
+   *   `deleteMany({"dcterms:isPartOf": …})` a clean way to drop a partition's
+   *   inferences. Callers that hold the reasoned resources build this map;
+   *   the TBox path leaves it unset (ontology resources have no data partition).
    * @returns {Promise<Object[]>} Array of Statement objects
    */
   async createStatementsForFacts(facts, opts = {}) {
@@ -376,10 +417,10 @@ INSERT DATA {
 
     opts = {
       onlyInferred: opts.onlyInferred !== false,
-      onlyNew: opts.onlyNew || false,
       metaPropsByPredicate: opts.metaPropsByPredicate || {},
       ...opts
     };
+    const subjectPartitions = opts.subjectPartitions || {};
 
     console.log(`Creating statements for ${facts.length} facts`);
 
@@ -467,10 +508,23 @@ INSERT DATA {
           });
         }
 
-        // Generate unique ID
-        const randomKey = Math.random().toString(36).substring(2, 8);
-        const statementId = ld.kebabCase(`${statement["rdf:subject"]}-${statement["rdf:predicate"]}-${statement["rdf:object"]}-${randomKey}`);
-        statement._id = `bold:${statementId}`;
+        // A reasoning statement inherits the partition of the subject resource
+        // it describes. Set before the id: the partition is also the id's
+        // provenance discriminator.
+        const partition = subjectPartitions[statement["rdf:subject"]];
+        if (partition !== undefined && partition !== null) {
+          statement["dcterms:isPartOf"] = partition;
+        }
+
+        // Deterministic, content-addressed id: re-reasoning the same triple from
+        // the same source yields the same _id, so _persistStatements upserts in
+        // place instead of inserting a duplicate.
+        statement._id = this._statementId(
+          statement["rdf:subject"],
+          statement["rdf:predicate"],
+          statement["rdf:object"],
+          statement["dcterms:isPartOf"] ?? statement["bold:createdBy"]
+        );
 
         if (!fact.explicit && fact.rule) {
           statement["bold:inferredFrom"] = [fact.rule.object, fact.rule.predicate, fact.rule.subject, fact.rule.axiom, "bold:reasoner"];
@@ -486,28 +540,9 @@ INSERT DATA {
 
     console.log(`Created ${statements.length} statements from ${facts.length} facts`);
 
-    // Filter out existing statements if onlyNew is true
-    if (opts.onlyNew && this.collections.statements) {
-      console.log("Filtering out existing statements...");
-      const newStatements = [];
-
-      for (const statement of statements) {
-        const existing = await this.collections.statements.findOne({
-          "rdf:subject": statement["rdf:subject"],
-          "rdf:object": statement["rdf:object"],
-          "rdf:predicate": statement["rdf:predicate"],
-          "bold:inferredFrom": statement["bold:inferredFrom"]
-        });
-
-        if (!existing) {
-          newStatements.push(statement);
-        }
-      }
-
-      console.log(`Filtered ${statements.length} statements to ${newStatements.length} new statements`);
-      return newStatements;
-    }
-
+    // No "only new" pre-filter: deterministic ids make the write path an upsert,
+    // so an already-recorded statement costs a no-op update rather than a
+    // duplicate document. The old per-statement findOne check is redundant.
     return statements;
   }
 

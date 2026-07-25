@@ -90,6 +90,8 @@ export declare class RdfApi {
   createSparqlInsert(triples: Array<{ s: string; p: string; o: string }>, opts?: Record<string, any>): Promise<string>;
   assembleFactsIntoResources(facts: any[], opts?: Record<string, any>): Promise<Resource[]>;
   createStatementsForFacts(facts: any[], opts?: Record<string, any>): Promise<Resource[]>;
+  /** Deterministic content-hash `_id` for a reification statement. */
+  _statementId(subject: string, predicate: string, object: string | number | boolean, source?: string | string[]): string;
 }
 
 /** `ontologizeServer.reasoner` — HyLAR reasoning integration and process management. */

@@ -166,7 +166,9 @@ export class ReasonerApi extends ApiNamespace {
       assembledResources = await this.ontologize.rdf.assembleFactsIntoResources(facts, { context });
       console.log(`Assembled ${Object.keys(assembledResources).length} resources from facts`);
       if (opts.debugDump) fs.writeFileSync("/tmp/assembledResources.json", JSON.stringify(assembledResources,null,2));
-      // 9. Create statements for inferred facts
+      // 9. Create statements for inferred facts. No subjectPartitions: ontology
+      //    resources belong to no data partition, so these statements carry no
+      //    dcterms:isPartOf and their id is discriminated by bold:createdBy.
       statements = await this.ontologize.rdf.createStatementsForFacts(facts, {
         onlyInferred: true,
         metaPropsByPredicate: {
@@ -507,8 +509,21 @@ export class ReasonerApi extends ApiNamespace {
   }
 
   /**
-   * Persist statements to Statements collection
-
+   * Persist statements to the Statements collection, idempotently.
+   *
+   * Statement ids are content hashes of (subject, predicate, object, source) —
+   * see RdfApi._statementId — so re-reasoning the same data addresses the same
+   * documents. Each statement is written as an upsert keyed on `_id`:
+   *
+   *   - `$set` every field except `bold:when`
+   *   - `$setOnInsert` `bold:when`, so first-seen time is stable and a re-run
+   *     over unchanged data is a genuine no-op rather than a rewrite with a
+   *     fresh timestamp.
+   *
+   * @param {Object[]} statements - statements to write (normally already carrying
+   *   deterministic `_id`s from createStatementsForFacts)
+   * @returns {Promise<number>} documents actually written (inserted + modified);
+   *   0 when every statement was already present unchanged
    * @private
    */
   async _persistStatements(statements) {
@@ -516,23 +531,51 @@ export class ReasonerApi extends ApiNamespace {
       return 0;
     }
 
-    // Ensure each statement has an _id
-    const statementsWithIds = statements.map(stmt => ({
-      ...stmt,
-      _id: stmt._id || `bold:statement-${Date.now()}-${Math.random().toString(36).substring(7)}`
-    }));
+    const collection = this.collections.statements;
 
-    // Insert in batches
+    const ops = statements.map((stmt) => {
+      const { _id, "bold:when": when, ...fields } = stmt;
+      // Defence in depth: a caller that hands us a statement without an id still
+      // gets a deterministic one rather than a random duplicate-maker.
+      const id = _id || this.ontologize.rdf._statementId(
+        stmt["rdf:subject"],
+        stmt["rdf:predicate"],
+        stmt["rdf:object"],
+        stmt["dcterms:isPartOf"] ?? stmt["bold:createdBy"]
+      );
+      return {
+        updateOne: {
+          filter: { _id: id },
+          update: {
+            $set: fields,
+            $setOnInsert: { "bold:when": when || new Date().toISOString() }
+          },
+          upsert: true
+        }
+      };
+    });
+
     const batchSize = 100;
-    let insertedCount = 0;
+    let writtenCount = 0;
 
-    for (let i = 0; i < statementsWithIds.length; i += batchSize) {
-      const batch = statementsWithIds.slice(i, Math.min(i + batchSize, statementsWithIds.length));
-      const result = await this.collections.statements.insertMany(batch);
-      insertedCount += result.insertedCount;
+    for (let i = 0; i < ops.length; i += batchSize) {
+      const batch = ops.slice(i, Math.min(i + batchSize, ops.length));
+      if (typeof collection.bulkWrite === "function") {
+        const result = await collection.bulkWrite(batch, { ordered: false });
+        writtenCount += (result.upsertedCount || 0) + (result.modifiedCount || 0);
+      }
+      else {
+        // Collection adapters without bulkWrite (some test doubles, remote
+        // adapters) still get the same semantics, one round trip per statement.
+        for (const op of batch) {
+          const { filter, update, upsert } = op.updateOne;
+          const result = await collection.updateOne(filter, update, { upsert });
+          writtenCount += (result.upsertedCount || 0) + (result.modifiedCount || 0);
+        }
+      }
     }
 
-    return insertedCount;
+    return writtenCount;
   }
 
   /**
@@ -675,6 +718,17 @@ export class ReasonerApi extends ApiNamespace {
     }
     console.log(`Found ${resources.length} resources to reason`);
 
+    // Provenance for the statements this run will write: each inference inherits
+    // the partition of the resource it describes. Built here, before
+    // getTriplesForResources mutates the resources.
+    const subjectPartitions = {};
+    for (const resource of resources) {
+      const partition = resource["dcterms:isPartOf"];
+      if (partition !== undefined && partition !== null) {
+        subjectPartitions[resource._id] = partition;
+      }
+    }
+
     if (resources.length === 0) {
       const duration = Date.now() - startTime;
       return {
@@ -791,7 +845,8 @@ export class ReasonerApi extends ApiNamespace {
 
         const statements = await this.ontologize.rdf.createStatementsForFacts(facts, {
           onlyInferred: true,
-          metaPropsByPredicate: { "*": metaProps }
+          metaPropsByPredicate: { "*": metaProps },
+          subjectPartitions
         });
         totalStatements += statements.length;
 

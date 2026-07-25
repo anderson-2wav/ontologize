@@ -177,6 +177,45 @@ export class MeteorCollectionAdapter extends CollectionAdapter {
   }
 
   /**
+   * Execute a batch of write operations.
+   *
+   * Passed straight through when the wrapped collection is a raw MongoDB driver
+   * collection (Meteor's `rawCollection()`), which is the case that matters for
+   * throughput. A Meteor collection has no bulkWrite, so `updateOne` operations
+   * are replayed one at a time — same semantics, more round trips. Anything else
+   * throws rather than silently skipping writes.
+   *
+   * @param {Array<object>} operations - MongoDB bulkWrite operations
+   * @param {object} [options] - bulkWrite options (e.g., { ordered: false })
+   * @returns {Promise<object>} Result with upsertedCount, modifiedCount, matchedCount
+   */
+  async bulkWrite(operations, options = {}) {
+    try {
+      if (typeof this.collection.bulkWrite === "function") {
+        return await this.collection.bulkWrite(operations, options);
+      }
+
+      let upsertedCount = 0;
+      let modifiedCount = 0;
+      let matchedCount = 0;
+      for (const op of operations) {
+        if (!op.updateOne) {
+          throw new Error(`unsupported operation ${Object.keys(op).join(",")} (only updateOne is emulated)`);
+        }
+        const { filter, update, upsert } = op.updateOne;
+        const result = await this.collection.updateOne(filter, update, { upsert });
+        upsertedCount += result.upsertedCount || 0;
+        modifiedCount += result.modifiedCount || 0;
+        matchedCount += result.matchedCount || 0;
+      }
+      return { upsertedCount, modifiedCount, matchedCount };
+    }
+    catch (error) {
+      throw new Error(`Error in ${this.name}.bulkWrite: ${error.message}`);
+    }
+  }
+
+  /**
    * Delete many documents matching the query
    * @param {object} query - MongoDB-style query object
    * @param {object} [options] - Delete options

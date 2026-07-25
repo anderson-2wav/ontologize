@@ -65,4 +65,10 @@ export class CollectionAdapter {
   async deleteMany(query, options = {}) {
     throw new Error("deleteMany must be implemented by subclass");
   }
+
+  // NOTE: `bulkWrite(operations, options)` is deliberately NOT declared here.
+  // It is an optional capability — callers (e.g. the reasoner's statement
+  // upserts) feature-detect with `typeof collection.bulkWrite === "function"`
+  // and fall back to one write per document. Declaring a throwing stub on the
+  // base would make every adapter claim support and break that detection.
 }
