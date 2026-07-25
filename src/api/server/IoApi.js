@@ -257,6 +257,7 @@ export class IoApi extends ApiNamespace {
         tboxResources: 0,
         aboxResources: 0,
         statementResources: 0,
+        statementIdsRewritten: 0,
         errors: []
       };
 
@@ -285,6 +286,11 @@ export class IoApi extends ApiNamespace {
               stats.processedResources++;
               if (processed.isStatement) {
                 stats.statementResources++;
+                // Source-supplied ids replaced by content hashes. Counted rather
+                // than logged per resource — one import can carry thousands.
+                if (processed.statementIdRewritten) {
+                  stats.statementIdsRewritten++;
+                }
               }
               else if (processed.isTBox) {
                 stats.tboxResources++;
@@ -783,6 +789,36 @@ export class IoApi extends ApiNamespace {
       processedResource = modifiedResource;
     }
 
+    // Step 5.9: Give an imported Statement a deterministic, content-addressed
+    // _id, the same scheme reasoning uses (statement-idempotency-spec.md §1).
+    //
+    // Source files name their statements however they like — nice.all.full.jsonld
+    // calls one `nice:K0865-K0377`, built from the subject and object of the
+    // triple it reifies. Those ids are only *incidentally* stable: change the
+    // naming convention, or import the same assertion from a second source, and
+    // the same statement lands twice. Hashing (s, p, o, provenance) makes a
+    // re-import address the same document, which is what lets the statements
+    // collection be rebuilt from scratch and re-imported without accumulating.
+    //
+    // Deliberately last: the hash covers dcterms:isPartOf, which Step 5.75 assigns
+    // from the leading ontology, and beforeSaveFn (Step 5.8) may still have
+    // rewritten the triple. Running after both means the id describes what is
+    // actually persisted — and beforeSaveFn still sees the source's own id, which
+    // callers filter on.
+    let statementIdRewritten = false;
+    if (isStatementResource) {
+      const statementId = this.ontologize.rdf._statementIdForResource(processedResource);
+      if (!statementId) {
+        // Typed rdf:Statement but no complete triple to hash — nothing to be
+        // content-addressed by, so keep whatever id the source supplied.
+        console.warn(`Statement ${processedResource._id} has no complete rdf:subject/predicate/object; keeping source _id`);
+      }
+      else if (statementId !== processedResource._id) {
+        processedResource._id = statementId;
+        statementIdRewritten = true;
+      }
+    }
+
     // Step 6: Save to appropriate collection(s)
 
     // if this is destined for an ABox collection,
@@ -839,6 +875,7 @@ export class IoApi extends ApiNamespace {
       success: true,
       isTBox: isTBoxResource,
       isStatement: isStatementResource,
+      statementIdRewritten,
       resource: processedResource
     };
   }

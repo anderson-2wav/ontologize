@@ -174,7 +174,7 @@ export class ReasonerApi extends ApiNamespace {
         metaPropsByPredicate: {
           "*": {
             "bold:when": new Date().toISOString(),
-            "bold:createdBy": "bold:bootstrapReasoner",
+            "bold:provenance": "bold:bootstrapReasoner",
             "bold:scope": "bold:system"
           }
         }
@@ -183,7 +183,7 @@ export class ReasonerApi extends ApiNamespace {
 
       // 10. Remove previous bootstrapReasoner statements and persist new ones
       if (this.collections.statements && opts.persistStatements && statements.length > 0) {
-        const deleteResult = await this.collections.statements.deleteMany({ "bold:createdBy": "bold:bootstrapReasoner" });
+        const deleteResult = await this.collections.statements.deleteMany({ "bold:provenance": "bold:bootstrapReasoner" });
         console.log(`Removed ${deleteResult.deletedCount} previous bootstrapReasoner statements`);
         await this._persistStatements(statements);
         console.log(`Persisted ${statements.length} new statements to collection`);
@@ -537,12 +537,12 @@ export class ReasonerApi extends ApiNamespace {
       const { _id, "bold:when": when, ...fields } = stmt;
       // Defence in depth: a caller that hands us a statement without an id still
       // gets a deterministic one rather than a random duplicate-maker.
-      const id = _id || this.ontologize.rdf._statementId(
-        stmt["rdf:subject"],
-        stmt["rdf:predicate"],
-        stmt["rdf:object"],
-        stmt["dcterms:isPartOf"] ?? stmt["bold:createdBy"]
-      );
+      const id = _id || this.ontologize.rdf._statementIdForResource(stmt);
+      if (!id) {
+        throw new Error(
+          "Statement has neither an _id nor a complete rdf:subject/predicate/object to derive one from"
+        );
+      }
       return {
         updateOne: {
           filter: { _id: id },
@@ -783,7 +783,7 @@ export class ReasonerApi extends ApiNamespace {
     const context = await this.ontologize.getContext();
     const metaProps = {
       "bold:when": new Date().toISOString(),
-      "bold:createdBy": "bold:reasonCollection",
+      "bold:provenance": "bold:reasonCollection",
       "bold:scope": "bold:system"
     };
     if (opts.userId) {

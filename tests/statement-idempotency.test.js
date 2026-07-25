@@ -64,6 +64,13 @@ function createStatementsStore() {
       for (const d of doomed) docs.delete(d._id);
       return { deletedCount: doomed.length };
     },
+    // The import path writes statements through _saveResourceWithMerge, which
+    // replaces rather than upserting field-by-field.
+    async replaceOne(query, doc) {
+      const existed = docs.has(query._id);
+      docs.set(query._id, doc);
+      return { matchedCount: existed ? 1 : 0, modifiedCount: 1 };
+    },
     count: () => docs.size,
     async bulkWrite(operations) {
       let upsertedCount = 0;
@@ -96,6 +103,37 @@ function createOntologyStore() {
     async findOne() { return null; },
     find() { return { toArray: async () => [], fetch: () => [] }; },
     async countDocuments() { return 0; },
+  };
+}
+
+/** Writable document store for the import path (ontology / context targets). */
+function createDocStore() {
+  const docs = new Map();
+  return {
+    docs,
+    async findOne(query) {
+      return [...docs.values()].find(d => matches(d, query)) || null;
+    },
+    find(query = {}) {
+      return { toArray: async () => [...docs.values()].filter(d => matches(d, query)) };
+    },
+    async replaceOne(query, doc) {
+      const existed = docs.has(query._id);
+      docs.set(query._id, doc);
+      return { matchedCount: existed ? 1 : 0, modifiedCount: 1 };
+    },
+    async updateOne(query, update) {
+      const existing = docs.get(query._id) || { _id: query._id };
+      docs.set(query._id, { ...existing, ...update.$set });
+      return { modifiedCount: 1 };
+    },
+    async deleteMany() {
+      const deletedCount = docs.size;
+      docs.clear();
+      return { deletedCount };
+    },
+    async countDocuments() { return docs.size; },
+    count: () => docs.size,
   };
 }
 
@@ -221,12 +259,90 @@ describe("statement idempotency & provenance", function () {
     });
   });
 
+  describe("_statementIdForResource", function () {
+    const doc = (overrides = {}) => ({
+      "@type": ["rdf:Statement"],
+      "rdf:subject": "nice:K0865",
+      "rdf:predicate": "owl:sameAs",
+      "rdf:object": "nice:K0377",
+      ...overrides,
+    });
+
+    it("agrees with _statementId over the same triple and source", function () {
+      assert.equal(
+        server.rdf._statementIdForResource(doc({ "dcterms:isPartOf": "nice:nice" })),
+        server.rdf._statementId("nice:K0865", "owl:sameAs", "nice:K0377", "nice:nice")
+      );
+    });
+
+    it("prefers dcterms:isPartOf over bold:provenance as the source", function () {
+      const both = server.rdf._statementIdForResource(doc({
+        "dcterms:isPartOf": "nice:nice",
+        "bold:provenance": "nist:mapping",
+      }));
+      assert.equal(both, server.rdf._statementId("nice:K0865", "owl:sameAs", "nice:K0377", "nice:nice"));
+    });
+
+    it("falls back to bold:provenance when there is no partition", function () {
+      assert.equal(
+        server.rdf._statementIdForResource(doc({ "bold:provenance": "nist:mapping" })),
+        server.rdf._statementId("nice:K0865", "owl:sameAs", "nice:K0377", "nist:mapping")
+      );
+    });
+
+    it("unwraps single-element arrays so compaction shape does not change the id", function () {
+      // ld.compact(..., {ensureArrayProps: true}) can hand back arrays where the
+      // reasoner passes bare scalars. Both must hash alike.
+      assert.equal(
+        server.rdf._statementIdForResource(doc({
+          "rdf:subject": ["nice:K0865"],
+          "rdf:predicate": ["owl:sameAs"],
+          "rdf:object": ["nice:K0377"],
+        })),
+        server.rdf._statementIdForResource(doc())
+      );
+    });
+
+    it("unwraps @id and @value objects", function () {
+      assert.equal(
+        server.rdf._statementIdForResource(doc({
+          "rdf:subject": { "@id": "nice:K0865" },
+          "rdf:object": { "@value": "nice:K0377" },
+        })),
+        server.rdf._statementIdForResource(doc())
+      );
+    });
+
+    it("reads expanded rdf term names too", function () {
+      const expanded = {
+        "@type": ["rdf:Statement"],
+        "http://www.w3.org/1999/02/22-rdf-syntax-ns#subject": "nice:K0865",
+        "http://www.w3.org/1999/02/22-rdf-syntax-ns#predicate": "owl:sameAs",
+        "http://www.w3.org/1999/02/22-rdf-syntax-ns#object": "nice:K0377",
+      };
+      assert.equal(server.rdf._statementIdForResource(expanded), server.rdf._statementIdForResource(doc()));
+    });
+
+    it("returns null for a statement with no complete triple", function () {
+      assert.isNull(server.rdf._statementIdForResource({ "@type": ["rdf:Statement"] }));
+      assert.isNull(server.rdf._statementIdForResource(doc({ "rdf:object": undefined })));
+      assert.isNull(server.rdf._statementIdForResource(doc({ "rdf:object": [] })));
+    });
+
+    it("is stable for a multi-valued term regardless of order", function () {
+      assert.equal(
+        server.rdf._statementIdForResource(doc({ "rdf:object": ["b", "a"] })),
+        server.rdf._statementIdForResource(doc({ "rdf:object": ["a", "b"] }))
+      );
+    });
+  });
+
   describe("createStatementsForFacts", function () {
     const buildStatements = async (extraOpts = {}) => {
       const facts = server.rdf._derivationsToFacts([derivation("report-1")]);
       return server.rdf.createStatementsForFacts(facts, {
         onlyInferred: true,
-        metaPropsByPredicate: { "*": { "bold:createdBy": "bold:reasonCollection" } },
+        metaPropsByPredicate: { "*": { "bold:provenance": "bold:reasonCollection" } },
         ...extraOpts,
       });
     };
@@ -418,6 +534,168 @@ describe("statement idempotency & provenance", function () {
         "bold:when is first-seen time, unchanged by a re-run"
       );
       assert.isAbove(updateCalls, 1, "the second run really did reason again");
+    });
+  });
+
+  /**
+   * Imported statements get the same content-addressed ids as reasoned ones
+   * (IoApi._normalizeAndSaveResource step 5.9), so re-importing a source file —
+   * or importing the same assertion from a second source — addresses the same
+   * document instead of adding another.
+   */
+  describe("import", function () {
+    let importServer;
+    let importStatements;
+    let ontologyStore;
+
+    // Shaped like nice.all.full.jsonld: a leading owl:Ontology (which supplies
+    // dcterms:isPartOf) followed by statements whose source ids are built from
+    // the triple they reify.
+    const SOURCE = () => [
+      { "@id": "nice:nice", "@type": "owl:Ontology", "rdfs:label": "NICE" },
+      {
+        "@id": "nice:K0865-K0377",
+        "@type": ["rdf:Statement"],
+        "rdf:subject": "nice:K0865",
+        "rdf:predicate": "owl:sameAs",
+        "rdf:object": "nice:K0377",
+        "dc:source": "nist:NICE-Framework-2017-to-v1.0.0-Mapping",
+      },
+    ];
+
+    beforeEach(async function () {
+      importStatements = createStatementsStore();
+      ontologyStore = createDocStore();
+      const contextStore = createDocStore();
+      await contextStore.replaceOne({ _id: "@id" }, {
+        ...CONTEXT_DOC,
+        dc: "http://purl.org/dc/elements/1.1/",
+        nice: "https://csrc.nist.gov/NICE/framework/",
+      });
+
+      importServer = new OntologizeServer(ontologyStore, contextStore, importStatements);
+      await importServer.ready();
+    });
+
+    it("replaces the source _id with a content hash", async function () {
+      const result = await importServer.io.importData(SOURCE());
+
+      assert.isTrue(result.success);
+      assert.equal(result.statementResources, 1);
+      assert.equal(result.statementIdsRewritten, 1);
+
+      assert.equal(importStatements.docs.size, 1);
+      const [doc] = [...importStatements.docs.values()];
+      assert.match(doc._id, /^bold:stmt-[0-9a-f]{16}$/);
+      assert.notEqual(doc._id, "nice:K0865-K0377");
+      // Human-readable triple is still right there in the document.
+      assert.equal(doc["rdf:subject"], "nice:K0865");
+      assert.equal(doc["rdf:predicate"], "owl:sameAs");
+      assert.equal(doc["rdf:object"], "nice:K0377");
+    });
+
+    it("hashes over the partition the import assigned", async function () {
+      await importServer.io.importData(SOURCE());
+      const [doc] = [...importStatements.docs.values()];
+
+      // Step 5.75 tags the statement with the leading ontology; step 5.9 hashes
+      // that value as the provenance discriminator, so the id must match one
+      // built from the persisted document.
+      assert.include(doc["dcterms:isPartOf"], "nice:nice");
+      assert.equal(doc._id, importServer.rdf._statementIdForResource(doc));
+    });
+
+    it("re-importing the same source creates no second document", async function () {
+      await importServer.io.importData(SOURCE());
+      const firstId = [...importStatements.docs.keys()][0];
+
+      const result = await importServer.io.importData(SOURCE());
+      assert.equal(importStatements.docs.size, 1, "re-import must not duplicate the statement");
+      assert.equal([...importStatements.docs.keys()][0], firstId);
+      assert.equal(result.statementIdsRewritten, 1);
+    });
+
+    it("gives the same id to the same assertion arriving under a different source id", async function () {
+      await importServer.io.importData(SOURCE());
+      const firstId = [...importStatements.docs.keys()][0];
+
+      // Same ontology, same triple, different naming convention in the source.
+      const renamed = SOURCE();
+      renamed[1]["@id"] = "nice:mapping-1729";
+      await importServer.io.importData(renamed);
+
+      assert.equal(importStatements.docs.size, 1, "the source id is not part of the identity");
+      assert.equal([...importStatements.docs.keys()][0], firstId);
+    });
+
+    it("distinguishes statements about different triples", async function () {
+      const data = SOURCE();
+      data.push({
+        "@id": "nice:K0865-K0287",
+        "@type": ["rdf:Statement"],
+        "rdf:subject": "nice:K0865",
+        "rdf:predicate": "owl:sameAs",
+        "rdf:object": "nice:K0287",
+      });
+
+      const result = await importServer.io.importData(data);
+      assert.equal(result.statementResources, 2);
+      assert.equal(importStatements.docs.size, 2);
+    });
+
+    it("keeps the source _id when the statement carries no complete triple", async function () {
+      const data = [
+        { "@id": "nice:nice", "@type": "owl:Ontology", "rdfs:label": "NICE" },
+        // Typed rdf:Statement, but nothing to content-address it by.
+        { "@id": "nice:stmt-incomplete", "@type": ["rdf:Statement"], "rdfs:comment": "placeholder" },
+      ];
+
+      const result = await importServer.io.importData(data);
+      assert.equal(result.statementResources, 1);
+      assert.equal(result.statementIdsRewritten, 0);
+      assert.isTrue(importStatements.docs.has("nice:stmt-incomplete"));
+    });
+
+    it("leaves non-statement resources' ids alone", async function () {
+      const data = [
+        { "@id": "nice:nice", "@type": "owl:Ontology", "rdfs:label": "NICE" },
+        { "@id": "nice:K0865", "@type": ["owl:Class"], "rdfs:label": "Knowledge 865" },
+      ];
+
+      const result = await importServer.io.importData(data);
+      assert.equal(result.statementResources, 0);
+      assert.equal(result.statementIdsRewritten, 0);
+      assert.isTrue(ontologyStore.docs.has("nice:K0865"));
+    });
+
+    it("hashes the id after beforeSaveFn, which still sees the source id", async function () {
+      const seen = [];
+      await importServer.io.importData(SOURCE(), {
+        beforeSaveFn: (resource) => {
+          seen.push(resource._id);
+          return resource;
+        },
+      });
+
+      assert.include(seen, "nice:K0865-K0377", "beforeSaveFn sees the source's own id");
+      const [doc] = [...importStatements.docs.values()];
+      assert.match(doc._id, /^bold:stmt-[0-9a-f]{16}$/);
+    });
+
+    it("hashes the triple beforeSaveFn actually persisted", async function () {
+      await importServer.io.importData(SOURCE(), {
+        beforeSaveFn: (resource) => {
+          if (resource["rdf:object"]) resource["rdf:object"] = "nice:K9999";
+          return resource;
+        },
+      });
+
+      const [doc] = [...importStatements.docs.values()];
+      assert.equal(doc._id, importServer.rdf._statementIdForResource(doc));
+      assert.notEqual(
+        doc._id,
+        importServer.rdf._statementId("nice:K0865", "owl:sameAs", "nice:K0377", ["nice:nice"])
+      );
     });
   });
 });

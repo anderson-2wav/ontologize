@@ -19,6 +19,12 @@ import { ApiNamespace } from "../ApiNamespace.js";
  * store through the owning instance.
  */
 export class RdfApi extends ApiNamespace {
+  // Expanded rdf reification term names, accepted alongside the compacted forms
+  // wherever a statement document is read (see _statementIdForResource).
+  static RDF_SUBJECT = "http://www.w3.org/1999/02/22-rdf-syntax-ns#subject";
+  static RDF_PREDICATE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#predicate";
+  static RDF_OBJECT = "http://www.w3.org/1999/02/22-rdf-syntax-ns#object";
+
   /**
    * Convert BFO resources from Ontology into a triples format that can be inserted into SPARQL
    * Similar to CTB's Ontology.getTriplesForResources but adapted for BOLD
@@ -371,7 +377,7 @@ INSERT DATA {
    * different provenance — a hand-authored import statement and a reasoner
    * inference about `dwc:Dataset rdfs:subClassOf bfo:immaterial-entity` stay
    * separate documents rather than clobbering each other. Callers pass the
-   * subject's `dcterms:isPartOf` when it has one, else `bold:createdBy`, else
+   * subject's `dcterms:isPartOf` when it has one, else `bold:provenance`, else
    * nothing. Array sources are sorted before joining so the value is
    * order-independent.
    *
@@ -392,6 +398,77 @@ INSERT DATA {
       .digest("hex")
       .slice(0, 16);
     return `bold:stmt-${hash}`;
+  }
+
+  /**
+   * Reduce one `rdf:subject`/`predicate`/`object` value to the single scalar the
+   * id hashes over.
+   *
+   * The same triple has to hash identically whichever path built it, and the two
+   * paths do not hand over identical shapes: the reasoner passes bare scalars,
+   * while a statement read back from an import has been through
+   * `ld.compact(..., { ensureArrayProps: true })` and may carry
+   * `["nice:K0865"]` or `{"@id": "nice:K0865"}` instead. Unwrapping here is what
+   * makes an imported statement and a reasoner inference about the same triple
+   * agree on their id.
+   *
+   * @param {*} value - the raw property value
+   * @returns {string|null} the scalar to hash, or null if there is nothing usable
+   * @private
+   */
+  _statementTerm(value) {
+    if (value === undefined || value === null) {
+      return null;
+    }
+    if (Array.isArray(value)) {
+      const terms = value.map(v => this._statementTerm(v)).filter(v => v !== null);
+      if (terms.length === 0) return null;
+      if (terms.length === 1) return terms[0];
+      // Multi-valued s/p/o is malformed for a reification, but sorting keeps the
+      // id stable rather than order-dependent.
+      return terms.sort().join(",");
+    }
+    if (typeof value === "object") {
+      if (Object.prototype.hasOwnProperty.call(value, "@id")) return this._statementTerm(value["@id"]);
+      if (Object.prototype.hasOwnProperty.call(value, "@value")) return this._statementTerm(value["@value"]);
+      return null;
+    }
+    return String(value);
+  }
+
+  /**
+   * Deterministic `_id` for an existing statement *document*, derived from the
+   * document itself: its reified triple plus `dcterms:isPartOf` (else
+   * `bold:provenance`) as the provenance discriminator.
+   *
+   * Used by the import path to replace whatever `_id` a source file supplied
+   * (`nice:K0865-K0377`, say) with a content hash, so re-importing the same
+   * statement addresses the same document — and by `_persistStatements` as its
+   * fallback when a caller hands over a statement with no id.
+   *
+   * Accepts both compacted and expanded rdf term names, matching what
+   * `Ontologize.isStatementResource` recognizes.
+   *
+   * @param {object} statement - a statement document
+   * @returns {string|null} the id, or null if the document carries no complete
+   *   triple to hash (a resource typed `rdf:Statement` but missing an s/p/o)
+   */
+  _statementIdForResource(statement) {
+    check(statement, Object);
+
+    const term = (compact, expanded) =>
+      this._statementTerm(statement[compact] ?? statement[expanded]);
+
+    const subject = term("rdf:subject", RdfApi.RDF_SUBJECT);
+    const predicate = term("rdf:predicate", RdfApi.RDF_PREDICATE);
+    const object = term("rdf:object", RdfApi.RDF_OBJECT);
+
+    if (subject === null || predicate === null || object === null) {
+      return null;
+    }
+
+    const source = statement["dcterms:isPartOf"] ?? statement["bold:provenance"];
+    return this._statementId(subject, predicate, object, source);
   }
 
   /**
@@ -421,7 +498,7 @@ INSERT DATA {
       ...opts
     };
     const subjectPartitions = opts.subjectPartitions || {};
-
+debugger;
     console.log(`Creating statements for ${facts.length} facts`);
 
     const context = opts.context || await this.ontologize.getContext();
@@ -496,8 +573,8 @@ INSERT DATA {
         if (allPreds["rdfs:comment"]) {
           statement["rdfs:comment"] = allPreds["rdfs:comment"];
         }
-        if (allPreds["bold:createdBy"]) {
-          statement["bold:createdBy"] = allPreds["bold:createdBy"];
+        if (allPreds["bold:provenance"]) {
+          statement["bold:provenance"] = allPreds["bold:provenance"];
         }
 
         // Add predicate-specific metadata
@@ -523,7 +600,7 @@ INSERT DATA {
           statement["rdf:subject"],
           statement["rdf:predicate"],
           statement["rdf:object"],
-          statement["dcterms:isPartOf"] ?? statement["bold:createdBy"]
+          statement["dcterms:isPartOf"] ?? statement["bold:provenance"]
         );
 
         if (!fact.explicit && fact.rule) {

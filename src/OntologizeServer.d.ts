@@ -92,6 +92,8 @@ export declare class RdfApi {
   createStatementsForFacts(facts: any[], opts?: Record<string, any>): Promise<Resource[]>;
   /** Deterministic content-hash `_id` for a reification statement. */
   _statementId(subject: string, predicate: string, object: string | number | boolean, source?: string | string[]): string;
+  /** Deterministic `_id` derived from an existing statement document; null if it carries no complete triple. */
+  _statementIdForResource(statement: Resource): string | null;
 }
 
 /** `ontologizeServer.reasoner` — HyLAR reasoning integration and process management. */
