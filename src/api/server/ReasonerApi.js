@@ -13,6 +13,14 @@ import { check } from "../../lib/check.js";
 import { ApiNamespace } from "../ApiNamespace.js";
 
 /**
+ * Registered collections that are never reasoned. `ontology` and `statements`
+ * are the reasoner's own inputs and outputs; `context` holds a single document
+ * (`_id: "@id"`, the global JSON-LD context) with no partition and nothing to
+ * infer.
+ */
+const NEVER_REASONED = new Set(["ontology", "context", "statements"]);
+
+/**
  * `ontologizeServer.reasoner` — HyLAR reasoning integration: manage the HyLAR
  * process (checkHylar / _startHylarProcess), bootstrap and warm the triplestore,
  * reason over a collection, and persist inferred properties + statements. HyLAR
@@ -881,6 +889,43 @@ export class ReasonerApi extends ApiNamespace {
       statementsCreated: totalStatements,
       resourcesUpdated: totalUpdated
     };
+  }
+
+  /**
+   * The collections a background pass reasons, in the order it reasons them.
+   *
+   * Every registered collection except NEVER_REASONED, so registering a
+   * collection is all it takes to have it reasoned — there is no second list to
+   * keep in sync.
+   *
+   * ORDER. `opts.reasonOrder` names the collections whose position matters;
+   * they go first, in the order given, and everything else follows in
+   * registration order. The hint never changes *which* collections are
+   * reasoned. Order affects completeness rather than correctness — reasoning a
+   * collection whose dependencies are not yet materialized still succeeds, it
+   * just derives less — but because `reasonCollection` stamps `bold:reasoned`
+   * on what it processed, a from-scratch pass in the wrong order leaves those
+   * resources permanently under-derived.
+   *
+   * @returns {string[]}
+   */
+  _reasonedCollectionNames() {
+    const all = Object.keys(this.collections).filter(name => !NEVER_REASONED.has(name));
+
+    const hint = this.opts.reasonOrder;
+    if (!Array.isArray(hint) || hint.length === 0) return all;
+
+    const named = [];
+    for (const name of hint) {
+      if (!all.includes(name)) {
+        console.warn(`ontologize reason: reasonOrder names "${name}", which is not a `
+          + `reasoned collection — ignoring it`);
+        continue;
+      }
+      if (!named.includes(name)) named.push(name);
+    }
+
+    return [...named, ...all.filter(name => !named.includes(name))];
   }
 }
 
