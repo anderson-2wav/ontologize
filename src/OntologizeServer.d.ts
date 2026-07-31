@@ -103,6 +103,24 @@ export declare class ReasonerApi {
   ensureReasoner(opts?: Record<string, any>): Promise<void>;
   checkHylar(opts?: Record<string, any>): Promise<void>;
   reasonCollection(collectionName: string, opts?: Record<string, any>): Promise<Record<string, any>>;
+  /** Start a background reasoning pass, or queue one if a pass is running. */
+  startReasoning(opts?: { scope?: string; collections?: string[] }): {
+    started: boolean; queued: boolean; running: boolean; scope: string | null;
+  };
+  /** Reasoning progress, counted from the documents. */
+  reasoningStatus(): Promise<{
+    running: boolean; scope: string | null; startedAt: string | null;
+    pending: boolean; lastRun: object | null;
+    collections: Record<string, { total: number; reasoned: number; unreasoned: number }>;
+    total: number; reasoned: number; unreasoned: number;
+  }>;
+  /** What is still unreasoned, grouped by @type and partition. */
+  unreasonedDetail(opts?: { sampleLimit?: number }): Promise<Record<string, {
+    total: number; sampled: number; truncated: boolean;
+    groups: Array<{ partition: string; type: string; count: number; examples: string[] }>;
+  }>>;
+  /** Whether a background pass is in flight. */
+  isReasoningRunning(): boolean;
 }
 
 /**

@@ -11,6 +11,7 @@ import path from "path";
 import * as fs from "node:fs";
 import { check } from "../../lib/check.js";
 import { ApiNamespace } from "../ApiNamespace.js";
+import { createRunState } from "../../lib/reasonRunState.js";
 
 /**
  * Registered collections that are never reasoned. `ontology` and `statements`
@@ -926,6 +927,236 @@ export class ReasonerApi extends ApiNamespace {
     }
 
     return [...named, ...all.filter(name => !named.includes(name))];
+  }
+
+  /**
+   * Run-state for background passes. Lazily created so construction order never
+   * matters, and held per instance rather than at module scope — the surrounding
+   * namespace classes already keep their state on the owning instance.
+   */
+  get _runState() {
+    return this._backgroundRunState ??= createRunState();
+  }
+
+  /**
+   * One pass over every collection.
+   *
+   * Sequential rather than parallel: the collections feed each other, and they
+   * share one HyLAR whose store is the thing being reasoned against. A
+   * collection the scope does not match costs a single `find` —
+   * `reasonCollection` returns early on an empty selection, before generating
+   * any triples.
+   *
+   * Totals are returned flat because that is what `recordRun` accumulates; the
+   * per-collection split is for the log line.
+   */
+  async _reasonOnce(scope, names) {
+    const startedMs = Date.now();
+    // A partition selector; `reasonCollection` merges it with its own
+    // unreasoned check. Collections carry `dcterms:isPartOf` but not all carry
+    // the same partitions, so only an unscoped pass reaches everything.
+    const selector = scope ? { "dcterms:isPartOf": scope } : {};
+
+    const byCollection = {};
+    let resources = 0;
+    let statements = 0;
+    let facts = 0;
+
+    for (const name of names) {
+      const result = await this.reasonCollection(name, { selector });
+      byCollection[name] = result.resourcesLoaded;
+      resources += result.resourcesLoaded;
+      statements += result.statementsCreated;
+      facts += result.factsInferred;
+    }
+
+    return { scope: scope || null, byCollection, resources, statements, facts,
+      durationMs: Date.now() - startedMs };
+  }
+
+  /**
+   * Drive passes until nothing is queued, then release the runner.
+   *
+   * Deliberately not awaited by the caller. The `.catch()` is not optional: an
+   * unhandled rejection in a detached promise takes the process down in Node,
+   * and the most likely failure here is a HyLAR that is not answering.
+   */
+  _launchReasoning(initialScope, overrideNames) {
+    (async () => {
+      let scope = initialScope;
+      for (;;) {
+        // Re-read each pass so a collection registered mid-run is picked up.
+        // The override applies to the pass that asked for it; a queued pass is
+        // a different request and gets the registered set.
+        const names = overrideNames || this._reasonedCollectionNames();
+        const run = await this._reasonOnce(scope, names);
+        this._runState.recordRun(run);
+
+        const detail = names.map(name => `${name} ${run.byCollection[name]}`).join(", ");
+        console.log(`ontologize reason: ${run.resources} resources (${detail}), `
+          + `${run.statements} statements in ${Math.round(run.durationMs / 1000)}s`
+          + `${run.scope ? ` (${run.scope})` : ""}`);
+
+        const pending = this._runState.takePending();
+        if (!pending) break;
+        scope = pending.scope;
+        overrideNames = undefined;
+        console.log("ontologize reason: work queued during the pass, running again");
+      }
+
+      // What is left over, once. A non-zero remainder after a completed cycle
+      // is the interesting case — documents the reasoner inferred nothing
+      // about, not work still to do — and logging it here means nobody has to
+      // think to ask for the detail before wondering why the count never
+      // reaches zero.
+      const leftover = await this.unreasonedDetail();
+      for (const [name, info] of Object.entries(leftover)) {
+        if (info.total === 0) continue;
+        const groups = info.groups
+          .map(g => `${g.count}× ${g.type} [${g.partition}] e.g. ${g.examples[0]}`)
+          .join("; ");
+        console.log(`ontologize reason: ${name} has ${info.total} unreasoned`
+          + `${info.truncated ? ` (grouping ${info.sampled} sampled)` : ""} — ${groups}`);
+      }
+
+      this._runState.end();
+    })().catch((err) => {
+      console.error("ontologize reason failed:", err);
+      this._runState.fail(err);
+    });
+  }
+
+  /**
+   * Start reasoning in the background, or queue it if a pass is already running.
+   *
+   * Returns immediately — the promise it starts is deliberately not returned,
+   * so a caller cannot accidentally await minutes of work.
+   *
+   * @param {Object}   [opts]
+   * @param {string}   [opts.scope] - partition to limit the pass to
+   * @param {string[]} [opts.collections] - override the reasoned set for this
+   *   pass only. An escape hatch; the registered set is the answer normally,
+   *   and a pass queued behind this one uses the registered set.
+   * @returns {{started: boolean, queued: boolean, running: boolean, scope: string|null}}
+   */
+  startReasoning(opts = {}) {
+    const scope = opts.scope || undefined;
+
+    if (!this._runState.begin(scope)) {
+      // Queued rather than refused: the running pass has already made its
+      // selection, so documents written since would otherwise never be reasoned.
+      return { started: false, queued: true, running: true, scope: scope || null };
+    }
+
+    this._launchReasoning(scope, opts.collections);
+    return { started: true, queued: false, running: true, scope: scope || null };
+  }
+
+  /**
+   * Current reasoning status. The counts come from the collections, so they are
+   * correct across a restart and after a run this process never saw.
+   *
+   * `total` / `reasoned` / `unreasoned` are sums across every reasoned
+   * collection, so a caller polling for "is it done yet" needs no change as the
+   * set grows. The per-collection breakdown is under `collections`, whose keys
+   * are also the authoritative list of what gets reasoned.
+   *
+   * @returns {Promise<Object>}
+   */
+  async reasoningStatus() {
+    const entries = await Promise.all(this._reasonedCollectionNames().map(async (name) => {
+      const collection = this.collections[name];
+      const [total, reasoned] = await Promise.all([
+        collection.countDocuments({}),
+        collection.countDocuments({ "bold:reasoned": { $exists: true } }),
+      ]);
+      return [name, { total, reasoned, unreasoned: total - reasoned }];
+    }));
+
+    const collections = Object.fromEntries(entries);
+    const total = entries.reduce((sum, [, c]) => sum + c.total, 0);
+    const reasoned = entries.reduce((sum, [, c]) => sum + c.reasoned, 0);
+
+    return { ...this._runState.snapshot(), collections, total, reasoned,
+      unreasoned: total - reasoned };
+  }
+
+  /**
+   * Breakdown of what is still unreasoned, grouped by `@type` and partition.
+   *
+   * WHY. `unreasoned` on its own cannot distinguish "the pass has not reached
+   * these yet" from "these will never be reasoned", and to anyone watching a
+   * progress display the second reads as a stuck import. Grouping the remainder
+   * tells the two apart: work in flight is spread across the same types as the
+   * work already done, while a permanent residue clusters into a few types or
+   * one partition.
+   *
+   * A residue is expected. `reasonCollection` stamps `bold:reasoned` from
+   * `_mergeAndUpdateResources`, which only runs over subjects that produced
+   * derivations — so a resource the reasoner infers nothing about is never
+   * stamped, is re-selected by every later pass, and stays in this count
+   * permanently. The count therefore has a floor above zero.
+   *
+   * Kept out of reasoningStatus() because it is a second query per collection
+   * and the status is polled in a loop.
+   *
+   * @param {Object} [opts]
+   * @param {number} [opts.sampleLimit=500] - documents examined per collection
+   * @returns {Promise<Object>} keyed by collection
+   */
+  async unreasonedDetail({ sampleLimit = 500 } = {}) {
+    const selector = { "bold:reasoned": { $exists: false } };
+    const detail = {};
+
+    for (const name of this._reasonedCollectionNames()) {
+      const collection = this.collections[name];
+      const total = await collection.countDocuments(selector);
+
+      if (total === 0) {
+        detail[name] = { total: 0, sampled: 0, truncated: false, groups: [] };
+        continue;
+      }
+
+      const docs = await collection
+        .find(selector, { projection: { "@type": 1, "dcterms:isPartOf": 1 } })
+        .limit(sampleLimit)
+        .toArray();
+
+      const groups = new Map();
+      for (const doc of docs) {
+        // @type is normally an array; join rather than take the first, because
+        // which types a resource carries is exactly what distinguishes these
+        // documents from the ones that did reason.
+        const type = [].concat(doc["@type"] ?? "(none)").join(", ");
+        const partition = doc["dcterms:isPartOf"] ?? "(none)";
+        const key = `${partition} ${type}`;
+
+        let group = groups.get(key);
+        if (!group) {
+          group = { partition, type, count: 0, examples: [] };
+          groups.set(key, group);
+        }
+        group.count++;
+        if (group.examples.length < 5) group.examples.push(doc._id);
+      }
+
+      detail[name] = {
+        total,
+        sampled: docs.length,
+        // Reported rather than hidden: a truncated sample means the group
+        // counts are of the sample, not of `total`, and reading them as totals
+        // would be wrong in exactly the case where the number matters.
+        truncated: docs.length < total,
+        groups: Array.from(groups.values()).sort((a, b) => b.count - a.count),
+      };
+    }
+
+    return detail;
+  }
+
+  /** Whether a background pass is in flight. */
+  isReasoningRunning() {
+    return this._runState.snapshot().running;
   }
 }
 
