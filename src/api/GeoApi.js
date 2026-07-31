@@ -9,6 +9,7 @@
 import { check } from "../lib/check.js";
 import { getSunriseSunsetInfo } from "sunrise-sunset-api";
 import { ApiNamespace } from "./ApiNamespace.js";
+import { mergeShapes } from "../geo/merge.js";
 
 /**
  * `ontologize.geo` — instance-bound geospatial helpers: derive a resource's
@@ -173,6 +174,79 @@ export class GeoApi extends ApiNamespace {
 
     // No location found
     return null;
+  }
+
+  /**
+   * Merge several resources' spatial depictions into one Feature covering their
+   * union — an IDNR region from its counties, or Illinois from all 102 of them.
+   * Interior borders dissolve.
+   *
+   * Each resource contributes one depiction: the first, or whichever
+   * `opts.select` picks. Resources whose depiction is non-areal (a point, a
+   * line) are skipped rather than rejected, and ids that resolve to nothing are
+   * counted — both land in `properties["bold:mergeDiagnostics"]` along with
+   * `holesDropped`, which is the signal that the inputs disagreed. Callers
+   * building a region should assert `holesDropped === 0 && contiguous`.
+   *
+   * See `.private/specs/ontologize/ontologize-geo-spec.md` for why sliver holes
+   * appear (mixed provenance, not imprecision) and why snapping does not fix them.
+   *
+   * Like `getSpatialDepiction`, this needs the ontology loaded: a depiction is
+   * only recognised once its property's `rdfs:range` is known to be
+   * `bold:GeoJSON` / `bold:GeoPoint`. Against an empty Ontology collection every
+   * resource resolves to nothing and the result is null.
+   *
+   * @param {Array<string|object>|string|object} resources - resource ids or
+   *   resources, or a single one of either
+   * @param {object} [opts]
+   * @param {object} [opts.properties] - properties for the resulting Feature
+   * @param {number} [opts.minHoleArea=100000] - m²; interior rings below this
+   *   are dropped as slivers. Pass 0 to keep every ring.
+   * @param {function} [opts.select] - `(depictions, resource) => depiction`,
+   *   for resources carrying more than one depiction
+   * @param {boolean} [opts.diagnostics=true] - attach `bold:mergeDiagnostics`
+   * @param {Map} [opts.ontologyCache] - cache Map for ontology lookups
+   * @returns {Promise<object|null>} a GeoJSON Feature, or null if nothing areal
+   *   could be resolved
+   */
+  async mergeShapes(resources, opts = {}) {
+    const list = Array.isArray(resources) ? resources : (resources ? [resources] : []);
+    const shapes = [];
+    let unresolved = 0;
+
+    for (const entry of list) {
+      let resource = entry;
+      if (typeof entry === "string") {
+        const found = await this.ontologize.getResourceForId(entry);
+        resource = found?.resource ?? null;
+      }
+      if (!resource) {
+        unresolved++;
+        continue;
+      }
+
+      let shape;
+      if (opts.select) {
+        // An LD proxy collapses a multi-valued property to its first value, so
+        // reach through __raw to offer the selector every depiction.
+        const raw = resource.__raw?.["bold:spatialDepiction"] ?? resource["bold:spatialDepiction"];
+        const depictions = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+        shape = opts.select(depictions, resource);
+      }
+      else {
+        shape = await this.getSpatialDepiction(resource, opts);
+      }
+
+      if (shape) shapes.push(shape);
+      else unresolved++;
+    }
+
+    const merged = mergeShapes(shapes, opts);
+    if (merged && opts.diagnostics !== false) {
+      merged.properties["bold:mergeDiagnostics"].requested = list.length;
+      merged.properties["bold:mergeDiagnostics"].unresolved = unresolved;
+    }
+    return merged;
   }
 
   /**

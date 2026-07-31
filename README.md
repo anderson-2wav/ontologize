@@ -22,7 +22,7 @@ methods, so the surface is discoverable and each area is documented and tested o
 |-----------|--------------|---------|
 | `ontologize.display.*` | client + server | Labels, descriptions, date formatting, info-component / label resolvers, individual colors and grouping |
 | `ontologize.schema.*` | client + server | TBox schema introspection (`getSchema`, `sortTypesFn`, `isArrayProperty`, `getGroupStrategies`) |
-| `ontologize.geo.*` | client + server | Instance-bound geospatial helpers (`getSpatialDepiction`, `getSunriseSunset`) |
+| `ontologize.geo.*` | client + server | Instance-bound geospatial helpers (`getSpatialDepiction`, `mergeShapes`, `getSunriseSunset`) |
 | `ontologize.explore.*` | client + server | Scan ontology structure + ABox collections (`explore.run()`) |
 | `ontologizeServer.io.*` | server | JSON-LD import/export and `bootstrap` |
 | `ontologizeServer.archive.*` | server | `mongodump` / `mongorestore` |

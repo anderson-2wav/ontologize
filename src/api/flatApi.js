@@ -54,6 +54,7 @@ export const CLIENT_FLAT_API = {
   getGroupStrategies: "schema",
   // geo
   getSpatialDepiction: "geo",
+  mergeShapes: "geo",
   getGeoJSON: "geo", // deprecated alias of getSpatialDepiction
   getSunriseSunset: "geo",
   // explore

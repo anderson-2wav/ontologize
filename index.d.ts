@@ -116,6 +116,45 @@ export type GeoJSONObject = GeoJSONGeometry | GeoJSONFeature | {
   features: GeoJSONFeature[];
 };
 
+/** Reported on a merged Feature at `properties["bold:mergeDiagnostics"]`. */
+export interface MergeDiagnostics {
+  /** shapes handed to the union */
+  inputs: number;
+  /** inputs carrying no areal geometry, skipped rather than rejected */
+  skippedNonAreal: number;
+  outerRings: number;
+  holes: number;
+  /** interior rings discarded as slivers — non-zero means the inputs disagreed */
+  holesDropped: number;
+  /** exterior-ring winding emitted: "ccw" is RFC 7946, "cw" is d3-geo */
+  winding: "ccw" | "cw";
+  contiguous: boolean;
+  areaKm2: number;
+  vertices: number;
+  /** resources asked for (GeoApi#mergeShapes only) */
+  requested?: number;
+  /** resources that resolved to nothing (GeoApi#mergeShapes only) */
+  unresolved?: number;
+}
+
+export interface MergeShapesOptions {
+  /** properties for the resulting Feature */
+  properties?: Record<string, any>;
+  /** m²; interior rings below this are dropped as slivers. 0 keeps every ring. */
+  minHoleArea?: number;
+  /** picks a depiction for a resource carrying several */
+  select?: (depictions: GeoJSONObject[], resource: Resource) => GeoJSONObject | null;
+  /**
+   * Exterior-ring winding of the result: as the input was wound (default),
+   * RFC 7946 (`ccw`), or d3-geo (`cw`). The wrong convention makes d3 draw the
+   * complement of the region rather than nothing.
+   */
+  winding?: "match" | "ccw" | "cw";
+  /** attach `bold:mergeDiagnostics` (default true) */
+  diagnostics?: boolean;
+  ontologyCache?: Map<string, any>;
+}
+
 export type Resource = Record<string, any>;
 export type OntologyResource = Resource & {
   "@id": string;
@@ -174,6 +213,15 @@ export declare class GeoApi {
    * FeatureCollection, or GeometryCollection. Branch on `type`.
    */
   getSpatialDepiction(resource: Resource, opts?: GetLocationOptions): Promise<GeoJSONObject | null>;
+  /**
+   * Union several resources' depictions into one Feature. Diagnostics land on
+   * `properties["bold:mergeDiagnostics"]`; assert `holesDropped === 0 &&
+   * contiguous` when building a region.
+   */
+  mergeShapes(
+    resources: Array<string | Resource> | string | Resource,
+    opts?: MergeShapesOptions
+  ): Promise<GeoJSONFeature | null>;
   /** @deprecated Use `getSpatialDepiction`. */
   getGeoJSON(resource: Resource, opts?: GetLocationOptions): Promise<GeoJSONObject | null>;
   getSunriseSunset(longLat: [number, number], date: Date | string | number | { "@value": string; "@type"?: string }, opts?: Record<string, any>): Promise<SunriseSunsetResponse>;
