@@ -93,13 +93,18 @@ export class GeoApi extends ApiNamespace {
    * 2. Any property with `rdfs:range` of `bold:GeoPoint`
    * 3. Any property with `rdfs:range` of `bold:GeoJSON` (e.g. `bold:spatialDepiction`)
    *
-   * **The returned object is GeoJSON, but not always a Feature.** Pattern 1
-   * synthesises a bare `Point` *geometry*; patterns 2 and 3 hand back whatever
-   * the property holds, which for `bold:spatialDepiction` is typically a whole
-   * `Feature` but may equally be a `Geometry`, `FeatureCollection`, or
-   * `GeometryCollection`. Callers that need a Feature must check `type` and wrap
-   * a bare geometry themselves — see `ResourceGeoView`'s `isGeoJSONGeometry`
-   * branch. A multi-valued property yields its first value.
+   * **The contract is a GeoJSON *object*, not specifically a Feature.** A
+   * depiction legitimately arrives as any of the GeoJSON object types:
+   * pattern 1 synthesises a bare `Point` geometry, while patterns 2 and 3 hand
+   * back whatever the property holds — commonly a `Feature` (as
+   * `bold:spatialDepiction` does for `gov:County`), but equally a `Geometry`,
+   * `FeatureCollection`, or `GeometryCollection`. Narrowing the return to
+   * `Feature` would mean inventing a wrapper for geometries and choosing how to
+   * collapse a `FeatureCollection`, so the union is deliberate.
+   *
+   * Callers branch on `type` and wrap a bare geometry when they need a Feature —
+   * see `ResourceGeoView`'s `isGeoJSONGeometry` branch. A multi-valued property
+   * yields its first value.
    *
    * @param {object} resource - The resource to get the depiction for
    * @param {object} [opts] - Options

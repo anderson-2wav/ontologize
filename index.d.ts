@@ -106,9 +106,10 @@ export interface GeoJSONFeature {
 }
 
 /**
- * Any GeoJSON object `geo.getSpatialDepiction` may return. It is deliberately
- * wider than `GeoJSONFeature`: what comes back depends on which property
- * supplied the depiction, so callers must branch on `type` rather than assume.
+ * Any GeoJSON object `geo.getSpatialDepiction` may return. Deliberately wider
+ * than `GeoJSONFeature`: what comes back depends on which property supplied the
+ * depiction, and a depiction is legitimately a Feature *or* a FeatureCollection
+ * (or a bare Geometry). Callers branch on `type` rather than assume.
  */
 export type GeoJSONObject = GeoJSONGeometry | GeoJSONFeature | {
   type: "FeatureCollection";
@@ -166,11 +167,11 @@ export declare class SchemaApi {
 /** `ontologize.geo` — instance-bound geospatial helpers. */
 export declare class GeoApi {
   /**
-   * The resource's spatial depiction as GeoJSON. Not necessarily a Feature:
-   * `geo:lat`/`geo:long` synthesise a bare Point geometry, while a
+   * The resource's spatial depiction as a GeoJSON object — not specifically a
+   * Feature. `geo:lat`/`geo:long` synthesise a bare Point geometry, while a
    * `bold:GeoJSON`-ranged property (e.g. `bold:spatialDepiction`) yields
-   * whatever it holds — commonly a Feature, but possibly a Geometry,
-   * FeatureCollection, or GeometryCollection.
+   * whatever it holds — commonly a Feature, but equally a Geometry,
+   * FeatureCollection, or GeometryCollection. Branch on `type`.
    */
   getSpatialDepiction(resource: Resource, opts?: GetLocationOptions): Promise<GeoJSONObject | null>;
   /** @deprecated Use `getSpatialDepiction`. */
