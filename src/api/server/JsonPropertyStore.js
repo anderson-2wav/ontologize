@@ -167,49 +167,45 @@ export class JsonPropertyStore extends ApiNamespace {
     const processed = { ...resource };
     for (const propId of jsonPropertyIds) {
       if (propId in processed) {
-        let value = processed[propId];
-        // NASTY... we can get a variety of mess from ld.compact for properties with context @type: @json, like:
-        const ex = {
-          "@type": [
-            "@json"
-          ],
-          "@value": {
-            "properties": {
-              //...
-            }
-          }
-        };
-        // look for a { @value } object, convert it
-        if (value["@value"]) {
-          value = value["@value"];
-        }
-        // Parse string values back to POJOs
-        if (typeof value === "string") {
-          try {
-            processed[propId] = JSON.parse(value);
-          }
-          catch (e) {
-            // Not valid JSON, leave as string
-          }
-        }
-        else if (Array.isArray(value)) {
-          // Handle array of JSON strings
-          processed[propId] = value.map(v => {
-            if (typeof v === "string") {
-              try {
-                return JSON.parse(v);
-              }
-              catch (e) {
-                return v;
-              }
-            }
-            return v;
-          });
-        }
+        const value = processed[propId];
+        processed[propId] = Array.isArray(value)
+          ? value.map(v => this._parseJsonValue(v))
+          : this._parseJsonValue(value);
       }
     }
 
     return processed;
+  }
+
+  /**
+   * Unwrap and parse a single JSON-property value.
+   *
+   * ld.compact hands back several shapes for a property whose context @type is
+   * "@json" — a bare JSON string, or a wrapper like
+   * `{ "@type": ["@json"], "@value": "{...}" }`. A multi-valued property gets
+   * one such wrapper *per entry*, so unwrapping has to happen per value rather
+   * than once on the whole property; doing it only at the top level silently
+   * left every entry of a multi-valued property wrapped.
+   *
+   * @param {*} value - one raw value off a JSON property
+   * @returns {*} the POJO, or the input unchanged if it is not JSON
+   * @private
+   */
+  _parseJsonValue(value) {
+    let v = value;
+    if (v !== null && typeof v === "object" && !Array.isArray(v) && "@value" in v) {
+      v = v["@value"];
+    }
+    if (typeof v === "string") {
+      try {
+        return JSON.parse(v);
+      }
+      catch (e) {
+        // Not valid JSON, leave as string
+        return v;
+      }
+    }
+    return v;
   }
 }
 
