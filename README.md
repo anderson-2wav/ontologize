@@ -27,7 +27,7 @@ methods, so the surface is discoverable and each area is documented and tested o
 | `ontologizeServer.io.*` | server | JSON-LD import/export and `bootstrap` |
 | `ontologizeServer.archive.*` | server | `mongodump` / `mongorestore` |
 | `ontologizeServer.rdf.*` | server | RDF/SPARQL serialization and HyLAR fact assembly |
-| `ontologizeServer.reasoner.*` | server | HyLAR reasoning integration and process management |
+| `ontologizeServer.reasoner.*` | server | HyLAR reasoning integration, process management, and background reasoning passes (`startReasoning`, `reasoningStatus`, `unreasonedDetail`, `isReasoningRunning`) |
 
 Lifecycle and cross-cutting members stay on the instance directly: `ready()`, `ld()`,
 `getContext()`, `getResourceForId()`, `mergeResources()`, `getVersion()`, and (server)
