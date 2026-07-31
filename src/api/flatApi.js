@@ -53,7 +53,8 @@ export const CLIENT_FLAT_API = {
   sortTypesFn: "schema",
   getGroupStrategies: "schema",
   // geo
-  getGeoJSON: "geo",
+  getSpatialDepiction: "geo",
+  getGeoJSON: "geo", // deprecated alias of getSpatialDepiction
   getSunriseSunset: "geo",
   // explore
   explorer: ["explore", "run"]

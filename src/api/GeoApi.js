@@ -11,8 +11,8 @@ import { getSunriseSunsetInfo } from "sunrise-sunset-api";
 import { ApiNamespace } from "./ApiNamespace.js";
 
 /**
- * `ontologize.geo` — instance-bound geospatial helpers: derive GeoJSON from a
- * resource's location properties, and look up solar events.
+ * `ontologize.geo` — instance-bound geospatial helpers: derive a resource's
+ * spatial depiction as GeoJSON, and look up solar events.
  *
  * The pure, instance-free viewport/H3/geohash helpers used by the GeoView
  * cell-cache (`bboxToH3Cells`, `bufferRing`, `zoomToH3Resolution`, …) live in
@@ -86,19 +86,28 @@ export class GeoApi extends ApiNamespace {
   }
 
   /**
-   * Get the geospatial location for a resource as a GeoJSON object.
+   * Get the spatial depiction of a resource as GeoJSON.
    *
-   * Checks for location data in this order of preference:
-   * 1. `geo:lat` and `geo:long` properties - returns a GeoPoint
+   * Checks for spatial data in this order of preference:
+   * 1. `geo:lat` and `geo:long` properties — synthesises a `Point` geometry
    * 2. Any property with `rdfs:range` of `bold:GeoPoint`
-   * 3. Any property with `rdfs:range` of `bold:GeoJSON`
+   * 3. Any property with `rdfs:range` of `bold:GeoJSON` (e.g. `bold:spatialDepiction`)
    *
-   * @param {object} resource - The resource to get location for
+   * **The returned object is GeoJSON, but not always a Feature.** Pattern 1
+   * synthesises a bare `Point` *geometry*; patterns 2 and 3 hand back whatever
+   * the property holds, which for `bold:spatialDepiction` is typically a whole
+   * `Feature` but may equally be a `Geometry`, `FeatureCollection`, or
+   * `GeometryCollection`. Callers that need a Feature must check `type` and wrap
+   * a bare geometry themselves — see `ResourceGeoView`'s `isGeoJSONGeometry`
+   * branch. A multi-valued property yields its first value.
+   *
+   * @param {object} resource - The resource to get the depiction for
    * @param {object} [opts] - Options
    * @param {Map} [opts.ontologyCache] - Cache Map for ontology lookups
-   * @returns {Promise<object|null>} GeoJSON Feature, or null if no location found
+   * @returns {Promise<object|null>} A GeoJSON object — Feature, FeatureCollection,
+   *   Geometry, or GeometryCollection — or null if the resource has no spatial data
    */
-  async getGeoJSON(resource, opts = {}) {
+  async getSpatialDepiction(resource, opts = {}) {
     check(resource, Object);
     const cache = opts.ontologyCache;
 
@@ -159,6 +168,19 @@ export class GeoApi extends ApiNamespace {
 
     // No location found
     return null;
+  }
+
+  /**
+   * @deprecated Use {@link GeoApi#getSpatialDepiction}. Kept as a delegate so
+   *   downstream consumers keep working; scheduled for removal once they migrate.
+   *
+   * @param {object} resource - The resource to get the depiction for
+   * @param {object} [opts] - Options
+   * @param {Map} [opts.ontologyCache] - Cache Map for ontology lookups
+   * @returns {Promise<object|null>} See {@link GeoApi#getSpatialDepiction}
+   */
+  async getGeoJSON(resource, opts = {}) {
+    return this.getSpatialDepiction(resource, opts);
   }
 
   /**

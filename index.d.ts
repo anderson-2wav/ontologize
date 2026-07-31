@@ -96,6 +96,25 @@ export type GeoJSONGeometry = GeoJSONPoint | {
   geometries?: GeoJSONGeometry[];
 };
 
+/**
+ * GeoJSON Feature — a geometry plus arbitrary properties.
+ */
+export interface GeoJSONFeature {
+  type: "Feature";
+  geometry: GeoJSONGeometry;
+  properties?: Record<string, any> | null;
+}
+
+/**
+ * Any GeoJSON object `geo.getSpatialDepiction` may return. It is deliberately
+ * wider than `GeoJSONFeature`: what comes back depends on which property
+ * supplied the depiction, so callers must branch on `type` rather than assume.
+ */
+export type GeoJSONObject = GeoJSONGeometry | GeoJSONFeature | {
+  type: "FeatureCollection";
+  features: GeoJSONFeature[];
+};
+
 export type Resource = Record<string, any>;
 export type OntologyResource = Resource & {
   "@id": string;
@@ -146,7 +165,16 @@ export declare class SchemaApi {
 
 /** `ontologize.geo` — instance-bound geospatial helpers. */
 export declare class GeoApi {
-  getGeoJSON(resource: Resource, opts?: GetLocationOptions): Promise<GeoJSONGeometry | null>;
+  /**
+   * The resource's spatial depiction as GeoJSON. Not necessarily a Feature:
+   * `geo:lat`/`geo:long` synthesise a bare Point geometry, while a
+   * `bold:GeoJSON`-ranged property (e.g. `bold:spatialDepiction`) yields
+   * whatever it holds — commonly a Feature, but possibly a Geometry,
+   * FeatureCollection, or GeometryCollection.
+   */
+  getSpatialDepiction(resource: Resource, opts?: GetLocationOptions): Promise<GeoJSONObject | null>;
+  /** @deprecated Use `getSpatialDepiction`. */
+  getGeoJSON(resource: Resource, opts?: GetLocationOptions): Promise<GeoJSONObject | null>;
   getSunriseSunset(longLat: [number, number], date: Date | string | number | { "@value": string; "@type"?: string }, opts?: Record<string, any>): Promise<SunriseSunsetResponse>;
 }
 
@@ -220,8 +248,10 @@ export declare class Ontologize {
   getLabel(resource: Resource, property?: string, fallback?: string): Promise<string>;
   getLabel(resource: Resource, property?: string, opts?: GetLabelOptions): Promise<string>;
   getLabel(resource: Resource, property?: string, fallback?: string, opts?: GetLabelOptions): Promise<string>;
-  /** @deprecated Use `ontologize.geo.getGeoJSON`. */
-  getGeoJSON(resource: Resource, opts?: GetLocationOptions): Promise<GeoJSONGeometry | null>;
+  /** @deprecated Use `ontologize.geo.getSpatialDepiction`. */
+  getSpatialDepiction(resource: Resource, opts?: GetLocationOptions): Promise<GeoJSONObject | null>;
+  /** @deprecated Use `ontologize.geo.getSpatialDepiction`. */
+  getGeoJSON(resource: Resource, opts?: GetLocationOptions): Promise<GeoJSONObject | null>;
   /** @deprecated Use `ontologize.display.formatDate`. */
   formatDate(date: Date | string | number | { "@value": string; "@type"?: string } | null | undefined, opts?: FormatDateOptions): string;
   /** @deprecated Use `ontologize.display.formatDateTime`. */
