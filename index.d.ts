@@ -96,6 +96,65 @@ export type GeoJSONGeometry = GeoJSONPoint | {
   geometries?: GeoJSONGeometry[];
 };
 
+/**
+ * GeoJSON Feature — a geometry plus arbitrary properties.
+ */
+export interface GeoJSONFeature {
+  type: "Feature";
+  geometry: GeoJSONGeometry;
+  properties?: Record<string, any> | null;
+}
+
+/**
+ * Any GeoJSON object `geo.getSpatialDepiction` may return. Deliberately wider
+ * than `GeoJSONFeature`: what comes back depends on which property supplied the
+ * depiction, and a depiction is legitimately a Feature *or* a FeatureCollection
+ * (or a bare Geometry). Callers branch on `type` rather than assume.
+ */
+export type GeoJSONObject = GeoJSONGeometry | GeoJSONFeature | {
+  type: "FeatureCollection";
+  features: GeoJSONFeature[];
+};
+
+/** Reported on a merged Feature at `properties["bold:mergeDiagnostics"]`. */
+export interface MergeDiagnostics {
+  /** shapes handed to the union */
+  inputs: number;
+  /** inputs carrying no areal geometry, skipped rather than rejected */
+  skippedNonAreal: number;
+  outerRings: number;
+  holes: number;
+  /** interior rings discarded as slivers — non-zero means the inputs disagreed */
+  holesDropped: number;
+  /** exterior-ring winding emitted: "ccw" is RFC 7946, "cw" is d3-geo */
+  winding: "ccw" | "cw";
+  contiguous: boolean;
+  areaKm2: number;
+  vertices: number;
+  /** resources asked for (GeoApi#mergeShapes only) */
+  requested?: number;
+  /** resources that resolved to nothing (GeoApi#mergeShapes only) */
+  unresolved?: number;
+}
+
+export interface MergeShapesOptions {
+  /** properties for the resulting Feature */
+  properties?: Record<string, any>;
+  /** m²; interior rings below this are dropped as slivers. 0 keeps every ring. */
+  minHoleArea?: number;
+  /** picks a depiction for a resource carrying several */
+  select?: (depictions: GeoJSONObject[], resource: Resource) => GeoJSONObject | null;
+  /**
+   * Exterior-ring winding of the result: as the input was wound (default),
+   * RFC 7946 (`ccw`), or d3-geo (`cw`). The wrong convention makes d3 draw the
+   * complement of the region rather than nothing.
+   */
+  winding?: "match" | "ccw" | "cw";
+  /** attach `bold:mergeDiagnostics` (default true) */
+  diagnostics?: boolean;
+  ontologyCache?: Map<string, any>;
+}
+
 export type Resource = Record<string, any>;
 export type OntologyResource = Resource & {
   "@id": string;
@@ -146,7 +205,25 @@ export declare class SchemaApi {
 
 /** `ontologize.geo` — instance-bound geospatial helpers. */
 export declare class GeoApi {
-  getGeoJSON(resource: Resource, opts?: GetLocationOptions): Promise<GeoJSONGeometry | null>;
+  /**
+   * The resource's spatial depiction as a GeoJSON object — not specifically a
+   * Feature. `geo:lat`/`geo:long` synthesise a bare Point geometry, while a
+   * `bold:GeoJSON`-ranged property (e.g. `bold:spatialDepiction`) yields
+   * whatever it holds — commonly a Feature, but equally a Geometry,
+   * FeatureCollection, or GeometryCollection. Branch on `type`.
+   */
+  getSpatialDepiction(resource: Resource, opts?: GetLocationOptions): Promise<GeoJSONObject | null>;
+  /**
+   * Union several resources' depictions into one Feature. Diagnostics land on
+   * `properties["bold:mergeDiagnostics"]`; assert `holesDropped === 0 &&
+   * contiguous` when building a region.
+   */
+  mergeShapes(
+    resources: Array<string | Resource> | string | Resource,
+    opts?: MergeShapesOptions
+  ): Promise<GeoJSONFeature | null>;
+  /** @deprecated Use `getSpatialDepiction`. */
+  getGeoJSON(resource: Resource, opts?: GetLocationOptions): Promise<GeoJSONObject | null>;
   getSunriseSunset(longLat: [number, number], date: Date | string | number | { "@value": string; "@type"?: string }, opts?: Record<string, any>): Promise<SunriseSunsetResponse>;
 }
 
@@ -220,8 +297,10 @@ export declare class Ontologize {
   getLabel(resource: Resource, property?: string, fallback?: string): Promise<string>;
   getLabel(resource: Resource, property?: string, opts?: GetLabelOptions): Promise<string>;
   getLabel(resource: Resource, property?: string, fallback?: string, opts?: GetLabelOptions): Promise<string>;
-  /** @deprecated Use `ontologize.geo.getGeoJSON`. */
-  getGeoJSON(resource: Resource, opts?: GetLocationOptions): Promise<GeoJSONGeometry | null>;
+  /** @deprecated Use `ontologize.geo.getSpatialDepiction`. */
+  getSpatialDepiction(resource: Resource, opts?: GetLocationOptions): Promise<GeoJSONObject | null>;
+  /** @deprecated Use `ontologize.geo.getSpatialDepiction`. */
+  getGeoJSON(resource: Resource, opts?: GetLocationOptions): Promise<GeoJSONObject | null>;
   /** @deprecated Use `ontologize.display.formatDate`. */
   formatDate(date: Date | string | number | { "@value": string; "@type"?: string } | null | undefined, opts?: FormatDateOptions): string;
   /** @deprecated Use `ontologize.display.formatDateTime`. */

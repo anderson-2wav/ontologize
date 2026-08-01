@@ -22,7 +22,7 @@ methods, so the surface is discoverable and each area is documented and tested o
 |-----------|--------------|---------|
 | `ontologize.display.*` | client + server | Labels, descriptions, date formatting, info-component / label resolvers, individual colors and grouping |
 | `ontologize.schema.*` | client + server | TBox schema introspection (`getSchema`, `sortTypesFn`, `isArrayProperty`, `getGroupStrategies`) |
-| `ontologize.geo.*` | client + server | Instance-bound geospatial helpers (`getGeoJSON`, `getSunriseSunset`) |
+| `ontologize.geo.*` | client + server | Instance-bound geospatial helpers (`getSpatialDepiction`, `mergeShapes`, `getSunriseSunset`) |
 | `ontologize.explore.*` | client + server | Scan ontology structure + ABox collections (`explore.run()`) |
 | `ontologizeServer.io.*` | server | JSON-LD import/export and `bootstrap` |
 | `ontologizeServer.archive.*` | server | `mongodump` / `mongorestore` |
@@ -48,7 +48,7 @@ while you migrate. They will be removed in a later release. Move each call to it
 | `ontologize.getLabel(...)` | `ontologize.display.getLabel(...)` |
 | `ontologize.formatDate(...)` / `formatDateTime(...)` | `ontologize.display.formatDate(...)` |
 | `ontologize.getSchema(...)` | `ontologize.schema.getSchema(...)` |
-| `ontologize.getGeoJSON(...)` | `ontologize.geo.getGeoJSON(...)` |
+| `ontologize.getGeoJSON(...)` | `ontologize.geo.getSpatialDepiction(...)` |
 | `ontologize.explorer(...)` | `ontologize.explore.run(...)` |
 | `ontologizeServer.importData(...)` / `importFromFile(...)` / `bootstrap(...)` | `ontologizeServer.io.importData(...)` etc. |
 | `ontologizeServer.reasonCollection(...)` / `bootstrapReasoner(...)` | `ontologizeServer.reasoner.reasonCollection(...)` etc. |
@@ -510,7 +510,7 @@ const ontologize: Ontologize = new Ontologize(
 - **`OntologyResource`** - Resource with required `@id` and `@type`
 - **`MongoCollection`** - MongoDB collection interface
 - **`GetLabelOptions`** - Options for `getLabel()` method
-- **`GetLocationOptions`** - Options for `getGeoJSON()` method
+- **`GetLocationOptions`** - Options for `getSpatialDepiction()` method
 - **`FormatDateOptions`** - Options for `formatDate()` and `formatDateTime()`
 - **`SunriseSunsetResponse`** - Return type for `getSunriseSunset()`
 - **`GeoJSONPoint`**, **`GeoJSONGeometry`** - GeoJSON location types
