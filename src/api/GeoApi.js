@@ -10,6 +10,7 @@ import { check } from "../lib/check.js";
 import { getSunriseSunsetInfo } from "sunrise-sunset-api";
 import { ApiNamespace } from "./ApiNamespace.js";
 import { mergeShapes } from "../geo/merge.js";
+import { getSpatialRange } from "../geo/range.js";
 
 /**
  * `ontologize.geo` — instance-bound geospatial helpers: derive a resource's
@@ -247,6 +248,79 @@ export class GeoApi extends ApiNamespace {
       merged.properties["bold:mergeDiagnostics"].unresolved = unresolved;
     }
     return merged;
+  }
+
+  /**
+   * The hull enclosing several resources' spatial data — an animal's home range
+   * from its tracking reports, suitable for storing as `bold:spatialRange`.
+   *
+   * Where `mergeShapes` unions areas, this reads *positions*: a mix of points,
+   * lines and polygons is ordinary input, and every vertex counts the same.
+   * Resources contributing no position are counted as `unresolved` rather than
+   * rejected, so one bad id shrinks the range visibly instead of silently.
+   *
+   * `hullType: "concave"` uses the same alpha-shape rule as
+   * `imports/lib/hullUtils.js`, so a stored range agrees with the hull
+   * `RangeExtentPlugin` draws live for the same points.
+   *
+   * Like `getSpatialDepiction`, this needs the ontology loaded: a depiction is
+   * only recognised once its property's `rdfs:range` is known to be
+   * `bold:GeoJSON` / `bold:GeoPoint`. Against an empty Ontology collection every
+   * resource resolves to nothing and the result is null.
+   *
+   * @param {Array<string|object>|string|object} resources - resource ids or
+   *   resources, or a single one of either
+   * @param {object} [opts]
+   * @param {object} [opts.properties] - properties for the resulting Feature
+   * @param {"convex"|"concave"} [opts.hullType="convex"] - boundary shape
+   * @param {number} [opts.alpha=0.5] - concavity, 0…1; `concave` only
+   * @param {"cw"|"ccw"} [opts.winding="cw"] - exterior-ring winding; defaults to
+   *   the d3-geo / `2dsphere` convention the rest of BOLD uses
+   * @param {function} [opts.select] - `(depictions, resource) => depiction`,
+   *   for resources carrying more than one depiction
+   * @param {boolean} [opts.diagnostics=true] - attach `bold:rangeDiagnostics`
+   * @param {Map} [opts.ontologyCache] - cache Map for ontology lookups
+   * @returns {Promise<object|null>} a GeoJSON Feature, or null if fewer than 3
+   *   distinct positions could be resolved
+   */
+  async getSpatialRange(resources, opts = {}) {
+    const list = Array.isArray(resources) ? resources : (resources ? [resources] : []);
+    const shapes = [];
+    let unresolved = 0;
+
+    for (const entry of list) {
+      let resource = entry;
+      if (typeof entry === "string") {
+        const found = await this.ontologize.getResourceForId(entry);
+        resource = found?.resource ?? null;
+      }
+      if (!resource) {
+        unresolved++;
+        continue;
+      }
+
+      let shape;
+      if (opts.select) {
+        // An LD proxy collapses a multi-valued property to its first value, so
+        // reach through __raw to offer the selector every depiction.
+        const raw = resource.__raw?.["bold:spatialDepiction"] ?? resource["bold:spatialDepiction"];
+        const depictions = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+        shape = opts.select(depictions, resource);
+      }
+      else {
+        shape = await this.getSpatialDepiction(resource, opts);
+      }
+
+      if (shape) shapes.push(shape);
+      else unresolved++;
+    }
+
+    const range = getSpatialRange(shapes, opts);
+    if (range && opts.diagnostics !== false) {
+      range.properties["bold:rangeDiagnostics"].requested = list.length;
+      range.properties["bold:rangeDiagnostics"].unresolved = unresolved;
+    }
+    return range;
   }
 
   /**

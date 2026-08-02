@@ -67,6 +67,7 @@
     "h3-js": "^4.1.0",
     "lodash": "^4.17.21",
     "ngeohash": "^0.6.3",
+    "d3-delaunay": "^6.0.4",
     "polygon-clipping": "^0.15.7",
     "sunrise-sunset-api": "^0.2.1"
   },
