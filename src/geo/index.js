@@ -15,3 +15,4 @@
 export * from "./geohash.js";
 export * from "./h3.js";
 export * from "./merge.js";
+export * from "./range.js";

@@ -155,6 +155,47 @@ export interface MergeShapesOptions {
   ontologyCache?: Map<string, any>;
 }
 
+/** Reported on a range Feature at `properties["bold:rangeDiagnostics"]`. */
+export interface RangeDiagnostics {
+  /** shapes handed to the hull */
+  inputs: number;
+  /** positions extracted from them, duplicates included */
+  positions: number;
+  /** what the hull actually saw — duplicates are the norm in tracking data */
+  distinctPositions: number;
+  hullType: "convex" | "concave";
+  /** concavity used, or null for a convex hull */
+  alpha: number | null;
+  /** exterior-ring winding emitted: "ccw" is RFC 7946, "cw" is d3-geo */
+  winding: "ccw" | "cw";
+  vertices: number;
+  areaKm2: number;
+  /** resources asked for (GeoApi#getSpatialRange only) */
+  requested?: number;
+  /** resources that resolved to nothing (GeoApi#getSpatialRange only) */
+  unresolved?: number;
+}
+
+export interface GetSpatialRangeOptions {
+  /** properties for the resulting Feature */
+  properties?: Record<string, any>;
+  /** boundary shape; `concave` is an alpha shape (default "convex") */
+  hullType?: "convex" | "concave";
+  /** concavity 0…1, `concave` only (default 0.5) */
+  alpha?: number;
+  /**
+   * Exterior-ring winding of the result (default `cw`, the d3-geo and
+   * `2dsphere` convention). No `"match"`: a hull built from positions has no
+   * input winding to match.
+   */
+  winding?: "ccw" | "cw";
+  /** picks a depiction for a resource carrying several */
+  select?: (depictions: GeoJSONObject[], resource: Resource) => GeoJSONObject | null;
+  /** attach `bold:rangeDiagnostics` (default true) */
+  diagnostics?: boolean;
+  ontologyCache?: Map<string, any>;
+}
+
 export type Resource = Record<string, any>;
 export type OntologyResource = Resource & {
   "@id": string;
@@ -221,6 +262,15 @@ export declare class GeoApi {
   mergeShapes(
     resources: Array<string | Resource> | string | Resource,
     opts?: MergeShapesOptions
+  ): Promise<GeoJSONFeature | null>;
+  /**
+   * The hull enclosing several resources' spatial data — a home range from
+   * tracking reports. Reads positions, not areas, so points, lines and polygons
+   * mix freely. Diagnostics land on `properties["bold:rangeDiagnostics"]`.
+   */
+  getSpatialRange(
+    resources: Array<string | Resource> | string | Resource,
+    opts?: GetSpatialRangeOptions
   ): Promise<GeoJSONFeature | null>;
   /** @deprecated Use `getSpatialDepiction`. */
   getGeoJSON(resource: Resource, opts?: GetLocationOptions): Promise<GeoJSONObject | null>;
