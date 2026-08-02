@@ -92,6 +92,14 @@ export function createRunState({ now = () => Date.now() } = {}) {
       const scopes = prev ? prev.scopes.slice() : [];
       if (!scopes.includes(run.scope ?? null)) scopes.push(run.scope ?? null);
 
+      // Stage timings accumulate key-wise for the same reason the scalars do:
+      // the cycle's profile is the sum of its passes, not the last one's.
+      // Union of keys, so a pass that skipped a stage does not drop it.
+      const stageMs = { ...(prev ? prev.stageMs : null) };
+      for (const [stage, ms] of Object.entries(run.stageMs || {})) {
+        stageMs[stage] = (stageMs[stage] || 0) + (ms || 0);
+      }
+
       lastRun = {
         passes: (prev ? prev.passes : 0) + 1,
         scopes,
@@ -99,6 +107,7 @@ export function createRunState({ now = () => Date.now() } = {}) {
         statements: (prev ? prev.statements : 0) + (run.statements || 0),
         facts: (prev ? prev.facts : 0) + (run.facts || 0),
         durationMs: (prev ? prev.durationMs : 0) + (run.durationMs || 0),
+        stageMs,
         finishedAt: new Date(now()).toISOString(),
         error: null,
       };

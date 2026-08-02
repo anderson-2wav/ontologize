@@ -81,6 +81,97 @@ describe("Collection Adapters", function () {
     });
   });
 
+  describe("MeteorCollectionAdapter.bulkWrite", function () {
+    it("passes operations straight through when the collection has bulkWrite", async function () {
+      let seen = null;
+      let seenOpts = null;
+      const raw = {
+        bulkWrite: async (ops, opts) => {
+          seen = ops;
+          seenOpts = opts;
+          return { modifiedCount: 2, insertedCount: 1 };
+        }
+      };
+      const adapter = new MeteorCollectionAdapter(raw, "Raw");
+
+      const ops = [
+        { replaceOne: { filter: { _id: "a" }, replacement: { _id: "a", v: 1 }, upsert: false } },
+        { insertOne: { document: { _id: "b" } } }
+      ];
+      const result = await adapter.bulkWrite(ops, { ordered: false });
+
+      assert.strictEqual(seen, ops, "operations should not be rewritten");
+      assert.deepEqual(seenOpts, { ordered: false });
+      assert.equal(result.modifiedCount, 2);
+      assert.equal(result.insertedCount, 1);
+    });
+
+    it("emulates replaceOne and insertOne when the collection has no bulkWrite", async function () {
+      // The reasoner's merge path emits exactly these two ops; a Meteor
+      // collection (as opposed to rawCollection()) has to replay them.
+      const calls = [];
+      const meteorCollection = {
+        replaceOne: async (query, replacement, options) => {
+          calls.push({ op: "replaceOne", query, replacement, options });
+          return { modifiedCount: 1, matchedCount: 1, upsertedCount: 0 };
+        },
+        insertOne: async (doc) => {
+          calls.push({ op: "insertOne", doc });
+          return { insertedId: doc._id };
+        }
+      };
+      const adapter = new MeteorCollectionAdapter(meteorCollection, "Emulated");
+
+      const result = await adapter.bulkWrite([
+        { replaceOne: { filter: { _id: "a" }, replacement: { _id: "a", v: 1 }, upsert: false } },
+        { replaceOne: { filter: { _id: "b" }, replacement: { _id: "b", v: 2 }, upsert: false } },
+        { insertOne: { document: { _id: "c", v: 3 } } }
+      ]);
+
+      assert.equal(calls.length, 3);
+      assert.deepEqual(calls[0].query, { _id: "a" });
+      assert.deepEqual(calls[0].replacement, { _id: "a", v: 1 });
+      assert.deepEqual(calls[0].options, { upsert: false });
+      assert.equal(calls[2].op, "insertOne");
+      assert.deepEqual(calls[2].doc, { _id: "c", v: 3 });
+
+      assert.equal(result.modifiedCount, 2);
+      assert.equal(result.matchedCount, 2);
+      assert.equal(result.insertedCount, 1);
+    });
+
+    it("emulates updateOne when the collection has no bulkWrite", async function () {
+      const calls = [];
+      const meteorCollection = {
+        updateOne: async (filter, update, options) => {
+          calls.push({ filter, update, options });
+          return { modifiedCount: 0, matchedCount: 0, upsertedCount: 1 };
+        }
+      };
+      const adapter = new MeteorCollectionAdapter(meteorCollection, "Emulated");
+
+      const result = await adapter.bulkWrite([
+        { updateOne: { filter: { _id: "a" }, update: { $set: { v: 1 } }, upsert: true } }
+      ]);
+
+      assert.equal(calls.length, 1);
+      assert.deepEqual(calls[0].options, { upsert: true });
+      assert.equal(result.upsertedCount, 1);
+    });
+
+    it("throws rather than silently skipping an unsupported operation", async function () {
+      const adapter = new MeteorCollectionAdapter({ replaceOne: async () => ({}) }, "Emulated");
+
+      try {
+        await adapter.bulkWrite([{ deleteOne: { filter: { _id: "a" } } }]);
+        assert.fail("Should have thrown an error");
+      }
+      catch (error) {
+        assert.include(error.message, "unsupported operation deleteOne");
+      }
+    });
+  });
+
   describe("MeteorCollectionAdapter Interface", function () {
     it("should provide consistent async interface for client-side usage", async function () {
       // Setup Meteor collection simulation

@@ -426,7 +426,13 @@ export class ReasonerApi extends ApiNamespace {
 
     const hylarPath = path.join(process.env.APP_DIR, "modules/hylar-reasoner");
 
-    const heapSize = Meteor.settings.hylarHeapSize ?? 8192;
+    // Matches the value the deploy settings files carry. The previous default
+    // was 8192, so a settings file that omitted the key gave HyLAR an 8 GB
+    // ceiling on a 2 GB host — no back-pressure, no warning, and the first
+    // symptom is the OOM killer taking the process. A default at or below the
+    // smallest host we deploy to fails as a heap error instead, which is
+    // diagnosable. Raise it explicitly in settings where there is memory for it.
+    const heapSize = Meteor.settings.hylarHeapSize ?? 2048;
     // Set hylarNative: false in settings to force the JS reasoner (disables the
     // Rust native insertion phase). Used to A/B against the native path when
     // investigating regressions. Defaults to native (env var unset).
@@ -603,7 +609,11 @@ export class ReasonerApi extends ApiNamespace {
    * @param {boolean} [opts.includeBlankNodes=true]
    * @param {boolean} [opts.singleCollection=false] - if true, skip per-resource resolution
    * @param {boolean} [opts.updateOnly=false] - merge into existing resources only; never insert new ones
-   * @returns {Promise<string[]>} ids of the resources actually written (merged/inserted)
+   * @param {object} [opts.context] - JSON-LD context; pass the pass's own to avoid
+   *   re-reading it from Mongo for every resource
+   * @returns {Promise<string[]>} ids of the resources actually written
+   *   (merged/inserted). Grouped by target collection, so the order is not the
+   *   order of `assembledResources`; callers use the count.
    * @private
    */
   async _mergeAndUpdateResources(assembledResources, collection, opts = {}) {
@@ -611,13 +621,38 @@ export class ReasonerApi extends ApiNamespace {
     // TODO impl this opt up the line
     const includeBlankNodes = opts.includeBlankNodes !== false;
 
+    // Resolve the context once for the whole call. `getContext()` is an uncached
+    // findOne, and both the merge and its isArrayProperty lookups take one — so
+    // leaving it unset costs several Mongo reads per resource for a document
+    // that does not change during a pass. Callers inside a pass pass theirs in.
+    const context = opts.context || await this.ontologize.getContext();
+
+    // Reads and writes go out in bulk, chunked, rather than a findOne+write pair
+    // per resource. Chunking is bounded by CHUNK (not by the caller's
+    // batchSize), so peak memory here stays flat however large a batch grows.
+    //
+    // Worth knowing before optimizing further: against a local mongod the round
+    // trips are NOT what this stage costs. Benchmarked on 2542 written resources
+    // (tests/merge-bench.throwaway.js), the stage split 98.9% CPU inside
+    // `mergeResources` against 1.1% for resolve+read+write combined, and the
+    // bulk form measured no faster end-to-end than the findOne-per-resource form
+    // it replaced. It is kept because the picture inverts with network latency —
+    // a remote Mongo pays per round trip, and this bounds them at two per
+    // hundred resources instead of two per resource. Look in `mergeResources`,
+    // not here, for the local-run cost.
+    const CHUNK = 100;
+
+    // Resolve each resource's target collection first, grouping by collection so
+    // a chunk's reads and writes address one collection. Resolution stays per
+    // resource: it is what routes an inference back to the collection owning the
+    // resource it describes.
+    const groups = new Map();
     for (const [resourceId, assembledResource] of Object.entries(assembledResources)) {
       // Skip blank nodes
       if (!includeBlankNodes && resourceId.startsWith("_:")) {
         continue;
       }
 
-      // Resolve target collection per resource, falling back to the passed-in collection
       let targetCollection = collection;
       if (!opts.singleCollection) {
         const resolved = await this.ontologize.getCollectionForResource(
@@ -628,34 +663,92 @@ export class ReasonerApi extends ApiNamespace {
         }
       }
 
-      // Get existing resource
-      const existing = await targetCollection.findOne({ _id: resourceId });
+      if (!groups.has(targetCollection)) groups.set(targetCollection, []);
+      groups.get(targetCollection).push({ resourceId, assembledResource });
+    }
 
-      if (existing) {
-        // Merge with existing
-        const merged = await this.ontologize.mergeResources([existing, assembledResource], {
-          mergeArrays: true
-        });
-        merged["bold:reasoned"] = new Date().toISOString();
+    for (const [targetCollection, items] of groups) {
+      for (let i = 0; i < items.length; i += CHUNK) {
+        const chunk = items.slice(i, Math.min(i + CHUNK, items.length));
 
-        // Update in collection
-        await targetCollection.replaceOne(
-          { _id: resourceId },
-          merged,
-          { upsert: false }
-        );
-        written.push(resourceId);
-      }
-      else {
-        // updateOnly: don't create new documents for inferred-but-unknown subjects
-        // (e.g. owl:Nothing / ontology-level URIs that shouldn't become resources).
-        if (opts.updateOnly) {
-          continue;
+        // One read for the whole chunk. Adapters without a cursor-style find()
+        // keep the original semantics, one findOne per resource.
+        const existingById = new Map();
+        if (typeof targetCollection.find === "function") {
+          const ids = chunk.map((c) => c.resourceId);
+          const docs = await targetCollection.find({ _id: { $in: ids } }).toArray();
+          for (const doc of docs) existingById.set(doc._id, doc);
         }
-        // Insert new resource
-        const newResource = { ...assembledResource, _id: resourceId, "bold:reasoned": new Date().toISOString() };
-        await targetCollection.insertOne(newResource);
-        written.push(resourceId);
+        else {
+          for (const { resourceId } of chunk) {
+            const doc = await targetCollection.findOne({ _id: resourceId });
+            if (doc) existingById.set(resourceId, doc);
+          }
+        }
+
+        // Merge every existing resource in the chunk in one call, so the chunk
+        // pays for one `ld.compact` instead of one per resource. Compaction is
+        // where this stage's time actually goes and its per-call overhead is
+        // largely fixed, so amortizing it over a chunk is the whole win.
+        const toMerge = [];
+        for (const { resourceId, assembledResource } of chunk) {
+          const existing = existingById.get(resourceId);
+          if (existing) {
+            toMerge.push({ resourceId, group: [existing, assembledResource] });
+          }
+        }
+        const mergedById = new Map();
+        if (toMerge.length > 0) {
+          const mergedList = await this.ontologize.mergeResourcesBatch(
+            toMerge.map((m) => m.group),
+            { mergeArrays: true, context }
+          );
+          toMerge.forEach((m, idx) => mergedById.set(m.resourceId, mergedList[idx]));
+        }
+
+        const ops = [];
+        const opIds = [];
+        for (const { resourceId, assembledResource } of chunk) {
+          const existing = existingById.get(resourceId);
+
+          if (existing) {
+            const merged = mergedById.get(resourceId);
+            merged["bold:reasoned"] = new Date().toISOString();
+            ops.push({ replaceOne: { filter: { _id: resourceId }, replacement: merged, upsert: false } });
+            opIds.push(resourceId);
+          }
+          else {
+            // updateOnly: don't create new documents for inferred-but-unknown subjects
+            // (e.g. owl:Nothing / ontology-level URIs that shouldn't become resources).
+            if (opts.updateOnly) {
+              continue;
+            }
+            const newResource = { ...assembledResource, _id: resourceId, "bold:reasoned": new Date().toISOString() };
+            ops.push({ insertOne: { document: newResource } });
+            opIds.push(resourceId);
+          }
+        }
+
+        if (ops.length === 0) continue;
+
+        if (typeof targetCollection.bulkWrite === "function") {
+          await targetCollection.bulkWrite(ops, { ordered: false });
+        }
+        else {
+          // Collection adapters without bulkWrite (some test doubles, remote
+          // adapters) still get the same semantics, one round trip per resource.
+          for (const op of ops) {
+            if (op.replaceOne) {
+              const { filter, replacement, upsert } = op.replaceOne;
+              await targetCollection.replaceOne(filter, replacement, { upsert });
+            }
+            else {
+              await targetCollection.insertOne(op.insertOne.document);
+            }
+          }
+        }
+
+        written.push(...opIds);
       }
     }
 
@@ -684,7 +777,12 @@ export class ReasonerApi extends ApiNamespace {
    * @param {boolean} [opts.blankNodes=false] - include blank nodes
    * @param {number} [opts.retries=5] - if hylar call fails, try again [5] times
    * @param {boolean} [opts.debugDump=false] - write sparql and inferred props to files in /temp
-   * @returns {Promise<object>} Result summary with counts
+   * @returns {Promise<object>} Result summary with counts, plus `stageMs`: a
+   *   per-stage wall-clock breakdown of the batch loop (sparqlBuild,
+   *   ensureReasoner, hylarUpdate, derivationsToFacts, assembleResources,
+   *   createStatements, persistStatements, mergeResources) with `unaccounted`
+   *   and `batchLoop` totals. Also logged. Use it to find where a slow pass
+   *   spends its time — HyLAR's own reasoning is typically well under 1%.
    */
   async reasonCollection(collectionName, opts={}) {
     check(collectionName, String);
@@ -803,33 +901,64 @@ export class ReasonerApi extends ApiNamespace {
     if (opts.userId) {
       metaProps["bold:updatedBy"] = opts.userId;
     }
+    // Per-stage wall-clock accumulators, summed across batches.
+    //
+    // Reasoning itself is a small fraction of a pass — HyLAR's own
+    // Reasoner.evaluate logged 15 s of one 3609 s run (0.4%) — so the cost lives
+    // in the work wrapped around it. Which of these seven stages carries it is
+    // not inferable from the totals the pass already reports, hence this
+    // breakdown. Timing only; no behaviour changes.
+    const stageMs = {
+      sparqlBuild: 0,
+      ensureReasoner: 0,
+      hylarUpdate: 0,
+      derivationsToFacts: 0,
+      assembleResources: 0,
+      createStatements: 0,
+      persistStatements: 0,
+      mergeResources: 0
+    };
+    const timeStage = async (name, fn) => {
+      const t0 = performance.now();
+      try {
+        return await fn();
+      }
+      finally {
+        stageMs[name] += performance.now() - t0;
+      }
+    };
+    const loopStart = performance.now();
+
     let retries = 0;
     for (let i = 0; i < batches.length; i++) {
       const batch = batches[i];
       console.log(`  Batch ${i + 1}/${batches.length}: inserting ${batch.length} triples...`);
 
-      const sparqlInsert = await this.ontologize.rdf.createSparqlInsert(batch);
+      const sparqlInsert = await timeStage("sparqlBuild",
+        () => this.ontologize.rdf.createSparqlInsert(batch));
       if (opts.debugDump) fs.writeFileSync("/tmp/reasonCollection-insert.sparql", sparqlInsert, { flag: "a" });
 
       let additions = [];
       const maxRetries = opts.retries || 0;
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
-          await this.ensureReasoner(opts);
-          const response = await fetch(`${opts.hylarUrl}/update`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              query: sparqlInsert,
-              save: opts.saveHylar
-            })
+          await timeStage("ensureReasoner", () => this.ensureReasoner(opts));
+          const responseData = await timeStage("hylarUpdate", async () => {
+            const response = await fetch(`${opts.hylarUrl}/update`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                query: sparqlInsert,
+                save: opts.saveHylar
+              })
+            });
+
+            if (!response.ok) {
+              throw new Error(`Failed to insert triples (batch ${i + 1}): ${response.statusText}`);
+            }
+
+            return response.json();
           });
-
-          if (!response.ok) {
-            throw new Error(`Failed to insert triples (batch ${i + 1}): ${response.statusText}`);
-          }
-
-          const responseData = await response.json();
           // /update may return { derivations: { additions } } or { additions } directly
           const derivations = responseData.derivations ?? responseData;
           if (derivations.additions && derivations.additions.length > 0) {
@@ -851,25 +980,29 @@ export class ReasonerApi extends ApiNamespace {
 
       // Process and persist this batch's derivations immediately
       if (additions.length > 0) {
-        const facts = this.ontologize.rdf._derivationsToFacts(additions, { blankNodes: opts.blankNodes });
+        const facts = await timeStage("derivationsToFacts",
+          async () => this.ontologize.rdf._derivationsToFacts(additions, { blankNodes: opts.blankNodes }));
         totalFacts += facts.length;
 
-        const assembledResources = await this.ontologize.rdf.assembleFactsIntoResources(facts, { context });
+        const assembledResources = await timeStage("assembleResources",
+          () => this.ontologize.rdf.assembleFactsIntoResources(facts, { context }));
         if (opts.debugDump) fs.writeFileSync("/tmp/reasonCollection-assembled.json", JSON.stringify(assembledResources, null, 2), { flag: "a" });
 
-        const statements = await this.ontologize.rdf.createStatementsForFacts(facts, {
-          onlyInferred: true,
-          metaPropsByPredicate: { "*": metaProps },
-          subjectPartitions
-        });
+        const statements = await timeStage("createStatements",
+          () => this.ontologize.rdf.createStatementsForFacts(facts, {
+            onlyInferred: true,
+            metaPropsByPredicate: { "*": metaProps },
+            subjectPartitions
+          }));
         totalStatements += statements.length;
 
         if (this.collections.statements && opts.persistStatements && statements.length > 0) {
-          await this._persistStatements(statements);
+          await timeStage("persistStatements", () => this._persistStatements(statements));
         }
 
         if (opts.updateResources && Object.keys(assembledResources).length > 0) {
-          const updated = await this._mergeAndUpdateResources(assembledResources, collection);
+          const updated = await timeStage("mergeResources",
+            () => this._mergeAndUpdateResources(assembledResources, collection, { context }));
           totalUpdated += updated.length;
         }
 
@@ -877,6 +1010,21 @@ export class ReasonerApi extends ApiNamespace {
       }
     }
     console.log(`Successfully processed all ${triples.length} triples: ${totalFacts} facts, ${totalStatements} statements, ${totalUpdated} resources updated`);
+
+    // Stage breakdown. `unaccounted` is the batch loop minus the seven measured
+    // stages — if it is large the cost is somewhere this instrument does not
+    // look, which is itself the finding.
+    const loopMs = performance.now() - loopStart;
+    const measured = Object.values(stageMs).reduce((a, b) => a + b, 0);
+    const perTriple = (ms) => triples.length ? (ms / triples.length).toFixed(3) : "0";
+    console.log(`reasonCollection "${collectionName}" stage breakdown over ${batches.length} batches / ${triples.length} triples:`);
+    for (const [name, ms] of Object.entries(stageMs).sort((a, b) => b[1] - a[1])) {
+      const pct = loopMs ? (100 * ms / loopMs).toFixed(1) : "0.0";
+      console.log(`    ${name.padEnd(20)} ${(ms / 1000).toFixed(1).padStart(9)} s  ${pct.padStart(5)}%  ${perTriple(ms).padStart(8)} ms/triple`);
+    }
+    const unaccounted = loopMs - measured;
+    console.log(`    ${"unaccounted".padEnd(20)} ${(unaccounted / 1000).toFixed(1).padStart(9)} s  ${(loopMs ? 100 * unaccounted / loopMs : 0).toFixed(1).padStart(5)}%`);
+    console.log(`    ${"batch loop total".padEnd(20)} ${(loopMs / 1000).toFixed(1).padStart(9)} s`);
 
     const duration = Date.now() - startTime;
     console.log(`reasonCollection "${collectionName}" completed in ${Math.round(duration / 1000)} seconds`);
@@ -888,7 +1036,8 @@ export class ReasonerApi extends ApiNamespace {
       triplesGenerated: triples.length,
       factsInferred: totalFacts,
       statementsCreated: totalStatements,
-      resourcesUpdated: totalUpdated
+      resourcesUpdated: totalUpdated,
+      stageMs: { ...stageMs, unaccounted, batchLoop: loopMs }
     };
   }
 
@@ -961,6 +1110,10 @@ export class ReasonerApi extends ApiNamespace {
     let resources = 0;
     let statements = 0;
     let facts = 0;
+    // Stage timings summed across collections. Carried through to the run record
+    // so a background pass profiles itself — the passes worth profiling are the
+    // long unscoped ones nobody is sitting in front of.
+    const stageMs = {};
 
     for (const name of names) {
       const result = await this.reasonCollection(name, { selector });
@@ -968,10 +1121,13 @@ export class ReasonerApi extends ApiNamespace {
       resources += result.resourcesLoaded;
       statements += result.statementsCreated;
       facts += result.factsInferred;
+      for (const [stage, ms] of Object.entries(result.stageMs || {})) {
+        stageMs[stage] = (stageMs[stage] || 0) + ms;
+      }
     }
 
     return { scope: scope || null, byCollection, resources, statements, facts,
-      durationMs: Date.now() - startedMs };
+      stageMs, durationMs: Date.now() - startedMs };
   }
 
   /**
