@@ -256,6 +256,8 @@ export interface MongoCollection {
   insertOne(document: any): Promise<any>;
   find(filter: Record<string, any>, options?: any): { toArray(): Promise<any[]> };
   findOne(filter: Record<string, any>): Promise<any | null>;
+  /** Execute a batch of write operations (e.g. `updateOne` entries), as used by `geo.updateSpatialRange`. */
+  bulkWrite(operations: Array<Record<string, any>>, options?: Record<string, any>): Promise<{ matchedCount: number; modifiedCount: number; upsertedCount: number }>;
 }
 
 /**
@@ -431,6 +433,8 @@ export interface QuerySpec {
   selector?: Record<string, any>;
   /** Query options (sort, limit, projection, etc.) */
   opts?: Record<string, any>;
+  /** Result count, when the query carries one (e.g. from ExploreApi) */
+  count?: number;
 }
 
 /**

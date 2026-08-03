@@ -385,6 +385,7 @@ describe("GeoApi#updateSpatialRange", function () {
 
     assert.isBelow(concave.ranges[0].areaKm2, convex.ranges[0].areaKm2);
     assert.equal(setsFrom(demo)["demo:animal-MA04"].properties["bold:rangeDiagnostics"].hullType, "concave");
+    assert.equal(setsFrom(demo)["demo:animal-MA04"].properties["bold:rangeDiagnostics"].alpha, 1);
   });
 
   it("forwards winding", async function () {
@@ -435,7 +436,7 @@ describe("GeoApi#updateSpatialRange", function () {
     // Two boxes of 5 ring positions each; the repeated closing corner dedupes.
     assert.equal(result.ranges[0].positions, 10);
     assert.equal(result.ranges[0].distinctPositions, 8);
-    assert.isAbove(ontologyCache.size, 0);
+    assert.isTrue(ontologyCache.has("bold:spatialDepiction"));
   });
 
   it("chunks writes past 500 individuals", async function () {
@@ -460,5 +461,56 @@ describe("GeoApi#updateSpatialRange", function () {
     assert.equal(result.updated, 501);
     assert.equal(bulkCalls, 2);
     assert.lengthOf(demo.writes, 501);
+  });
+
+  it("validates hullType up front, even when no individual matches", async function () {
+    // Empty individuals: nothing would ever reach getSpatialRange to validate
+    // it there, so the only thing that can catch a typo is the check at the
+    // top of updateSpatialRange itself.
+    await initialize({ animals: [], reports: [] });
+
+    try {
+      await ontologize.geo.updateSpatialRange({
+        individuals: INDIVIDUALS, geoData: GEO, hullType: "hexagon"
+      });
+      assert.fail("expected updateSpatialRange to throw");
+    }
+    catch (e) {
+      assert.match(e.message, /unknown hullType "hexagon"/);
+    }
+  });
+
+  it("validates winding up front, even when no individual matches", async function () {
+    await initialize({ animals: [], reports: [] });
+
+    try {
+      await ontologize.geo.updateSpatialRange({
+        individuals: INDIVIDUALS, geoData: GEO, winding: "sideways"
+      });
+      assert.fail("expected updateSpatialRange to throw");
+    }
+    catch (e) {
+      assert.match(e.message, /unknown winding "sideways"/);
+    }
+  });
+
+  it("counts a group value naming no individual even when the doc has no position", async function () {
+    // A typo'd group value AND no resolvable coordinates on the same doc —
+    // the case that made unmatched invisible before the group keys were read
+    // ahead of the depiction bail.
+    await initialize({
+      animals: [animal("demo:animal-MA04")],
+      reports: [
+        { _id: "demo:r-orphan-blank", "@type": ["bold:TrackingReport"], "bold:animal": "demo:animal-GONE" }
+      ]
+    });
+
+    const result = await ontologize.geo.updateSpatialRange({
+      individuals: INDIVIDUALS, geoData: GEO
+    });
+
+    assert.equal(result.unmatched, 1);
+    assert.equal(result.geoUnresolved, 1);
+    assert.equal(result.updated, 0);
   });
 });

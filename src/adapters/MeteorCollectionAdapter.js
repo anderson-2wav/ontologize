@@ -171,6 +171,12 @@ export class MeteorCollectionAdapter extends CollectionAdapter {
    * Meteor resolves to a *count* rather than a result object, so the driver's
    * shape is reconstructed for callers that read `modifiedCount`.
    *
+   * On the `updateAsync` fallback path, that count is *documents affected*,
+   * not documents changed: `modifiedCount` is set equal to `matchedCount` and
+   * will read 1 for a no-op `$set` where the driver's own `updateOne` would
+   * report 0. A caller summing `modifiedCount` across calls as "documents
+   * changed" over this path over-counts.
+   *
    * @param {object} query - MongoDB-style query object
    * @param {object} update - Update operations (e.g., { $set: { field: value } })
    * @param {object} [options] - Update options (e.g., { upsert: true })

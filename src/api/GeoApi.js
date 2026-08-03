@@ -10,7 +10,7 @@ import { check } from "../lib/check.js";
 import { getSunriseSunsetInfo } from "sunrise-sunset-api";
 import { ApiNamespace } from "./ApiNamespace.js";
 import { mergeShapes } from "../geo/merge.js";
-import { getSpatialRange, positionsOf } from "../geo/range.js";
+import { getSpatialRange, positionsOf, HULL_TYPES } from "../geo/range.js";
 import { Query } from "../Query.js";
 
 /**
@@ -393,6 +393,10 @@ export class GeoApi extends ApiNamespace {
    *
    * See `.private/specs/ontologize/ontologize-geo-spec.md` § "Storing ranges".
    *
+   * Writes go out in chunks of `WRITE_CHUNK` operations. A `bulkWrite` failure
+   * partway through therefore throws *after* earlier chunks have already been
+   * written — a throw here means partially written, not nothing written.
+   *
    * @param {object} opts
    * @param {object|Query} opts.individuals - Query for the resources written onto
    * @param {object|Query} opts.geoData - Query for the resources hulled
@@ -407,10 +411,30 @@ export class GeoApi extends ApiNamespace {
    * @param {boolean} [opts.dryRun=false] - compute everything, write nothing
    * @param {Map} [opts.ontologyCache] - shared across the whole run
    * @returns {Promise<object>} counts, `ranges`, and `skippedReasons`
-   * @throws {Error} if either query names an unregistered collection
+   * @throws {Error} if either query names an unregistered collection, or if
+   *   `hullType` or `winding` is not recognised — checked up front, before any
+   *   collection is read, so a typo fails fast even when nothing would have
+   *   matched
    */
   async updateSpatialRange(opts = {}) {
     const t0 = Date.now();
+    const hullType = opts.hullType ?? "convex";
+    const winding = opts.winding ?? "cw";
+
+    // Validated here rather than left to getSpatialRange: that function only
+    // sees a hullType/winding once a bucket has shapes to hull, so with 30k
+    // geo docs a typo throws only after the whole resolve pass — or, if no
+    // individual ends up with a bucket, never throws at all and the run
+    // reports a clean "everything skipped" with a nonsense option. Same error
+    // text as getSpatialRange's own check, so the message is identical
+    // regardless of which path throws it.
+    if (!HULL_TYPES.includes(hullType)) {
+      throw new Error(`getSpatialRange: unknown hullType "${hullType}" — expected one of ${HULL_TYPES.join(", ")}`);
+    }
+    if (winding !== "cw" && winding !== "ccw") {
+      throw new Error(`getSpatialRange: unknown winding "${winding}" — expected cw or ccw`);
+    }
+
     const groupProperty = opts.groupProperty ?? "bold:animal";
     const property = opts.property ?? "bold:spatialRange";
     const clearEmpty = opts.clearEmpty === true;
@@ -436,16 +460,23 @@ export class GeoApi extends ApiNamespace {
       if (i > 0 && i % GeoApi.YIELD_EVERY === 0) {
         await new Promise(resolve => setTimeout(resolve, 0));
       }
+      // Group keys are read before the shape is resolved, and before the
+      // `!shape` bail below, so a doc naming an unmatched group still reaches
+      // `unmatched` even when it also has no resolvable position — the
+      // typo'd-partition-id case `unmatched` exists to surface is otherwise
+      // invisible whenever those same docs lack coordinates too.
+      const keys = groupKeysOf(geoDocs[i][groupProperty]);
+      for (const key of keys) {
+        if (!byId.has(key)) unmatched.add(key);
+      }
+
       const shape = await this.getSpatialDepiction(geoDocs[i], { ontologyCache });
       if (!shape) {
         geoUnresolved++;
         continue;
       }
-      for (const key of groupKeysOf(geoDocs[i][groupProperty])) {
-        if (!byId.has(key)) {
-          unmatched.add(key);
-          continue;
-        }
+      for (const key of keys) {
+        if (!byId.has(key)) continue;
         if (!buckets.has(key)) buckets.set(key, []);
         buckets.get(key).push(shape);
       }
@@ -458,9 +489,9 @@ export class GeoApi extends ApiNamespace {
     for (const [id, individual] of byId) {
       const shapes = buckets.get(id);
       const feature = shapes ? getSpatialRange(shapes, {
-        hullType: opts.hullType,
+        hullType,
         alpha: opts.alpha,
-        winding: opts.winding,
+        winding,
         properties: {
           individualId: id,
           "rdfs:label": individual["rdfs:label"] ?? id,
