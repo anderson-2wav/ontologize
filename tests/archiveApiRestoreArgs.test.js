@@ -45,7 +45,7 @@ describe("ArchiveApi.buildRestoreArgs", function() {
       "--archive=/tmp/track.all.archive",
       "--nsFrom=meteor.*",
       "--nsTo=critter-track.*",
-      "mongodb://127.0.0.1:27017/critter-track"
+      "mongodb://127.0.0.1:27017/"
     ]);
   });
 
@@ -61,6 +61,75 @@ describe("ArchiveApi.buildRestoreArgs", function() {
       () => makeArchiveApi().buildRestoreArgs({ archive: "track.all.archive", nsFrom: "meteor.*" }),
       /nsFrom.*nsTo/
     );
+  });
+
+  // A database in the connection URL becomes mongorestore's --db, which filters
+  // the archive's *source* namespaces before the rename runs. Since those are
+  // meteor.*, a --db of critter-track matches nothing: "0 document(s) restored".
+  it("drops the database from the connection URL when renaming namespaces", function() {
+    const args = makeArchiveApi().buildRestoreArgs({
+      archive: "track.all.archive",
+      mongoUrl: "mongodb://127.0.0.1:27017/critter-track",
+      nsFrom: "meteor.*",
+      nsTo: "critter-track.*"
+    });
+
+    assert.equal(args[args.length - 1], "mongodb://127.0.0.1:27017/");
+  });
+
+  it("keeps the database in the connection URL when not renaming namespaces", function() {
+    const args = makeArchiveApi().buildRestoreArgs({
+      archive: "track.all.archive",
+      mongoUrl: "mongodb://127.0.0.1:27017/critter-track"
+    });
+
+    assert.equal(args[args.length - 1], "mongodb://127.0.0.1:27017/critter-track");
+  });
+
+  it("keeps query options when dropping the database from the URL", function() {
+    const args = makeArchiveApi().buildRestoreArgs({
+      archive: "track.all.archive",
+      mongoUrl: "mongodb://h1:27017,h2:27017/critter-track?replicaSet=rs0",
+      nsFrom: "meteor.*",
+      nsTo: "critter-track.*"
+    });
+
+    assert.equal(args[args.length - 1], "mongodb://h1:27017,h2:27017/?replicaSet=rs0");
+  });
+
+  // Dropping the path would otherwise move authentication to `admin`, because a
+  // URL's auth database defaults to the database in its path.
+  it("pins authSource to the dropped database when the URL carries credentials", function() {
+    const args = makeArchiveApi().buildRestoreArgs({
+      archive: "track.all.archive",
+      mongoUrl: "mongodb+srv://user:pw@cluster0.example.net/critter-track",
+      nsFrom: "meteor.*",
+      nsTo: "critter-track.*"
+    });
+
+    assert.equal(args[args.length - 1], "mongodb+srv://user:pw@cluster0.example.net/?authSource=critter-track");
+  });
+
+  it("leaves an explicit authSource alone", function() {
+    const args = makeArchiveApi().buildRestoreArgs({
+      archive: "track.all.archive",
+      mongoUrl: "mongodb://user:pw@h:27017/critter-track?authSource=admin",
+      nsFrom: "meteor.*",
+      nsTo: "critter-track.*"
+    });
+
+    assert.equal(args[args.length - 1], "mongodb://user:pw@h:27017/?authSource=admin");
+  });
+
+  it("leaves a URL that has no database alone", function() {
+    const args = makeArchiveApi().buildRestoreArgs({
+      archive: "track.all.archive",
+      mongoUrl: "mongodb://127.0.0.1:27017",
+      nsFrom: "meteor.*",
+      nsTo: "critter-track.*"
+    });
+
+    assert.equal(args[args.length - 1], "mongodb://127.0.0.1:27017");
   });
 
   it("throws when no archive is given and none is configured", function() {

@@ -19,6 +19,35 @@ import { ApiNamespace } from "../ApiNamespace.js";
  */
 export class ArchiveApi extends ApiNamespace {
   /**
+   * Strip the database off a MongoDB connection URL, keeping host list and
+   * query options. mongorestore reads that database as --db, which filters the
+   * archive's *source* namespaces before --nsFrom/--nsTo renames them — so a
+   * URL ending in /critter-track silently restores nothing from a meteor.*
+   * archive. Parsed by hand: mongodb:// URLs allow comma-separated hosts, which
+   * the WHATWG URL parser rejects.
+   *
+   * @param {string} mongoUrl
+   * @returns {string} The URL with no database path
+   */
+  stripDatabase(mongoUrl) {
+    const match = /^([^/]*\/\/[^/?#]*)\/([^/?#]+)(.*)$/.exec(mongoUrl || "");
+    if (!match) {
+      return mongoUrl;
+    }
+
+    const [, prefix, db, rest] = match;
+
+    // A URL's auth database defaults to the database in its path, so dropping
+    // the path would move authentication to `admin` unless it is pinned here.
+    const needsAuthSource = prefix.includes("@") && !/[?&]authSource=/i.test(rest);
+    if (needsAuthSource) {
+      return `${prefix}/${rest}${rest.startsWith("?") ? "&" : "?"}authSource=${db}`;
+    }
+
+    return `${prefix}/${rest}`;
+  }
+
+  /**
    * The mongorestore argv for a restore. Split out from restoreFromArchive so
    * the path / namespace resolution is testable without spawning mongorestore.
    *
@@ -47,11 +76,16 @@ export class ArchiveApi extends ApiNamespace {
 
     const mongoUrl = opts.mongoUrl || this.ontologize.mongoUrl;
 
+    if (!opts.nsFrom) {
+      return ["--drop", `--archive=${archivePath}`, mongoUrl];
+    }
+
     return [
       "--drop",
       `--archive=${archivePath}`,
-      ...(opts.nsFrom ? [`--nsFrom=${opts.nsFrom}`, `--nsTo=${opts.nsTo}`] : []),
-      mongoUrl
+      `--nsFrom=${opts.nsFrom}`,
+      `--nsTo=${opts.nsTo}`,
+      this.stripDatabase(mongoUrl)
     ];
   }
 
