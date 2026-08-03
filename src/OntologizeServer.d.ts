@@ -78,9 +78,23 @@ export declare class IoApi {
   ensurePropertyContext(propertyResource: Resource, contextCollection: MongoCollection): Promise<void>;
 }
 
+/**
+ * An archive carries the namespaces it was dumped from, so restoring into a
+ * differently named database requires nsFrom/nsTo — the database in mongoUrl
+ * does not redirect it.
+ */
+export interface RestoreOptions {
+  archive?: string;
+  archivePath?: string;
+  mongoUrl?: string;
+  nsFrom?: string;
+  nsTo?: string;
+}
+
 /** `ontologizeServer.archive` — mongodump / mongorestore. */
 export declare class ArchiveApi {
-  restoreFromArchive(opts?: { archive?: string; archivePath?: string; mongoUrl?: string }): Promise<{ success: boolean; message: string }>;
+  buildRestoreArgs(opts?: RestoreOptions): string[];
+  restoreFromArchive(opts?: RestoreOptions): Promise<{ success: boolean; message: string }>;
   dumpToArchive(opts: { archive: string; archivePath?: string; mongoUrl?: string }): Promise<{ success: boolean; message: string; archivePath: string; bytes: number }>;
 }
 

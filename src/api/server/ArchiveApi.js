@@ -19,19 +19,26 @@ import { ApiNamespace } from "../ApiNamespace.js";
  */
 export class ArchiveApi extends ApiNamespace {
   /**
-   * Restore a MongoDB collection from a mongorestore archive file.
-   * Pure Node.js — no Meteor dependency.
+   * The mongorestore argv for a restore. Split out from restoreFromArchive so
+   * the path / namespace resolution is testable without spawning mongorestore.
    *
-   * @param {object} [opts]
-   * @param {string} [opts.archive] - Archive filename or absolute path (defaults to this.ontologize.ontologyArchive)
-   * @param {string} [opts.archivePath] - Base path for relative archive filenames (defaults to this.ontologize.archivePath)
-   * @param {string} [opts.mongoUrl] - MongoDB connection URL (defaults to this.ontologize.mongoUrl)
-   * @returns {Promise<object>} { success, message }
+   * An archive carries the namespaces it was dumped from, so the database in
+   * the connection URL does not redirect it: restoring a `meteor.*` archive
+   * into a database named something else needs --nsFrom/--nsTo.
+   *
+   * @param {object} [opts] - See restoreFromArchive
+   * @returns {string[]} mongorestore arguments
    */
-  async restoreFromArchive(opts = {}) {
+  buildRestoreArgs(opts = {}) {
     const archive = opts.archive || this.ontologize.ontologyArchive;
     if (!archive) {
       throw new Error("No restore archive configured. Pass opts.archive or set opts.ontologyArchive in constructor.");
+    }
+
+    // mongorestore ignores a lone --nsTo, which would quietly restore into the
+    // archive's own database instead of the intended one.
+    if (Boolean(opts.nsFrom) !== Boolean(opts.nsTo)) {
+      throw new Error("opts.nsFrom and opts.nsTo must be given together, e.g. nsFrom: \"meteor.*\", nsTo: \"critter-track.*\"");
     }
 
     const archivePath = path.isAbsolute(archive)
@@ -40,10 +47,32 @@ export class ArchiveApi extends ApiNamespace {
 
     const mongoUrl = opts.mongoUrl || this.ontologize.mongoUrl;
 
-    console.log(`restoreFromArchive: mongorestore --drop --archive=${archivePath} ${mongoUrl}`);
+    return [
+      "--drop",
+      `--archive=${archivePath}`,
+      ...(opts.nsFrom ? [`--nsFrom=${opts.nsFrom}`, `--nsTo=${opts.nsTo}`] : []),
+      mongoUrl
+    ];
+  }
+
+  /**
+   * Restore a MongoDB collection from a mongorestore archive file.
+   * Pure Node.js — no Meteor dependency.
+   *
+   * @param {object} [opts]
+   * @param {string} [opts.archive] - Archive filename or absolute path (defaults to this.ontologize.ontologyArchive)
+   * @param {string} [opts.archivePath] - Base path for relative archive filenames (defaults to this.ontologize.archivePath)
+   * @param {string} [opts.mongoUrl] - MongoDB connection URL (defaults to this.ontologize.mongoUrl)
+   * @param {string} [opts.nsFrom] - Source namespace pattern, e.g. "meteor.*". Must be paired with nsTo
+   * @param {string} [opts.nsTo] - Target namespace pattern, e.g. "critter-track.*"
+   * @returns {Promise<object>} { success, message }
+   */
+  async restoreFromArchive(opts = {}) {
+    const args = this.buildRestoreArgs(opts);
+
+    console.log(`restoreFromArchive: mongorestore ${args.join(" ")}`);
 
     return new Promise((resolve, reject) => {
-      const args = ["--drop", `--archive=${archivePath}`, mongoUrl];
       const proc = spawn("mongorestore", args);
       let stderr = "";
 
