@@ -10,7 +10,8 @@ import { check } from "../lib/check.js";
 import { getSunriseSunsetInfo } from "sunrise-sunset-api";
 import { ApiNamespace } from "./ApiNamespace.js";
 import { mergeShapes } from "../geo/merge.js";
-import { getSpatialRange } from "../geo/range.js";
+import { getSpatialRange, positionsOf } from "../geo/range.js";
+import { Query } from "../Query.js";
 
 /**
  * `ontologize.geo` — instance-bound geospatial helpers: derive a resource's
@@ -23,7 +24,37 @@ import { getSpatialRange } from "../geo/range.js";
  * Ontologize instance can reach them without a second import; nothing about the
  * `ontologize/geo` / `ontologize/geo-server` subpaths changes.
  */
+
+/**
+ * The individual ids a group value names.
+ *
+ * A link property arrives in more than one shape: a bare id string, an
+ * `{"@id": …}` reference, or an array of either when a geo resource belongs to
+ * several individuals. Normalising here means the bucketing loop stays a lookup.
+ *
+ * @param {*} value - the raw value of the group property on a geo resource
+ * @returns {string[]} individual ids, empty when the value names none
+ * @private
+ */
+function groupKeysOf(value) {
+  if (value === null || value === undefined) return [];
+  const values = Array.isArray(value) ? value : [value];
+  return values
+    .map(v => (v && typeof v === "object" ? (v["@id"] ?? v._id ?? null) : v))
+    .filter(v => typeof v === "string" && v.length > 0);
+}
+
 export class GeoApi extends ApiNamespace {
+  /**
+   * Docs processed between yields to the event loop while resolving depictions.
+   * Matches OntologizeServer.YIELD_EVERY: a long loop that never yields blocks
+   * every other request for its whole duration.
+   */
+  static YIELD_EVERY = 100;
+
+  /** Write operations per bulkWrite call. */
+  static WRITE_CHUNK = 500;
+
   /**
    * Get sunrise and sunset times for a location and date.
    *
@@ -321,6 +352,164 @@ export class GeoApi extends ApiNamespace {
       range.properties["bold:rangeDiagnostics"].unresolved = unresolved;
     }
     return range;
+  }
+
+  /**
+   * A registered collection, or a throw naming what is registered.
+   *
+   * A missing collection would otherwise range nothing and report zeroes, which
+   * reads exactly like data that is genuinely absent.
+   *
+   * @param {string} name - registered collection name
+   * @returns {object} the collection
+   * @private
+   */
+  _requireCollection(name) {
+    const collection = this.collections[name];
+    if (!collection) {
+      throw new Error(
+        `updateSpatialRange: unknown collection "${name}" — registered: ${Object.keys(this.collections).join(", ")}`
+      );
+    }
+    return collection;
+  }
+
+  /**
+   * Compute a spatial range for each of a set of individuals and store it.
+   *
+   * The persistent counterpart of `RangeExtentPlugin`: where the plugin buckets
+   * features by `groupProperty` to draw per-animal hulls live, this buckets
+   * resources the same way and writes each hull to the individual it belongs to.
+   * Individuals need not be animals — two queries and a link property describe
+   * survey sites as readily as collared bobcats.
+   *
+   * The geo query is walked **once** and bucketed in memory, rather than queried
+   * per individual: one round trip however many individuals there are. Only the
+   * resolved shapes are retained, not the documents.
+   *
+   * Writes a plain `$set` of the Feature — no reasoning, no Statements. The
+   * value is a datatype blob; HyLAR gains nothing from it, and `updateOne`'s
+   * reasoning path would round-trip the geometry through SPARQL.
+   *
+   * See `.private/specs/ontologize/ontologize-geo-spec.md` § "Storing ranges".
+   *
+   * @param {object} opts
+   * @param {object|Query} opts.individuals - Query for the resources written onto
+   * @param {object|Query} opts.geoData - Query for the resources hulled
+   * @param {string} [opts.groupProperty="bold:animal"] - property on a geo
+   *   resource naming its individual
+   * @param {string} [opts.property="bold:spatialRange"] - where the Feature goes
+   * @param {"convex"|"concave"} [opts.hullType] - forwarded to getSpatialRange
+   * @param {number} [opts.alpha] - forwarded to getSpatialRange
+   * @param {"cw"|"ccw"} [opts.winding] - forwarded to getSpatialRange
+   * @param {object} [opts.properties] - merged into every Feature's properties
+   * @param {boolean} [opts.clearEmpty=false] - $unset when no hull can be built
+   * @param {boolean} [opts.dryRun=false] - compute everything, write nothing
+   * @param {Map} [opts.ontologyCache] - shared across the whole run
+   * @returns {Promise<object>} counts, `ranges`, and `skippedReasons`
+   * @throws {Error} if either query names an unregistered collection
+   */
+  async updateSpatialRange(opts = {}) {
+    const t0 = Date.now();
+    const groupProperty = opts.groupProperty ?? "bold:animal";
+    const property = opts.property ?? "bold:spatialRange";
+    const clearEmpty = opts.clearEmpty === true;
+    const dryRun = opts.dryRun === true;
+    const ontologyCache = opts.ontologyCache ?? new Map();
+
+    const individualsQuery = Query.from(opts.individuals);
+    const geoQuery = Query.from(opts.geoData);
+    const individualsCollection = this._requireCollection(individualsQuery.collection);
+    const geoCollection = this._requireCollection(geoQuery.collection);
+
+    const individuals = await individualsCollection
+      .find(individualsQuery.selector, individualsQuery.opts).toArray();
+    const byId = new Map(individuals.map(r => [r._id, r]));
+
+    // One pass: resolve each doc's depiction, bucket the shape, drop the doc.
+    const geoDocs = await geoCollection.find(geoQuery.selector, geoQuery.opts).toArray();
+    const buckets = new Map();
+    const unmatched = new Set();
+    let geoUnresolved = 0;
+
+    for (let i = 0; i < geoDocs.length; i++) {
+      if (i > 0 && i % GeoApi.YIELD_EVERY === 0) {
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
+      const shape = await this.getSpatialDepiction(geoDocs[i], { ontologyCache });
+      if (!shape) {
+        geoUnresolved++;
+        continue;
+      }
+      for (const key of groupKeysOf(geoDocs[i][groupProperty])) {
+        if (!byId.has(key)) {
+          unmatched.add(key);
+          continue;
+        }
+        if (!buckets.has(key)) buckets.set(key, []);
+        buckets.get(key).push(shape);
+      }
+    }
+
+    const ranges = [];
+    const skippedReasons = {};
+    const ops = [];
+
+    for (const [id, individual] of byId) {
+      const shapes = buckets.get(id);
+      const feature = shapes ? getSpatialRange(shapes, {
+        hullType: opts.hullType,
+        alpha: opts.alpha,
+        winding: opts.winding,
+        properties: {
+          individualId: id,
+          "rdfs:label": individual["rdfs:label"] ?? id,
+          ...(opts.properties ?? {})
+        }
+      }) : null;
+
+      if (!feature) {
+        // Under clearEmpty these are the cleared ones; the key keeps its name
+        // so a caller reads one place for "what got no range, and why".
+        skippedReasons[id] = shapes
+          ? `${new Set(shapes.flatMap(positionsOf).map(([lng, lat]) => `${lng},${lat}`)).size} distinct positions`
+          : "no geo resources";
+        if (clearEmpty) {
+          ops.push({ updateOne: { filter: { _id: id }, update: { $unset: { [property]: "" } } } });
+        }
+        continue;
+      }
+
+      const diagnostics = feature.properties["bold:rangeDiagnostics"];
+      ranges.push({
+        id,
+        areaKm2: diagnostics.areaKm2,
+        vertices: diagnostics.vertices,
+        positions: diagnostics.positions,
+        distinctPositions: diagnostics.distinctPositions
+      });
+      ops.push({ updateOne: { filter: { _id: id }, update: { $set: { [property]: feature } } } });
+    }
+
+    if (!dryRun) {
+      for (let i = 0; i < ops.length; i += GeoApi.WRITE_CHUNK) {
+        await individualsCollection.bulkWrite(ops.slice(i, i + GeoApi.WRITE_CHUNK), { ordered: false });
+      }
+    }
+
+    const empties = Object.keys(skippedReasons).length;
+    return {
+      individuals: byId.size,
+      geoResources: geoDocs.length,
+      geoUnresolved,
+      updated: ranges.length,
+      cleared: clearEmpty ? empties : 0,
+      skipped: clearEmpty ? 0 : empties,
+      unmatched: unmatched.size,
+      durationMs: Date.now() - t0,
+      ranges,
+      skippedReasons
+    };
   }
 
   /**
