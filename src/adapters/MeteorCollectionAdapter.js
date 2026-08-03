@@ -243,7 +243,10 @@ export class MeteorCollectionAdapter extends CollectionAdapter {
       for (const op of operations) {
         if (op.updateOne) {
           const { filter, update, upsert } = op.updateOne;
-          const result = await this.collection.updateOne(filter, update, { upsert });
+          // Through the adapter, not the wrapped collection — a Mongo.Collection
+          // has no `updateOne`, and this is where the updateAsync fallback lives.
+          // Matches the replaceOne/insertOne branches below.
+          const result = await this.updateOne(filter, update, { upsert });
           upsertedCount += result.upsertedCount || 0;
           modifiedCount += result.modifiedCount || 0;
           matchedCount += result.matchedCount || 0;

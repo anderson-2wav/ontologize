@@ -246,6 +246,82 @@ describe("getSpatialRange", function() {
     });
   });
 
+  describe("centroid and count", function() {
+    const centroid = (feature) => feature.properties.centroid;
+
+    it("is a GeoJSON Point, in [lng, lat] order", function() {
+      const c = centroid(getSpatialRange([SQUARE_PLUS_CENTRE]));
+      assert.equal(c.type, "Point");
+      assert.lengthOf(c.coordinates, 2);
+      assert.closeTo(c.coordinates[0], -87.5, 0.001);   // lng
+      assert.closeTo(c.coordinates[1], 40.5, 0.001);    // lat
+    });
+
+    it("is the mean of the positions, hand-computed", function() {
+      // Deliberately lopsided: three points west, one east, so the mean is not
+      // the centre of the bounding box and not the centre of the hull either.
+      const coords = [[-88, 40], [-88, 41], [-87.9, 40.5], [-86, 40.5]];
+      const c = centroid(getSpatialRange([points(coords)]));
+      assert.closeTo(c.coordinates[0], (-88 + -88 + -87.9 + -86) / 4, 1e-9);
+      assert.closeTo(c.coordinates[1], (40 + 41 + 40.5 + 40.5) / 4, 1e-9);
+    });
+
+    /**
+     * The centre of the observations, not of the shape. Piling reports into one
+     * corner leaves the hull alone — those points are interior — but must drag
+     * the centroid toward them. This is the assertion that separates it from a
+     * polygon centroid, which would not move at all.
+     */
+    it("follows where the positions cluster", function() {
+      const bare = getSpatialRange([points(CORNERS)]);
+      const clustered = getSpatialRange([points([
+        ...CORNERS,
+        [-87.99, 40.01], [-87.98, 40.02], [-87.97, 40.01], [-87.96, 40.02]
+      ])]);
+      // The cluster sits at the southwest corner, so the mean moves that way.
+      assert.isBelow(centroid(clustered).coordinates[0], centroid(bare).coordinates[0]);
+      assert.isBelow(centroid(clustered).coordinates[1], centroid(bare).coordinates[1]);
+      // …while the hull is unchanged: the added points are inside it.
+      assert.equal(diag(clustered).areaKm2, diag(bare).areaKm2);
+    });
+
+    /**
+     * A stationary collar is one place, reported many times, and the mean is
+     * meant to reflect that weight — unlike the hull, which dedupes first.
+     */
+    it("weights a repeated position by how often it repeats", function() {
+      const once = centroid(getSpatialRange([points([[-88, 40], [-86, 40], [-87, 42]])]));
+      const many = centroid(getSpatialRange([points([
+        [-88, 40], [-88, 40], [-88, 40], [-88, 40], [-86, 40], [-87, 42]
+      ])]));
+      assert.isBelow(many.coordinates[0], once.coordinates[0]);
+      assert.isBelow(many.coordinates[1], once.coordinates[1]);
+    });
+
+    it("is the same whichever way the ring is wound", function() {
+      const cw  = centroid(getSpatialRange([SQUARE_PLUS_CENTRE], { winding: "cw" }));
+      const ccw = centroid(getSpatialRange([SQUARE_PLUS_CENTRE], { winding: "ccw" }));
+      assert.deepEqual(cw.coordinates, ccw.coordinates);
+    });
+
+    it("counts every position, duplicates and polygon vertices included", function() {
+      const f = getSpatialRange([
+        points([[-88, 40], [-88, 40]]),                                  // a repeat
+        { type: "LineString", coordinates: [[-87, 40], [-87, 41]] },
+        { type: "Polygon", coordinates: [[[-88, 41], [-87.5, 41], [-87.5, 41.5], [-88, 41]]] }
+      ]);
+      assert.equal(f.properties.count, 8);                 // 2 + 2 + 4
+      assert.equal(f.properties.count, diag(f).positions); // same number diagnostics reports
+    });
+
+    it("both are attached with diagnostics off — they describe the inputs, not the run", function() {
+      const f = getSpatialRange([SQUARE_PLUS_CENTRE], { diagnostics: false });
+      assert.isUndefined(f.properties["bold:rangeDiagnostics"]);
+      assert.equal(centroid(f).type, "Point");
+      assert.equal(f.properties.count, 5);
+    });
+  });
+
   describe("does not mutate its input", function() {
     it("leaves the caller's geometry untouched", function() {
       const shape = points([...CORNERS, [-87.5, 40.5]]);

@@ -216,6 +216,33 @@ function signedArea(ring) {
 }
 
 /**
+ * Mean of every position that went into the range.
+ *
+ * **The centre of the observations, not of the enclosed shape.** Duplicates
+ * count: a collar reporting the same spot for hours pulls the mean toward it,
+ * which is the point — this answers "where was the animal, on average", where a
+ * polygon's centre of mass would answer "where is the middle of the boundary"
+ * and ignore how the interior was used.
+ *
+ * Needs no planar frame. Scaling longitude by a constant and dividing it back
+ * out leaves an arithmetic mean exactly where it was, unlike the area-weighted
+ * calculation the hull itself requires.
+ *
+ * @param {Array<[number, number]>} positions - [lng, lat], duplicates included
+ * @returns {[number, number]} [lng, lat]
+ * @private
+ */
+function meanPosition(positions) {
+  let lng = 0;
+  let lat = 0;
+  for (const [x, y] of positions) {
+    lng += x;
+    lat += y;
+  }
+  return [lng / positions.length, lat / positions.length];
+}
+
+/**
  * Compute the spatial range of a set of GeoJSON shapes as one Feature polygon.
  *
  * **The hull is computed in a local planar frame, not in degrees.** A degree of
@@ -237,7 +264,10 @@ function signedArea(ring) {
  *   input winding to match.
  * @param {boolean} [opts.diagnostics=true] - attach `bold:rangeDiagnostics`
  * @returns {object|null} a GeoJSON Feature, or null if fewer than 3 distinct
- *   positions were given — no area can be enclosed by two points
+ *   positions were given — no area can be enclosed by two points. The Feature
+ *   always carries `properties.centroid`, a GeoJSON Point at the mean of every
+ *   position that went in (see {@link meanPosition}), and `properties.count`,
+ *   how many positions that was — duplicates included in both
  * @throws {Error} if `hullType` or `winding` is not recognised
  */
 export function getSpatialRange(shapes, opts = {}) {
@@ -282,6 +312,14 @@ export function getSpatialRange(shapes, opts = {}) {
 
   const geometry = { type: "Polygon", coordinates: [coordinates] };
   const properties = { ...(opts.properties ?? {}) };
+
+  // A GeoJSON Point rather than a bare pair: it is the shape `bold:GeoPoint`
+  // describes, so it can be read, stored, or drawn without unpacking. Both of
+  // these sit outside `bold:rangeDiagnostics` and ignore `diagnostics: false` —
+  // diagnostics record how the shape was built, while these describe what it
+  // was built from, and callers want them without opting into provenance.
+  properties.centroid = { type: "Point", coordinates: meanPosition(positions) };
+  properties.count = positions.length;
 
   if (opts.diagnostics !== false) {
     properties["bold:rangeDiagnostics"] = {

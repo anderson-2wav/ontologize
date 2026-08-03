@@ -224,6 +224,8 @@ export interface SpatialRangeSummary {
   vertices: number;
   positions: number;
   distinctPositions: number;
+  /** mean of every position that went in, as [lng, lat] — `properties.centroid` */
+  centroid: [number, number];
 }
 
 export interface SpatialRangeUpdateResult {

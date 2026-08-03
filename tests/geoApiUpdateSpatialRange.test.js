@@ -177,6 +177,28 @@ describe("GeoApi#updateSpatialRange", function () {
     assert.equal(result.ranges[0].vertices, diagnostics.vertices);
   });
 
+  it("stores the centroid and count on the Feature, and repeats the centroid in the summary", async function () {
+    await initialize({
+      animals: [animal("demo:animal-MA04")],
+      reports: reportsFor("demo:animal-MA04", "a")
+    });
+
+    const result = await ontologize.geo.updateSpatialRange({
+      individuals: INDIVIDUALS, geoData: GEO
+    });
+
+    const stored = setsFrom(demo)["demo:animal-MA04"].properties;
+    assert.equal(stored.centroid.type, "Point");
+    // Mean of the four CORNERS: lng -104.93, lat 38.90.
+    assert.closeTo(stored.centroid.coordinates[0], -104.93, 1e-9);
+    assert.closeTo(stored.centroid.coordinates[1], 38.90, 1e-9);
+    assert.equal(stored.count, 4);
+
+    // The summary carries the same pair, so a caller can map every range
+    // without reopening the geometry.
+    assert.deepEqual(result.ranges[0].centroid, stored.centroid.coordinates);
+  });
+
   it("skips an individual with no geo resources, and says so", async function () {
     await initialize({
       animals: [animal("demo:animal-MA04"), animal("demo:animal-MA22")],

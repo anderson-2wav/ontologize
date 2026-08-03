@@ -517,7 +517,10 @@ export class GeoApi extends ApiNamespace {
         areaKm2: diagnostics.areaKm2,
         vertices: diagnostics.vertices,
         positions: diagnostics.positions,
-        distinctPositions: diagnostics.distinctPositions
+        distinctPositions: diagnostics.distinctPositions,
+        // Repeated from the Feature so a caller can place every range on a map
+        // from the result alone, without reopening the stored geometry.
+        centroid: feature.properties.centroid.coordinates
       });
       ops.push({ updateOne: { filter: { _id: id }, update: { $set: { [property]: feature } } } });
     }
