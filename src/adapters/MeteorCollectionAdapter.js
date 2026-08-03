@@ -220,13 +220,15 @@ export class MeteorCollectionAdapter extends CollectionAdapter {
    *
    * Passed straight through when the wrapped collection is a raw MongoDB driver
    * collection (Meteor's `rawCollection()`), which is the case that matters for
-   * throughput. A Meteor collection has no bulkWrite, so `updateOne` operations
-   * are replayed one at a time — same semantics, more round trips. Anything else
-   * throws rather than silently skipping writes.
+   * throughput. A Meteor collection has no bulkWrite, so operations are replayed
+   * one at a time — same semantics, more round trips. `updateOne`, `replaceOne`
+   * and `insertOne` are emulated; anything else throws rather than silently
+   * skipping writes.
    *
    * @param {Array<object>} operations - MongoDB bulkWrite operations
    * @param {object} [options] - bulkWrite options (e.g., { ordered: false })
-   * @returns {Promise<object>} Result with upsertedCount, modifiedCount, matchedCount
+   * @returns {Promise<object>} Result with upsertedCount, modifiedCount,
+   *   matchedCount and (emulated path only) insertedCount
    */
   async bulkWrite(operations, options = {}) {
     try {
@@ -237,17 +239,31 @@ export class MeteorCollectionAdapter extends CollectionAdapter {
       let upsertedCount = 0;
       let modifiedCount = 0;
       let matchedCount = 0;
+      let insertedCount = 0;
       for (const op of operations) {
-        if (!op.updateOne) {
-          throw new Error(`unsupported operation ${Object.keys(op).join(",")} (only updateOne is emulated)`);
+        if (op.updateOne) {
+          const { filter, update, upsert } = op.updateOne;
+          const result = await this.collection.updateOne(filter, update, { upsert });
+          upsertedCount += result.upsertedCount || 0;
+          modifiedCount += result.modifiedCount || 0;
+          matchedCount += result.matchedCount || 0;
         }
-        const { filter, update, upsert } = op.updateOne;
-        const result = await this.updateOne(filter, update, { upsert });
-        upsertedCount += result.upsertedCount || 0;
-        modifiedCount += result.modifiedCount || 0;
-        matchedCount += result.matchedCount || 0;
+        else if (op.replaceOne) {
+          const { filter, replacement, upsert } = op.replaceOne;
+          const result = await this.replaceOne(filter, replacement, { upsert });
+          upsertedCount += result.upsertedCount || 0;
+          modifiedCount += result.modifiedCount || 0;
+          matchedCount += result.matchedCount || 0;
+        }
+        else if (op.insertOne) {
+          await this.insertOne(op.insertOne.document);
+          insertedCount += 1;
+        }
+        else {
+          throw new Error(`unsupported operation ${Object.keys(op).join(",")} (updateOne, replaceOne and insertOne are emulated)`);
+        }
       }
-      return { upsertedCount, modifiedCount, matchedCount };
+      return { upsertedCount, modifiedCount, matchedCount, insertedCount };
     }
     catch (error) {
       throw new Error(`Error in ${this.name}.bulkWrite: ${error.message}`);
