@@ -160,16 +160,49 @@ export class MeteorCollectionAdapter extends CollectionAdapter {
   }
 
   /**
-   * Update one document matching the query
+   * Update one document matching the query.
+   *
+   * Prefers the MongoDB driver's `updateOne` and falls back to Meteor's
+   * `updateAsync` / `upsertAsync`, because a `Mongo.Collection` has neither of
+   * the driver's names — only `update`/`upsert` and their async forms. Without
+   * the fallback every write method here is a `rawCollection()`-only path,
+   * despite this adapter existing to serve the client.
+   *
+   * Meteor resolves to a *count* rather than a result object, so the driver's
+   * shape is reconstructed for callers that read `modifiedCount`.
+   *
    * @param {object} query - MongoDB-style query object
    * @param {object} update - Update operations (e.g., { $set: { field: value } })
    * @param {object} [options] - Update options (e.g., { upsert: true })
-   * @returns {Promise<object>} Result with modifiedCount
+   * @returns {Promise<object>} Result with matchedCount, modifiedCount, upsertedCount
    */
   async updateOne(query, update, options = {}) {
     try {
-      const result = await this.collection.updateOne(query, update, options);
-      return result;
+      if (typeof this.collection.updateOne === "function") {
+        return await this.collection.updateOne(query, update, options);
+      }
+
+      if (options.upsert && typeof this.collection.upsertAsync === "function") {
+        const result = await this.collection.upsertAsync(query, update, options) ?? {};
+        const inserted = result.insertedId ?? null;
+        const affected = result.numberAffected ?? 0;
+        return {
+          acknowledged: true,
+          matchedCount: inserted ? 0 : affected,
+          modifiedCount: inserted ? 0 : affected,
+          upsertedCount: inserted ? 1 : 0,
+          upsertedId: inserted
+        };
+      }
+
+      const modifiedCount = await this.collection.updateAsync(query, update, options);
+      return {
+        acknowledged: true,
+        matchedCount: modifiedCount,
+        modifiedCount,
+        upsertedCount: 0,
+        upsertedId: null
+      };
     }
     catch (error) {
       throw new Error(`Error in ${this.name}.updateOne: ${error.message}`);
@@ -203,7 +236,7 @@ export class MeteorCollectionAdapter extends CollectionAdapter {
           throw new Error(`unsupported operation ${Object.keys(op).join(",")} (only updateOne is emulated)`);
         }
         const { filter, update, upsert } = op.updateOne;
-        const result = await this.collection.updateOne(filter, update, { upsert });
+        const result = await this.updateOne(filter, update, { upsert });
         upsertedCount += result.upsertedCount || 0;
         modifiedCount += result.modifiedCount || 0;
         matchedCount += result.matchedCount || 0;

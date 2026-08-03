@@ -79,6 +79,78 @@ describe("Collection Adapters", function () {
         assert.include(error.message, "Error in ErrorCollection.findOne");
       }
     });
+
+    /**
+     * Mongo.Collection carries update/updateAsync and never the driver's
+     * updateOne — so the adapter's write half only ever worked over a
+     * rawCollection(). These pin the fallback that makes the client case work.
+     */
+    describe("writes over a Meteor collection", function () {
+      let calls;
+      let meteorish;
+      let meteorAdapter;
+
+      beforeEach(function () {
+        calls = [];
+        meteorish = {
+          // Meteor resolves to the number of documents affected, not a result object.
+          updateAsync: async (selector, modifier, options) => {
+            calls.push({ kind: "update", selector, modifier, options });
+            return 1;
+          },
+          upsertAsync: async (selector, modifier, options) => {
+            calls.push({ kind: "upsert", selector, modifier, options });
+            return { numberAffected: 1, insertedId: "test:new" };
+          }
+        };
+        meteorAdapter = new MeteorCollectionAdapter(meteorish, "meteorish");
+      });
+
+      it("falls back to updateAsync when the driver name is absent", async function () {
+        const result = await meteorAdapter.updateOne({ _id: "test:1" }, { $set: { x: 1 } });
+
+        assert.equal(calls.length, 1);
+        assert.equal(calls[0].kind, "update");
+        assert.deepEqual(calls[0].selector, { _id: "test:1" });
+        assert.deepEqual(calls[0].modifier, { $set: { x: 1 } });
+        assert.equal(result.matchedCount, 1);
+        assert.equal(result.modifiedCount, 1);
+        assert.equal(result.upsertedCount, 0);
+      });
+
+      it("routes an upsert through upsertAsync", async function () {
+        const result = await meteorAdapter.updateOne(
+          { _id: "test:new" }, { $set: { x: 1 } }, { upsert: true }
+        );
+
+        assert.equal(calls[0].kind, "upsert");
+        assert.equal(result.upsertedCount, 1);
+        assert.equal(result.upsertedId, "test:new");
+      });
+
+      it("emulates bulkWrite through its own updateOne, not the collection's", async function () {
+        const result = await meteorAdapter.bulkWrite([
+          { updateOne: { filter: { _id: "test:1" }, update: { $set: { x: 1 } } } },
+          { updateOne: { filter: { _id: "test:2" }, update: { $set: { x: 2 } } } }
+        ]);
+
+        assert.equal(calls.length, 2);
+        assert.deepEqual(calls[1].selector, { _id: "test:2" });
+        assert.equal(result.modifiedCount, 2);
+        assert.equal(result.matchedCount, 2);
+      });
+
+      it("prefers the native driver method when the collection has one", async function () {
+        const driverish = {
+          updateOne: async () => ({ matchedCount: 1, modifiedCount: 1, upsertedCount: 0 }),
+          updateAsync: async () => { throw new Error("updateAsync must not be called"); }
+        };
+        const driverAdapter = new MeteorCollectionAdapter(driverish, "driverish");
+
+        const result = await driverAdapter.updateOne({ _id: "test:1" }, { $set: { x: 1 } });
+        assert.equal(result.modifiedCount, 1);
+      });
+    });
   });
 
   describe("MeteorCollectionAdapter Interface", function () {
