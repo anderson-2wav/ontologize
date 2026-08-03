@@ -196,6 +196,54 @@ export interface GetSpatialRangeOptions {
   ontologyCache?: Map<string, any>;
 }
 
+export interface UpdateSpatialRangeOptions {
+  /** Query (or plain spec) for the resources written onto */
+  individuals: QuerySpec | Query;
+  /** Query (or plain spec) for the resources hulled */
+  geoData: QuerySpec | Query;
+  /** property on a geo resource naming its individual (default "bold:animal") */
+  groupProperty?: string;
+  /** where the Feature is written (default "bold:spatialRange") */
+  property?: string;
+  hullType?: "convex" | "concave";
+  alpha?: number;
+  winding?: "ccw" | "cw";
+  /** merged into every Feature's properties */
+  properties?: Record<string, any>;
+  /** $unset the property when no hull can be built (default false) */
+  clearEmpty?: boolean;
+  /** compute everything, write nothing (default false) */
+  dryRun?: boolean;
+  ontologyCache?: Map<string, any>;
+}
+
+/** One entry per individual that got a hull. */
+export interface SpatialRangeSummary {
+  id: string;
+  areaKm2: number;
+  vertices: number;
+  positions: number;
+  distinctPositions: number;
+}
+
+export interface SpatialRangeUpdateResult {
+  /** individuals matched by the individuals query */
+  individuals: number;
+  /** geo docs read */
+  geoResources: number;
+  /** geo docs that yielded no depiction */
+  geoUnresolved: number;
+  updated: number;
+  cleared: number;
+  skipped: number;
+  /** distinct group values naming no matched individual */
+  unmatched: number;
+  durationMs: number;
+  ranges: SpatialRangeSummary[];
+  /** id → why it got no range; the cleared ones too, under clearEmpty */
+  skippedReasons: Record<string, string>;
+}
+
 export type Resource = Record<string, any>;
 export type OntologyResource = Resource & {
   "@id": string;
@@ -272,6 +320,12 @@ export declare class GeoApi {
     resources: Array<string | Resource> | string | Resource,
     opts?: GetSpatialRangeOptions
   ): Promise<GeoJSONFeature | null>;
+  /**
+   * Compute a spatial range for each of a set of individuals and store it.
+   * Buckets the geo query by `groupProperty` and writes one Feature per
+   * individual. Server-side in practice: it needs a write-capable collection.
+   */
+  updateSpatialRange(opts: UpdateSpatialRangeOptions): Promise<SpatialRangeUpdateResult>;
   /** @deprecated Use `getSpatialDepiction`. */
   getGeoJSON(resource: Resource, opts?: GetLocationOptions): Promise<GeoJSONObject | null>;
   getSunriseSunset(longLat: [number, number], date: Date | string | number | { "@value": string; "@type"?: string }, opts?: Record<string, any>): Promise<SunriseSunsetResponse>;

@@ -243,4 +243,222 @@ describe("GeoApi#updateSpatialRange", function () {
     assert.isUndefined(setsFrom(demo, "bold:spatialRange")["demo:animal-MA04"]);
     assert.isObject(setsFrom(demo, "demo:summerRange")["demo:animal-MA04"]);
   });
+
+  it("counts distinct group values naming no individual", async function () {
+    await initialize({
+      animals: [animal("demo:animal-MA04")],
+      reports: [
+        ...reportsFor("demo:animal-MA04", "a"),
+        ...reportsFor("demo:animal-GONE", "b"),      // 4 reports, 1 absent animal
+        ...reportsFor("demo:animal-ALSO-GONE", "c")  // 4 more, another
+      ]
+    });
+
+    const result = await ontologize.geo.updateSpatialRange({
+      individuals: INDIVIDUALS, geoData: GEO
+    });
+
+    // Two absent animals, not the eight reports pointing at them.
+    assert.equal(result.unmatched, 2);
+    assert.equal(result.updated, 1);
+  });
+
+  it("counts geo docs that resolve to no depiction", async function () {
+    await initialize({
+      animals: [animal("demo:animal-MA04")],
+      reports: [
+        ...reportsFor("demo:animal-MA04", "a"),
+        { _id: "demo:r-blank", "@type": ["bold:TrackingReport"], "bold:animal": "demo:animal-MA04" }
+      ]
+    });
+
+    const result = await ontologize.geo.updateSpatialRange({
+      individuals: INDIVIDUALS, geoData: GEO
+    });
+
+    assert.equal(result.geoResources, 5);
+    assert.equal(result.geoUnresolved, 1);
+    assert.equal(result.ranges[0].positions, 4);
+  });
+
+  it("reads a group value given as an {@id} reference", async function () {
+    const reports = reportsFor("demo:animal-MA04", "a")
+      .map(r => ({ ...r, "bold:animal": { "@id": "demo:animal-MA04" } }));
+    await initialize({ animals: [animal("demo:animal-MA04")], reports });
+
+    const result = await ontologize.geo.updateSpatialRange({
+      individuals: INDIVIDUALS, geoData: GEO
+    });
+
+    assert.equal(result.updated, 1);
+    assert.equal(result.unmatched, 0);
+  });
+
+  it("fans an array group value out to every individual it names", async function () {
+    const shared = reportsFor("demo:animal-MA04", "a")
+      .map(r => ({ ...r, "bold:animal": ["demo:animal-MA04", "demo:animal-MA13"] }));
+    await initialize({
+      animals: [animal("demo:animal-MA04"), animal("demo:animal-MA13")],
+      reports: shared
+    });
+
+    const result = await ontologize.geo.updateSpatialRange({
+      individuals: INDIVIDUALS, geoData: GEO
+    });
+
+    assert.equal(result.updated, 2);
+    assert.equal(result.ranges[0].distinctPositions, 4);
+    assert.equal(result.ranges[1].distinctPositions, 4);
+  });
+
+  it("honours a group property other than bold:animal", async function () {
+    const reports = reportsFor("x", "a").map(r => {
+      const { "bold:animal": _drop, ...rest } = r;
+      return { ...rest, "demo:site": "demo:site-1" };
+    });
+    await initialize({
+      animals: [{ _id: "demo:site-1", "@type": ["bold:Animal"] }],
+      reports
+    });
+
+    const result = await ontologize.geo.updateSpatialRange({
+      individuals: INDIVIDUALS, geoData: GEO, groupProperty: "demo:site"
+    });
+
+    assert.equal(result.updated, 1);
+    assert.isObject(setsFrom(demo)["demo:site-1"]);
+  });
+
+  it("clearEmpty unsets the property instead of skipping", async function () {
+    await initialize({
+      animals: [animal("demo:animal-MA04"), animal("demo:animal-MA22")],
+      reports: reportsFor("demo:animal-MA04", "a")
+    });
+
+    const result = await ontologize.geo.updateSpatialRange({
+      individuals: INDIVIDUALS, geoData: GEO, clearEmpty: true
+    });
+
+    assert.equal(result.cleared, 1);
+    assert.equal(result.skipped, 0);
+    assert.equal(result.skippedReasons["demo:animal-MA22"], "no geo resources");
+
+    const unset = demo.writes.find(op => op.updateOne.update.$unset);
+    assert.equal(unset.updateOne.filter._id, "demo:animal-MA22");
+    assert.property(unset.updateOne.update.$unset, "bold:spatialRange");
+  });
+
+  it("dryRun computes the same ranges and writes nothing", async function () {
+    await initialize({
+      animals: [animal("demo:animal-MA04"), animal("demo:animal-MA22")],
+      reports: reportsFor("demo:animal-MA04", "a")
+    });
+
+    const result = await ontologize.geo.updateSpatialRange({
+      individuals: INDIVIDUALS, geoData: GEO, dryRun: true
+    });
+
+    assert.lengthOf(demo.writes, 0);
+    assert.equal(result.updated, 1);          // what would have been written
+    assert.equal(result.skipped, 1);
+    assert.lengthOf(result.ranges, 1);
+    assert.equal(result.ranges[0].distinctPositions, 4);
+  });
+
+  it("forwards hullType and alpha to the hull", async function () {
+    // Two clusters with a thin neck: a concave hull cuts the neck out.
+    const coords = [];
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2;
+      coords.push([-88 + 0.1 * Math.cos(a), 40 + 0.1 * Math.sin(a)]);
+      coords.push([-87 + 0.1 * Math.cos(a), 40 + 0.1 * Math.sin(a)]);
+    }
+    const reports = coords.map(([lng, lat], i) => report(`demo:d-${i}`, "demo:animal-MA04", lng, lat));
+    await initialize({ animals: [animal("demo:animal-MA04")], reports });
+
+    const convex = await ontologize.geo.updateSpatialRange({
+      individuals: INDIVIDUALS, geoData: GEO, hullType: "convex"
+    });
+    const concave = await ontologize.geo.updateSpatialRange({
+      individuals: INDIVIDUALS, geoData: GEO, hullType: "concave", alpha: 1
+    });
+
+    assert.isBelow(concave.ranges[0].areaKm2, convex.ranges[0].areaKm2);
+    assert.equal(setsFrom(demo)["demo:animal-MA04"].properties["bold:rangeDiagnostics"].hullType, "concave");
+  });
+
+  it("forwards winding", async function () {
+    await initialize({
+      animals: [animal("demo:animal-MA04")],
+      reports: reportsFor("demo:animal-MA04", "a")
+    });
+
+    await ontologize.geo.updateSpatialRange({
+      individuals: INDIVIDUALS, geoData: GEO, winding: "ccw"
+    });
+
+    assert.equal(
+      setsFrom(demo)["demo:animal-MA04"].properties["bold:rangeDiagnostics"].winding,
+      "ccw"
+    );
+  });
+
+  /**
+   * Every other case here feeds geo:lat/geo:long, which getSpatialDepiction
+   * answers from pattern 1 without touching the ontology. A depiction property
+   * is the other path: it costs a lookup to recognise, which is what the shared
+   * ontologyCache exists for, and its vertices are positions like any others.
+   */
+  it("hulls depiction-property resources, sharing the ontologyCache", async function () {
+    const box = (x, y) => ({
+      type: "Feature",
+      properties: {},
+      geometry: { type: "Polygon", coordinates: [[[x, y], [x + 1, y], [x + 1, y + 1], [x, y + 1], [x, y]]] }
+    });
+    await initialize({
+      animals: [animal("demo:animal-MA04")],
+      reports: [
+        { _id: "demo:site-a", "@type": ["bold:TrackingReport"],
+          "bold:animal": "demo:animal-MA04", "bold:spatialDepiction": [box(0, 0)] },
+        { _id: "demo:site-b", "@type": ["bold:TrackingReport"],
+          "bold:animal": "demo:animal-MA04", "bold:spatialDepiction": [box(2, 2)] }
+      ]
+    });
+
+    const ontologyCache = new Map();
+    const result = await ontologize.geo.updateSpatialRange({
+      individuals: INDIVIDUALS, geoData: GEO, ontologyCache
+    });
+
+    assert.equal(result.updated, 1);
+    assert.equal(result.geoUnresolved, 0);
+    // Two boxes of 5 ring positions each; the repeated closing corner dedupes.
+    assert.equal(result.ranges[0].positions, 10);
+    assert.equal(result.ranges[0].distinctPositions, 8);
+    assert.isAbove(ontologyCache.size, 0);
+  });
+
+  it("chunks writes past 500 individuals", async function () {
+    const animals = [];
+    const reports = [];
+    for (let i = 0; i < 501; i++) {
+      const id = `demo:animal-${i}`;
+      animals.push(animal(id));
+      reports.push(...reportsFor(id, `r${i}`));
+    }
+    await initialize({ animals, reports });
+
+    // Count calls rather than operations: the stub records ops, so wrap it.
+    let bulkCalls = 0;
+    const inner = demo.bulkWrite;
+    demo.bulkWrite = async (ops) => { bulkCalls++; return inner(ops); };
+
+    const result = await ontologize.geo.updateSpatialRange({
+      individuals: INDIVIDUALS, geoData: GEO
+    });
+
+    assert.equal(result.updated, 501);
+    assert.equal(bulkCalls, 2);
+    assert.lengthOf(demo.writes, 501);
+  });
 });
