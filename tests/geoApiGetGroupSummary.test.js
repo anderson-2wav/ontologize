@@ -98,6 +98,63 @@ describe("GeoApi.getGroupSummary", function() {
     assert.isTrue(out.meta.regionsAvailable);
   });
 
+  it("degrades region tagging when the region collection is unregistered", async function() {
+    const api = makeApi({
+      track: collectionOf([], [[{ _id: "a:1", firstMs: 1, lastMs: 2, count: 1, cells: [CELL_NORTH] }]]),
+      animal: collectionOf([{ _id: "a:1", "rdfs:label": "Coyote 1" }]),
+    });
+
+    const warnings = [];
+    const realWarn = console.warn;
+    console.warn = (...args) => warnings.push(args.join(" "));
+    let out;
+    try {
+      out = await api.getGroupSummary({
+        queries: [{ dataCollection: "track", dataSelector: {}, resourceCollection: "animal" }],
+        groupProperty: "bold:animal",
+        regions: { collection: "gov", selector: { "@type": "gov:IDNRRegion" } },
+      });
+    }
+    finally {
+      console.warn = realWarn;
+    }
+
+    // The roster still returns — a missing region config must never blank it.
+    assert.deepEqual(out.resources.map(r => r._id), ["a:1"]);
+    assert.equal(out.summary["a:1"].count, 1);
+    assert.deepEqual(out.summary["a:1"].regions, []);
+    assert.deepEqual(out.regions, []);
+    assert.isFalse(out.meta.regionsAvailable);
+    assert.isTrue(out.meta.cellsAvailable);
+    assert.lengthOf(warnings, 1);
+  });
+
+  it("degrades region tagging when the region collection cannot be read", async function() {
+    const api = makeApi({
+      track: collectionOf([], [[{ _id: "a:1", firstMs: 1, lastMs: 2, count: 1, cells: [CELL_NORTH] }]]),
+      animal: collectionOf([{ _id: "a:1" }]),
+      gov: { find: () => ({ toArray: async () => { throw new Error("read failed"); } }) },
+    });
+
+    const realWarn = console.warn;
+    console.warn = () => {};
+    let out;
+    try {
+      out = await api.getGroupSummary({
+        queries: [{ dataCollection: "track", dataSelector: {}, resourceCollection: "animal" }],
+        groupProperty: "bold:animal",
+        regions: { collection: "gov", selector: {} },
+      });
+    }
+    finally {
+      console.warn = realWarn;
+    }
+
+    assert.deepEqual(out.resources.map(r => r._id), ["a:1"]);
+    assert.deepEqual(out.regions, []);
+    assert.isFalse(out.meta.regionsAvailable);
+  });
+
   it("reports cellsAvailable false when no group has a cell", async function() {
     const api = makeApi({
       track: collectionOf([], [[{ _id: "a:1", firstMs: 1, lastMs: 2, count: 1, cells: [null] }]]),

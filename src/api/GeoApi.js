@@ -406,7 +406,9 @@ export class GeoApi extends ApiNamespace {
    * @param {{collection: string, selector: object, geometryProperty: string}} [opts.regions]
    * @param {string} [opts.timeProperty="_whenMs"]
    * @returns {Promise<{resources: object[], summary: object, regions: object[], meta: object}>}
-   * @throws {Error} if any named collection is not registered
+   * @throws {Error} if a data or resource collection is not registered. A bad
+   *   *region* config does not throw: region tagging degrades to no tags and
+   *   `meta.regionsAvailable: false`, so the roster still returns.
    */
   async getGroupSummary(opts = {}) {
     const queries = Array.isArray(opts.queries) ? opts.queries : [];
@@ -454,15 +456,29 @@ export class GeoApi extends ApiNamespace {
     // are far too heavy for a field client.
     const regionDocs = [];
     if (opts.regions?.collection) {
-      const geometryProperty = opts.regions.geometryProperty ?? "bold:spatialDepiction";
-      const collection = this._requireCollection(opts.regions.collection);
-      const rows = await collection.find(opts.regions.selector ?? {}).toArray();
-      for (const row of rows) {
-        regionDocs.push({
-          _id: row._id,
-          label: row["rdfs:label"] ?? row["foaf:name"] ?? row._id,
-          geometry: row[geometryProperty] ?? null,
-        });
+      // Region tagging degrades, never fails. An unregistered collection, a
+      // malformed selector, or an unreadable region collection leaves the
+      // roster intact with no tags and `regionsAvailable: false` — a missing
+      // region config must never blank the animal list. Only this block is
+      // wrapped: a failure of the summary aggregation or the roster fetch is
+      // still a failed request.
+      try {
+        const geometryProperty = opts.regions.geometryProperty ?? "bold:spatialDepiction";
+        const collection = this._requireCollection(opts.regions.collection);
+        const rows = await collection.find(opts.regions.selector ?? {}).toArray();
+        for (const row of rows) {
+          regionDocs.push({
+            _id: row._id,
+            label: row["rdfs:label"] ?? row["foaf:name"] ?? row._id,
+            geometry: row[geometryProperty] ?? null,
+          });
+        }
+      }
+      catch (err) {
+        regionDocs.length = 0;
+        console.warn(
+          `getGroupSummary: region tagging skipped — ${err?.message ?? err}`
+        );
       }
     }
 
