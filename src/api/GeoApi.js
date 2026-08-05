@@ -11,6 +11,8 @@ import { getSunriseSunsetInfo } from "sunrise-sunset-api";
 import { ApiNamespace } from "./ApiNamespace.js";
 import { mergeShapes } from "../geo/merge.js";
 import { getSpatialRange, positionsOf, HULL_TYPES } from "../geo/range.js";
+import { buildSummaryPipeline, mergeSummaries, centroidsForCells, tagRegions } from "../geo/groupSummary.js";
+import { h3FieldName, PARENT_RESOLUTIONS } from "../geo/h3.js";
 import { Query } from "../Query.js";
 
 /**
@@ -54,6 +56,12 @@ export class GeoApi extends ApiNamespace {
 
   /** Write operations per bulkWrite call. */
   static WRITE_CHUNK = 500;
+
+  /** Default stored H3 resolution summarised (~1.2 km cells). */
+  static SUMMARY_CELL_RES = 7;
+
+  /** Ceiling on centroids returned across all groups before stepping coarser. */
+  static SUMMARY_MAX_CELLS = 20000;
 
   /**
    * Get sunrise and sunset times for a location and date.
@@ -372,6 +380,143 @@ export class GeoApi extends ApiNamespace {
       );
     }
     return collection;
+  }
+
+  /**
+   * Per-group facts for the GeoView group selector: time bounds, document
+   * count, a compact spatial footprint, and region tags.
+   *
+   * The counterpart of `geo.getGroupResources`, which answers only "which
+   * resources does this query reference". This answers "and what is true of
+   * each of them", in one round trip, without shipping the geo documents: 761
+   * cell centroids stand in for 32,732 collar reports.
+   *
+   * Facts only — no filtering, sorting, or paging, and no user location. The
+   * client applies predicates to what comes back, which is what lets filters
+   * move server-side later without changing this vocabulary.
+   *
+   * See `.private/specs/crittertrack/animal-selector-filters-spec.md` §4.
+   *
+   * @param {object} opts
+   * @param {Array<{dataCollection: string, dataSelector: object, resourceCollection: string}>} opts.queries
+   * @param {string} [opts.groupProperty="bold:animal"]
+   * @param {number} [opts.cellRes=7] - stored H3 resolution to summarise
+   * @param {string[]} [opts.fields] - roster projection; omit for whole documents
+   * @param {number} [opts.maxCells=20000] - ceiling before stepping coarser
+   * @param {{collection: string, selector: object, geometryProperty: string}} [opts.regions]
+   * @param {string} [opts.timeProperty="_whenMs"]
+   * @returns {Promise<{resources: object[], summary: object, regions: object[], meta: object}>}
+   * @throws {Error} if any named collection is not registered
+   */
+  async getGroupSummary(opts = {}) {
+    const queries = Array.isArray(opts.queries) ? opts.queries : [];
+    const groupProperty = opts.groupProperty ?? "bold:animal";
+    const timeProperty = opts.timeProperty ?? "_whenMs";
+    const maxCells = opts.maxCells ?? GeoApi.SUMMARY_MAX_CELLS;
+
+    // Resolution ladder: the requested resolution, then every coarser stored
+    // one. h3FieldName throws for resolutions the importer never wrote, so a
+    // bad cellRes fails here rather than silently matching no documents.
+    const requestedRes = opts.cellRes ?? GeoApi.SUMMARY_CELL_RES;
+    const ladder = PARENT_RESOLUTIONS.filter(r => r <= requestedRes).sort((a, b) => b - a);
+    if (ladder.length === 0) ladder.push(requestedRes);
+
+    let merged = new Map();
+    let cellRes = ladder[0];
+    let truncated = false;
+
+    for (let i = 0; i < ladder.length; i++) {
+      cellRes = ladder[i];
+      const cellField = h3FieldName(cellRes);
+      const batches = [];
+      for (const query of queries) {
+        const collection = this._requireCollection(query.dataCollection);
+        const pipeline = buildSummaryPipeline({
+          selector: query.dataSelector ?? {},
+          groupProperty,
+          cellField,
+          timeProperty,
+        });
+        batches.push(await collection.aggregate(pipeline).toArray());
+      }
+      merged = mergeSummaries(batches);
+
+      let total = 0;
+      for (const facts of merged.values()) total += facts.cells.size;
+      if (total <= maxCells) break;
+      // Flagged even on the last rung, where no coarser stored field exists to
+      // retry with: the client must know the footprint is incomplete either way.
+      truncated = true;
+      if (i === ladder.length - 1) break;
+    }
+
+    // Region documents: three rows, fetched once, never shipped — the polygons
+    // are far too heavy for a field client.
+    const regionDocs = [];
+    if (opts.regions?.collection) {
+      const geometryProperty = opts.regions.geometryProperty ?? "bold:spatialDepiction";
+      const collection = this._requireCollection(opts.regions.collection);
+      const rows = await collection.find(opts.regions.selector ?? {}).toArray();
+      for (const row of rows) {
+        regionDocs.push({
+          _id: row._id,
+          label: row["rdfs:label"] ?? row["foaf:name"] ?? row._id,
+          geometry: row[geometryProperty] ?? null,
+        });
+      }
+    }
+
+    const summary = {};
+    let cellsAvailable = false;
+    let timeAvailable = false;
+    for (const [id, facts] of merged) {
+      const cells = centroidsForCells(facts.cells);
+      if (cells.length > 0) cellsAvailable = true;
+      if (facts.firstMs !== null || facts.lastMs !== null) timeAvailable = true;
+      summary[id] = {
+        firstMs: facts.firstMs,
+        lastMs:  facts.lastMs,
+        count:   facts.count,
+        cells,
+        regions: regionDocs.length > 0 ? tagRegions(cells, regionDocs) : [],
+      };
+    }
+
+    // The roster is defined by the data query, not by the resource collection:
+    // a resource nothing points at is not part of this group set.
+    const ids = [...merged.keys()];
+    const resources = [];
+    const seen = new Set();
+    for (const query of queries) {
+      if (ids.length === 0) break;
+      const collection = this._requireCollection(query.resourceCollection);
+      const projection = Array.isArray(opts.fields) && opts.fields.length > 0
+        ? Object.fromEntries(opts.fields.map(f => [f, 1]))
+        : undefined;
+      const rows = await collection
+        .find({ _id: { $in: ids } }, projection ? { projection } : {})
+        .toArray();
+      for (const row of rows) {
+        if (seen.has(row._id)) continue;
+        seen.add(row._id);
+        resources.push(row);
+      }
+    }
+
+    return {
+      resources,
+      summary,
+      regions: regionDocs.map(({ _id, label }) => ({ _id, label })),
+      meta: {
+        cellProperty: h3FieldName(cellRes),
+        cellRes,
+        groupCount: merged.size,
+        cellsAvailable,
+        timeAvailable,
+        regionsAvailable: regionDocs.some(r => r.geometry !== null),
+        truncated,
+      },
+    };
   }
 
   /**
