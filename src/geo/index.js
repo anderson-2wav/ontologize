@@ -17,3 +17,4 @@ export * from "./h3.js";
 export * from "./merge.js";
 export * from "./range.js";
 export * from "./pointInPolygon.js";
+export * from "./groupSummary.js";
