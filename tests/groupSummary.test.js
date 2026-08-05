@@ -9,7 +9,8 @@
  */
 
 import { assert } from "chai";
-import { buildSummaryPipeline, mergeSummaries } from "../src/geo/groupSummary.js";
+import { buildSummaryPipeline, mergeSummaries, centroidsForCells, tagRegions } from "../src/geo/groupSummary.js";
+import { latLngToCell } from "h3-js";
 
 describe("buildSummaryPipeline", function() {
   it("matches the selector and groups by the group property", function() {
@@ -96,5 +97,79 @@ describe("mergeSummaries", function() {
   it("returns an empty map for empty input", function() {
     assert.equal(mergeSummaries([]).size, 0);
     assert.equal(mergeSummaries([[], null]).size, 0);
+  });
+});
+
+describe("centroidsForCells", function() {
+  it("resolves a cell to a [lat, lng] pair near the source point", function() {
+    const cell = latLngToCell(41.8445, -88.1554, 7);
+    const [[lat, lng]] = centroidsForCells([cell]);
+
+    // Resolution 7 cells are ~1.2 km across, so the centroid is close but not equal.
+    assert.closeTo(lat, 41.8445, 0.05);
+    assert.closeTo(lng, -88.1554, 0.05);
+  });
+
+  it("returns [lat, lng] order, not GeoJSON [lng, lat]", function() {
+    const [[lat, lng]] = centroidsForCells([latLngToCell(41.8, -88.1, 7)]);
+    assert.isAbove(lat, 0, "latitude is positive in Illinois");
+    assert.isBelow(lng, 0, "longitude is negative in Illinois");
+  });
+
+  it("rounds to the requested precision", function() {
+    const [[lat]] = centroidsForCells([latLngToCell(41.8445, -88.1554, 7)], 2);
+    assert.equal(lat, Number(lat.toFixed(2)));
+  });
+
+  it("skips unusable cell ids rather than throwing", function() {
+    const good = latLngToCell(41.8, -88.1, 7);
+    assert.lengthOf(centroidsForCells([good, "not-a-cell", null, ""]), 1);
+  });
+
+  it("accepts a Set, as mergeSummaries produces", function() {
+    const cell = latLngToCell(41.8, -88.1, 7);
+    assert.lengthOf(centroidsForCells(new Set([cell])), 1);
+  });
+});
+
+describe("tagRegions", function() {
+  // [lng, lat] in the geometry; [lat, lng] in the centroids — the whole point.
+  const NORTH = {
+    _id: "gov:idnr-region-north",
+    label: "North",
+    geometry: { type: "Polygon", coordinates: [[[-90, 41], [-87, 41], [-87, 43], [-90, 43], [-90, 41]]] },
+  };
+  const SOUTH = {
+    _id: "gov:idnr-region-south",
+    label: "South",
+    geometry: { type: "Polygon", coordinates: [[[-90, 37], [-87, 37], [-87, 39], [-90, 39], [-90, 37]]] },
+  };
+
+  it("tags the region containing a centroid", function() {
+    assert.deepEqual(tagRegions([[42, -88.5]], [NORTH, SOUTH]), ["gov:idnr-region-north"]);
+  });
+
+  it("tags both regions when any point falls in each — the 'any point' rule", function() {
+    const tags = tagRegions([[42, -88.5], [38, -88.5]], [NORTH, SOUTH]);
+    assert.sameMembers(tags, ["gov:idnr-region-north", "gov:idnr-region-south"]);
+  });
+
+  it("returns no tags when nothing matches", function() {
+    assert.deepEqual(tagRegions([[10, 10]], [NORTH, SOUTH]), []);
+  });
+
+  it("would return nothing if lat/lng were swapped — guards the axis order", function() {
+    // [-88.5, 42] read as [lat, lng] is off the map; a swap bug shows up here.
+    assert.deepEqual(tagRegions([[-88.5, 42]], [NORTH, SOUTH]), []);
+  });
+
+  it("skips a region with unusable geometry without failing the batch", function() {
+    const broken = { _id: "gov:broken", label: "Broken", geometry: { type: "Point", coordinates: [0, 0] } };
+    assert.deepEqual(tagRegions([[42, -88.5]], [broken, NORTH]), ["gov:idnr-region-north"]);
+  });
+
+  it("returns an empty array for empty inputs", function() {
+    assert.deepEqual(tagRegions([], [NORTH]), []);
+    assert.deepEqual(tagRegions([[42, -88.5]], []), []);
   });
 });

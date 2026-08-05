@@ -12,6 +12,9 @@
  * See `.private/specs/crittertrack/animal-selector-filters-spec.md` §4.
  */
 
+import { cellToLatLng, isValidCell } from "h3-js";
+import { pointInGeometry } from "./pointInPolygon.js";
+
 /**
  * The aggregation that reduces a geo collection to one row per group.
  *
@@ -100,4 +103,60 @@ export function mergeSummaries(batches) {
     }
   }
   return out;
+}
+
+/**
+ * Resolve H3 cell ids to `[lat, lng]` centroids.
+ *
+ * The server resolves these rather than shipping cell ids because it needs the
+ * centroids anyway for `tagRegions`, and a resolved pair costs the same on the
+ * wire (~19 bytes against ~17). The client then measures distances with no
+ * `h3-js` dependency and no knowledge of the H3 encoding.
+ *
+ * Rounding to 4 decimals is ~11 m — far finer than the ~1.2 km cell whose
+ * centre this is, and it keeps the payload compact.
+ *
+ * @param {Iterable<string>} cellIds - cell ids; a Set is fine
+ * @param {number} [precision=4] - decimal places
+ * @returns {Array<[number, number]>} [lat, lng] pairs
+ */
+export function centroidsForCells(cellIds, precision = 4) {
+  const out = [];
+  const factor = 10 ** precision;
+  for (const id of cellIds ?? []) {
+    if (typeof id !== "string" || id.length === 0 || !isValidCell(id)) continue;
+    try {
+      const [lat, lng] = cellToLatLng(id);
+      out.push([Math.round(lat * factor) / factor, Math.round(lng * factor) / factor]);
+    }
+    catch (err) {
+      // A cell id the importer never wrote, or wrote at a resolution h3-js
+      // rejects. One bad cell must not fail a roster request.
+    }
+  }
+  return out;
+}
+
+/**
+ * Which regions a group touches, under the "any point" rule: a group belongs to
+ * a region if **any** of its centroids falls inside it. An animal near a
+ * boundary therefore appears under both regions, which is the intended reading
+ * of "show me the animals in the South" — see the spec §2 decision table.
+ *
+ * A region whose geometry is missing or is not a Polygon/MultiPolygon is
+ * skipped, not fatal: a misconfigured region must never blank the roster.
+ *
+ * @param {Array<[number, number]>} centroids - [lat, lng] pairs
+ * @param {Array<{_id: string, geometry: object}>} regions
+ * @returns {string[]} region ids, in the order the regions were given
+ */
+export function tagRegions(centroids, regions) {
+  const tags = [];
+  for (const region of regions ?? []) {
+    if (!region?._id || !region.geometry) continue;
+    // GeoJSON is [lng, lat]; centroids are [lat, lng]. Swap here, once.
+    const hit = (centroids ?? []).some(([lat, lng]) => pointInGeometry([lng, lat], region.geometry));
+    if (hit) tags.push(region._id);
+  }
+  return tags;
 }
