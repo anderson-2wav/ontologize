@@ -16,6 +16,20 @@ export type LabelResolver = (
   opts?: GetLabelOptions
 ) => Promise<string | null | undefined> | string | null | undefined;
 
+/**
+ * Application-supplied image resolver. Called by `getImageUrl` when no
+ * configured image property carries a usable URL. Return `{ url, generic }`
+ * to supply an image; return null or undefined to decline.
+ */
+export type ImageResolver = (
+  resource: Resource,
+  opts?: Record<string, any>
+) =>
+  | Promise<{ url: string; generic: boolean } | null | undefined>
+  | { url: string; generic: boolean }
+  | null
+  | undefined;
+
 export interface OntologizeOptions {
   /** Named collections in addition to ontology, context, and statements */
   collections?: Record<string, any>;
@@ -25,6 +39,8 @@ export interface OntologizeOptions {
   debug?: boolean;
   /** Properties to check for labels (in order of preference) */
   labelProperties?: string[];
+  /** Properties to check for images (in order of preference). Default: ["bold:img"] */
+  imageProperties?: string[];
   /** Properties to check for descriptions (in order of preference) */
   descriptionProperties?: string[];
   /** Date format string (date-fns format). Default: "M/d/yyyy" */
@@ -35,6 +51,8 @@ export interface OntologizeOptions {
   dateTimeZone?: string;
   /** Application-specific label resolver; return null/undefined to decline */
   labelResolver?: LabelResolver;
+  /** Application-specific image resolver; return null/undefined to decline */
+  imageResolver?: ImageResolver;
 }
 
 export interface GetLabelOptions {
@@ -271,12 +289,19 @@ export interface MongoCollection {
 /** `ontologize.display` — UI presentation helpers (labels, descriptions, dates). */
 export declare class DisplayApi {
   setLabelResolver(resolver: LabelResolver | null): void;
+  setImageResolver(resolver: ImageResolver | null): void;
   setInfoComponentResolver(resolver: ((resource: Resource, hint?: any) => any) | null): void;
   getInfoComponent(resource: Resource, hint?: any): any;
   getLabel(resource: Resource, property?: string, fallback?: string): Promise<string>;
   getLabel(resource: Resource, property?: string, opts?: GetLabelOptions): Promise<string>;
   getLabel(resource: Resource, property?: string, fallback?: string, opts?: GetLabelOptions): Promise<string>;
   getLabelProperty(resource: Resource, fallback?: string): Promise<string>;
+  /**
+   * `property` is the matched `imageProperties` key when the image came from
+   * the resource itself, or `null` when it was supplied by the image
+   * resolver (the resolver does not report a property).
+   */
+  getImageUrl(resource: Resource, opts?: Record<string, any>): Promise<{ url: string; generic: boolean; property: string | null } | null>;
   getLabelFromId(resourceId: string, fallback?: string): Promise<string>;
   getDescription(resource: Resource, fallback?: string): Promise<string>;
   getDescriptionProperty(resource: Resource, fallback?: string): Promise<string>;

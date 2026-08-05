@@ -252,23 +252,28 @@ export class DisplayApi extends ApiNamespace {
    * opts.ontologyCache, and never clones the resource into a proxy. `opts` is
    * forwarded to the resolver and is otherwise unused.
    *
+   * `property` reports which `imageProperties` key matched, or `null` when
+   * the image came from the resolver instead — so a caller building a
+   * generic property listing (e.g. ResourceViewer's dynamic property list)
+   * can exclude that key and avoid rendering the image twice.
+   *
    * @param {object} resource
    * @param {object} [opts] - forwarded to the image resolver
-   * @returns {Promise<{url: string, generic: boolean}|null>}
+   * @returns {Promise<{url: string, generic: boolean, property: string|null}|null>}
    */
   async getImageUrl(resource, opts = {}) {
     check(resource, Object);
 
     for (const prop of this.opts.imageProperties) {
       const url = DisplayApi._firstUrl(resource[prop]);
-      if (url) return { url, generic: false };
+      if (url) return { url, generic: false, property: prop };
     }
 
     if (this._imageResolver) {
       try {
         const resolved = await this._imageResolver(resource, opts);
         const url = DisplayApi._firstUrl(resolved?.url);
-        if (url) return { url, generic: !!resolved.generic };
+        if (url) return { url, generic: !!resolved.generic, property: null };
       }
       catch (err) {
         console.error("[Ontologize] imageResolver threw:", err);

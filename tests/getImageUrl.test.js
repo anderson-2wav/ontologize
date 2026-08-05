@@ -45,13 +45,13 @@ describe("DisplayApi.getImageUrl", function() {
   it("returns the resource's own image as non-generic", async function() {
     const resource = { _id: "track:animal-151325", "bold:img": PHOTO };
     const result = await ontologize.display.getImageUrl(resource);
-    assert.deepEqual(result, { url: PHOTO, generic: false });
+    assert.deepEqual(result, { url: PHOTO, generic: false, property: "bold:img" });
   });
 
   it("takes the first entry of an array-valued image property", async function() {
     const resource = { _id: "track:animal-1", "bold:img": [PHOTO, SPECIES_PHOTO] };
     const result = await ontologize.display.getImageUrl(resource);
-    assert.deepEqual(result, { url: PHOTO, generic: false });
+    assert.deepEqual(result, { url: PHOTO, generic: false, property: "bold:img" });
   });
 
   it("treats empty, whitespace and non-string values as absent", async function() {
@@ -69,13 +69,13 @@ describe("DisplayApi.getImageUrl", function() {
   it("falls back to the image resolver and keeps its generic flag", async function() {
     ontologize.display.setImageResolver(async () => ({ url: SPECIES_PHOTO, generic: true }));
     const result = await ontologize.display.getImageUrl({ _id: "track:animal-2" });
-    assert.deepEqual(result, { url: SPECIES_PHOTO, generic: true });
+    assert.deepEqual(result, { url: SPECIES_PHOTO, generic: true, property: null });
   });
 
   it("coerces a resolver's missing generic flag to false", async function() {
     ontologize.display.setImageResolver(async () => ({ url: SPECIES_PHOTO }));
     const result = await ontologize.display.getImageUrl({ _id: "track:animal-2" });
-    assert.deepEqual(result, { url: SPECIES_PHOTO, generic: false });
+    assert.deepEqual(result, { url: SPECIES_PHOTO, generic: false, property: null });
   });
 
   it("prefers the resource's own image over the resolver", async function() {
@@ -86,7 +86,7 @@ describe("DisplayApi.getImageUrl", function() {
     });
     const resource = { _id: "track:animal-151325", "bold:img": PHOTO };
     const result = await ontologize.display.getImageUrl(resource);
-    assert.deepEqual(result, { url: PHOTO, generic: false });
+    assert.deepEqual(result, { url: PHOTO, generic: false, property: "bold:img" });
     assert.isFalse(resolverCalled, "resolver must not run when the resource has its own image");
   });
 
@@ -113,7 +113,19 @@ describe("DisplayApi.getImageUrl", function() {
     const custom = makeOntologize({ imageProperties: ["schema:image"] });
     const resource = { _id: "x", "schema:image": PHOTO, "bold:img": SPECIES_PHOTO };
     const result = await custom.display.getImageUrl(resource);
-    assert.deepEqual(result, { url: PHOTO, generic: false });
+    assert.deepEqual(result, { url: PHOTO, generic: false, property: "schema:image" });
+  });
+
+  it("reports the matched property when the image comes from the resource", async function() {
+    const resource = { _id: "x", "bold:img": PHOTO };
+    const result = await ontologize.display.getImageUrl(resource);
+    assert.equal(result.property, "bold:img");
+  });
+
+  it("reports a null property when the image comes from the resolver", async function() {
+    ontologize.display.setImageResolver(async () => ({ url: SPECIES_PHOTO, generic: true }));
+    const result = await ontologize.display.getImageUrl({ _id: "track:animal-2" });
+    assert.isNull(result.property);
   });
 
   it("defaults imageProperties to bold:img", function() {
