@@ -140,7 +140,12 @@ export class DisplayApi extends ApiNamespace {
 
     check(fallback, Match.Optional(String));
 
-    const labelProperties = this.opts.labelProperties;
+    // Copy, don't alias: the class-level override below unshifts onto this
+    // list, and `this.opts.labelProperties` is the shared instance array. A
+    // bare reference made every call permanently prepend to the global
+    // preference order — unbounded growth, and one class's override leaking
+    // into every other class's lookups.
+    const labelProperties = [...this.opts.labelProperties];
     // Get the assembled schema to check for label or labelProperties override
     const schema = await this.ontologize.schema.getSchema(property, resource, opts);
     // if there is a direct label override, use it
@@ -237,7 +242,7 @@ export class DisplayApi extends ApiNamespace {
       }
     }
 
-    return fallback || this.opts.labelProperties[this.opts.labelProperties - 1];
+    return fallback || this.opts.labelProperties[this.opts.labelProperties.length - 1];
   }
   /**
    * Get the description for a resource, checking properties in order of preference.
