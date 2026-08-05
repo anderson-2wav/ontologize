@@ -42,10 +42,12 @@ export class DisplayApi extends ApiNamespace {
   constructor(ontologize) {
     super(ontologize);
     // Optional application-registered resolvers (see setInfoComponentResolver /
-    // setLabelResolver). Held on the display namespace; the owning Ontologize
-    // constructor forwards its infoComponentResolver / labelResolver opts here.
+    // setLabelResolver / setImageResolver). Held on the display namespace; the
+    // owning Ontologize constructor forwards its infoComponentResolver /
+    // labelResolver / imageResolver opts here.
     this._infoComponentResolver = null;
     this._labelResolver = null;
+    this._imageResolver = null;
   }
 
   /**
@@ -212,6 +214,85 @@ export class DisplayApi extends ApiNamespace {
     }
 
     return fallback || "Unknown";
+  }
+
+  /**
+   * Register an application-specific image resolver. Called by `getImageUrl`
+   * when no configured image property carries a usable URL. Return
+   * `{ url, generic }` to supply an image; return null/undefined to decline.
+   * Pass `null` to clear a previously registered resolver.
+   *
+   * `generic` declares *specificity*, not provenance: false when the image
+   * depicts this exact resource, true when it stands in for the kind of thing
+   * it is (e.g. a species photo shown for an individual animal). Only the
+   * application knows, which is why the resolver declares it.
+   *
+   * @param {Function|null} resolver  async (resource, opts) => {url, generic}|null
+   */
+  setImageResolver(resolver) {
+    if (resolver !== null && typeof resolver !== "function") {
+      throw new Error("Ontologize.setImageResolver: resolver must be a function or null");
+    }
+    this._imageResolver = resolver;
+  }
+
+  /**
+   * Get an image for a resource.
+   *
+   * Resolution order:
+   *   1. the resource's own `opts.imageProperties` -> { url, generic: false }
+   *   2. the application image resolver            -> whatever it declares
+   *   3. null
+   *
+   * Data beats heuristics: a resource's own image always outranks an
+   * application-supplied one, so a real photo is never shadowed by a stand-in.
+   *
+   * Unlike getLabel this performs no ontology lookup — there is no class-level
+   * override to assemble — so it never calls getSchema, never reads
+   * opts.ontologyCache, and never clones the resource into a proxy. `opts` is
+   * forwarded to the resolver and is otherwise unused.
+   *
+   * @param {object} resource
+   * @param {object} [opts] - forwarded to the image resolver
+   * @returns {Promise<{url: string, generic: boolean}|null>}
+   */
+  async getImageUrl(resource, opts = {}) {
+    check(resource, Object);
+
+    for (const prop of this.opts.imageProperties) {
+      const url = DisplayApi._firstUrl(resource[prop]);
+      if (url) return { url, generic: false };
+    }
+
+    if (this._imageResolver) {
+      try {
+        const resolved = await this._imageResolver(resource, opts);
+        const url = DisplayApi._firstUrl(resolved?.url);
+        if (url) return { url, generic: !!resolved.generic };
+      }
+      catch (err) {
+        console.error("[Ontologize] imageResolver threw:", err);
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Normalize a raw property value to a usable URL string, or null.
+   *
+   * Arrays take their first entry: a plain MongoDB document may hold one, while
+   * an LD proxy unwraps to a scalar, and this reads correctly off both. Anything
+   * that is not a non-empty string is treated as *absent* so resolution
+   * continues to the next property or the resolver, rather than emitting
+   * `<img src="[object Object]">`.
+   *
+   * @param {*} value
+   * @returns {string|null}
+   */
+  static _firstUrl(value) {
+    const v = Array.isArray(value) ? value[0] : value;
+    return (typeof v === "string" && v.trim()) ? v : null;
   }
 
   /**

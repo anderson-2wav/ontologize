@@ -29,6 +29,9 @@ export class Ontologize {
   // Default properties for getDescription (in order of preference)
   static DEFAULT_DESCRIPTION_PROPERTIES = ["dcterms:description", "rdfs:comment"];
 
+  // Default properties for getImageUrl (in order of preference)
+  static DEFAULT_IMAGE_PROPERTIES = ["bold:img"];
+
   // Default color scheme for individuals. The array now lives on DisplayApi
   // (where assignIndividualColors / buildGroupOptions consume it); re-exported
   // here for back-compat with callers reading Ontologize.DEFAULT_COLOR_SCHEME.
@@ -78,6 +81,7 @@ export class Ontologize {
    * @param {boolean} [opts.debug=false] - Enable debug logging
    * @param {string[]} [opts.labelProperties] - Properties to check for labels (in order of preference)
    * @param {string[]} [opts.descriptionProperties] - Properties to check for descriptions (in order of preference)
+   * @param {string[]} [opts.imageProperties] - Properties to check for image URLs (in order of preference)
    * @param {string} [opts.dateFormat="M/d/yyyy"] - Default format for dates
    * @param {string} [opts.dateTimeFormat="M/d/yyyy h:mm a"] - Default format for date-times
    * @param {string} [opts.dateTimeZone="America/Los_Angeles"] - Default timezone for date formatting
@@ -100,6 +104,12 @@ export class Ontologize {
     this.opts.debug = this.opts.debug || false;
     this.opts.labelProperties = this.opts.labelProperties || Ontologize.DEFAULT_LABEL_PROPERTIES;
     this.opts.descriptionProperties = this.opts.descriptionProperties || Ontologize.DEFAULT_DESCRIPTION_PROPERTIES;
+    // Copy the default: the sibling lines above assign the shared static array
+    // by reference, so any future code that mutates opts.imageProperties would
+    // corrupt DEFAULT_IMAGE_PROPERTIES for every other instance. That is the
+    // same aliasing shape that made getLabel grow opts.labelProperties without
+    // bound. Nothing mutates this list today; the copy keeps it that way.
+    this.opts.imageProperties = this.opts.imageProperties || [...Ontologize.DEFAULT_IMAGE_PROPERTIES];
     this.opts.dateFormat = this.opts.dateFormat || "M/d/yyyy";
     this.opts.dateTimeFormat = this.opts.dateTimeFormat || "M/d/yyyy h:mm a ZZ";
     this.opts.dateTimeZone = this.opts.dateTimeZone || "America/Los_Angeles";
@@ -122,6 +132,9 @@ export class Ontologize {
     }
     if (this.opts.labelResolver) {
       this.display.setLabelResolver(this.opts.labelResolver);
+    }
+    if (this.opts.imageResolver) {
+      this.display.setImageResolver(this.opts.imageResolver);
     }
 
     // Initialize the singleton LD instance for this Ontologize instance.
