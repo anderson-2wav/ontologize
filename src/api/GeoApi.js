@@ -11,6 +11,8 @@ import { getSunriseSunsetInfo } from "sunrise-sunset-api";
 import { ApiNamespace } from "./ApiNamespace.js";
 import { mergeShapes } from "../geo/merge.js";
 import { getSpatialRange, positionsOf, HULL_TYPES } from "../geo/range.js";
+import { simplifyShape, DEFAULT_TOLERANCE } from "../geo/simplify.js";
+import { pickDepictionByRole, withDepictionRole } from "../geo/depiction.js";
 import { buildSummaryPipeline, mergeSummaries, centroidsForCells, tagRegions } from "../geo/groupSummary.js";
 import { h3FieldName, PARENT_RESOLUTIONS } from "../geo/h3.js";
 import { Query } from "../Query.js";
@@ -145,11 +147,18 @@ export class GeoApi extends ApiNamespace {
    *
    * Callers branch on `type` and wrap a bare geometry when they need a Feature —
    * see `ResourceGeoView`'s `isGeoJSONGeometry` branch. A multi-valued property
-   * yields its first value.
+   * yields its first value, unless `opts.depictionRole` asks for another.
    *
    * @param {object} resource - The resource to get the depiction for
    * @param {object} [opts] - Options
    * @param {Map} [opts.ontologyCache] - Cache Map for ontology lookups
+   * @param {string} [opts.depictionRole] - select the depiction whose
+   *   `properties["bold:depictionRole"]` matches, rather than the first. See
+   *   `../geo/depiction.js`.
+   * @param {boolean} [opts.strictRole=false] - with a role requested, answer
+   *   null rather than falling back to the first depiction. Callers shipping a
+   *   payload to a browser want this: a non-strict miss on "thumbnail" hands
+   *   back the full-detail geometry, which for Illinois is 100x larger.
    * @returns {Promise<object|null>} A GeoJSON object — Feature, FeatureCollection,
    *   Geometry, or GeometryCollection — or null if the resource has no spatial data
    */
@@ -205,7 +214,7 @@ export class GeoApi extends ApiNamespace {
 
       // Pattern 3: bold:GeoJSON
       if (rangeValue === "bold:GeoJSON") {
-        const geoJson = this._parseGeoValue(propertyValue);
+        const geoJson = this._selectGeoValue(propertyName, propertyValue, resource, opts);
         if (geoJson) {
           return geoJson;
         }
@@ -287,6 +296,53 @@ export class GeoApi extends ApiNamespace {
       merged.properties["bold:mergeDiagnostics"].unresolved = unresolved;
     }
     return merged;
+  }
+
+  /**
+   * Build a resource's whole `bold:spatialDepiction` value: the merged
+   * full-detail outline, plus a simplified thumbnail of it.
+   *
+   * Two fidelities of one shape, because they answer different questions. The
+   * detail outline is what area, containment and merge operations need. The
+   * thumbnail is what a 100px panel needs, and shipping the detail there means
+   * ~780 KB for Illinois where 8 KB is indistinguishable.
+   *
+   * A wrapper rather than an option on `mergeShapes`, whose Feature return
+   * every caller destructures — a flag that conditionally changed the return
+   * type to a pair would break them all.
+   *
+   * **Order is load-bearing.** `_parseGeoValue` takes `value[0]`, so the
+   * full-detail shape must stay first: every existing consumer reads the array
+   * without knowing about roles and must keep getting detail. Only the
+   * thumbnail is tagged, matching the marker-then-position rule in
+   * `../geo/depiction.js`.
+   *
+   * @param {Array<string|object>|string|object} resources - what to merge; see
+   *   `mergeShapes`
+   * @param {object} [opts] - everything `mergeShapes` takes, plus:
+   * @param {number} [opts.tolerance=DEFAULT_TOLERANCE] - thumbnail simplification
+   *   tolerance, in degrees of latitude
+   * @param {boolean} [opts.thumbnail=true] - set false to get `[detail]` alone
+   * @returns {Promise<Array<object>|null>} `[detail, thumbnail]`, `[detail]`, or
+   *   null if nothing areal could be resolved
+   */
+  async buildDepictions(resources, opts = {}) {
+    const detail = await this.mergeShapes(resources, opts);
+    if (!detail) return null;
+    if (opts.thumbnail === false) return [detail];
+
+    const thumbnail = simplifyShape(detail, {
+      tolerance: opts.tolerance ?? DEFAULT_TOLERANCE,
+      // Carry the label so the thumbnail is self-describing, but not the merge
+      // diagnostics: those record how the *detail* shape was built, and the
+      // thumbnail keeps its own provenance in bold:simplifyDiagnostics.
+      properties: detail.properties?.["rdfs:label"]
+        ? { "rdfs:label": detail.properties["rdfs:label"] }
+        : {}
+    });
+    if (!thumbnail) return [detail];
+
+    return [detail, withDepictionRole(thumbnail, "thumbnail")];
   }
 
   /**
@@ -751,6 +807,36 @@ export class GeoApi extends ApiNamespace {
    * @returns {object|null} GeoJSON object or null
    * @private
    */
+  /**
+   * Resolve one `bold:GeoJSON` property value, honouring `opts.depictionRole`.
+   *
+   * Falls straight through to `_parseGeoValue` when no role is asked for, so
+   * every existing caller keeps its documented first-value behaviour — that
+   * behaviour is depended on by `getSpatialDepiction`, `mergeShapes`,
+   * `getSpatialRange`, `updateSpatialRange`, and the whole `gov.counties`
+   * trimming design, and is not safe to change underneath them.
+   *
+   * With a role, it reaches through `resource.__raw` for the same reason
+   * `mergeShapes`' `opts.select` hook does: an LD proxy collapses a
+   * multi-valued property to its first value, so the proxy alone can never see
+   * the second depiction.
+   *
+   * @param {string} propertyName
+   * @param {*} propertyValue - the value as read off the (possibly proxied) resource
+   * @param {object} resource
+   * @param {object} opts - `depictionRole`, `strictRole`
+   * @returns {object|null}
+   * @private
+   */
+  _selectGeoValue(propertyName, propertyValue, resource, opts = {}) {
+    if (!opts.depictionRole) return this._parseGeoValue(propertyValue);
+
+    const raw = resource.__raw?.[propertyName] ?? propertyValue;
+    const list = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+    const picked = pickDepictionByRole(list, opts.depictionRole, { strict: opts.strictRole });
+    return picked ? this._parseGeoValue(picked) : null;
+  }
+
   _parseGeoValue(value) {
     if (!value) return null;
 
