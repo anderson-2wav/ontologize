@@ -74,3 +74,60 @@ export function pointInGeometry(point, geometry) {
   }
   return false;
 }
+
+/**
+ * Bounding box of a GeoJSON Polygon, MultiPolygon, or a Feature wrapping
+ * either, as `[minLng, minLat, maxLng, maxLat]`.
+ *
+ * Lives beside `pointInGeometry` because that is what it is for: a ray cast
+ * over a 218-vertex ring is cheap, but a scan over 50 of them is not, and one
+ * bbox comparison rejects 49 of the 50 before the cast. Callers that keep the
+ * geometry around should keep the box too rather than recomputing it.
+ *
+ * Only ring 0 of each polygon is walked. Holes are by definition inside the
+ * outer ring, so they cannot widen the box.
+ *
+ * Anything unusable — a Point, a missing geometry, a malformed coordinates
+ * array — is null rather than a throw, matching `pointInGeometry`: one broken
+ * shape must not fail a whole scan.
+ *
+ * @param {object} shape - a GeoJSON Feature or geometry
+ * @returns {[number, number, number, number]|null}
+ */
+export function geometryBbox(shape) {
+  const g = shape?.type === "Feature" ? shape.geometry : shape;
+  if (!g || !Array.isArray(g.coordinates)) return null;
+
+  const polygons = g.type === "Polygon"
+    ? [g.coordinates]
+    : (g.type === "MultiPolygon" ? g.coordinates : null);
+  if (!polygons) return null;
+
+  let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
+  for (const rings of polygons) {
+    for (const position of rings?.[0] ?? []) {
+      const [lng, lat] = position ?? [];
+      if (!Number.isFinite(lng) || !Number.isFinite(lat)) continue;
+      if (lng < minLng) minLng = lng;
+      if (lng > maxLng) maxLng = lng;
+      if (lat < minLat) minLat = lat;
+      if (lat > maxLat) maxLat = lat;
+    }
+  }
+  return Number.isFinite(minLng) && Number.isFinite(minLat)
+    ? [minLng, minLat, maxLng, maxLat]
+    : null;
+}
+
+/**
+ * Whether a point falls inside a bounding box, edges included.
+ *
+ * @param {[number, number]} point - [lng, lat]
+ * @param {[number, number, number, number]} bbox - [minLng, minLat, maxLng, maxLat]
+ * @returns {boolean}
+ */
+export function pointInBbox([lng, lat], bbox) {
+  if (!Array.isArray(bbox) || bbox.length !== 4) return false;
+  const [minLng, minLat, maxLng, maxLat] = bbox;
+  return lng >= minLng && lng <= maxLng && lat >= minLat && lat <= maxLat;
+}

@@ -13,6 +13,7 @@ import { mergeShapes } from "../geo/merge.js";
 import { getSpatialRange, positionsOf, HULL_TYPES } from "../geo/range.js";
 import { simplifyShape, DEFAULT_TOLERANCE } from "../geo/simplify.js";
 import { pickDepictionByRole, withDepictionRole } from "../geo/depiction.js";
+import { pointInGeometry, geometryBbox, pointInBbox } from "../geo/pointInPolygon.js";
 import { buildSummaryPipeline, mergeSummaries, centroidsForCells, tagRegions } from "../geo/groupSummary.js";
 import { h3FieldName, PARENT_RESOLUTIONS } from "../geo/h3.js";
 import { Query } from "../Query.js";
@@ -64,6 +65,18 @@ export class GeoApi extends ApiNamespace {
 
   /** Ceiling on centroids returned across all groups before stepping coarser. */
   static SUMMARY_MAX_CELLS = 20000;
+
+  /** Collection `outline` scans for containing regions. */
+  static OUTLINE_COLLECTION = "gov";
+
+  /** `@type` an `outline` candidate must carry. */
+  static OUTLINE_TYPE = "gov:State";
+
+  /**
+   * Depiction role `outline` returns. Thumbnail, always: the caller is a 100px
+   * figure, and the detail geometry is ~100x larger.
+   */
+  static OUTLINE_ROLE = "thumbnail";
 
   /**
    * Get sunrise and sunset times for a location and date.
@@ -343,6 +356,133 @@ export class GeoApi extends ApiNamespace {
     if (!thumbnail) return [detail];
 
     return [detail, withDepictionRole(thumbnail, "thumbnail")];
+  }
+
+  /**
+   * The small outline of the region containing a point — the map a thumbnail
+   * draws a home range against.
+   *
+   * `bold-vue`'s `SpatialRangeValue` calls this as the `geo.outline` RPC method
+   * to place an animal's range inside its state in a ~100px figure. It answers
+   * the containing region rather than a fixed one because the renderer fires
+   * for any `bold:Animal` subclass: `orju:Bird` resolves to California, and a
+   * hard-coded Illinois would draw the wrong map with the dot off canvas.
+   * Adding a state is then a data change — bootstrap `gov:state-CA` with a
+   * `[detail, thumbnail]` pair and it resolves with no code edit.
+   *
+   * **Only the thumbnail depiction is ever returned**, and null rather than the
+   * full-detail geometry when a region has none: `strictRole` is what keeps a
+   * 778 KB Illinois polygon out of a popup that asked for 8 KB. See
+   * `../geo/depiction.js`.
+   *
+   * It takes an id or a coordinate pair and **no selector**, unlike
+   * `getGroupSummary` — which is what makes it safe to expose directly to a
+   * browser without the server-owns-the-selector precaution that method needs.
+   *
+   * Like `getSpatialDepiction`, this needs the ontology loaded: a depiction is
+   * only recognised once `bold:spatialDepiction`'s `rdfs:range` is known to be
+   * `bold:GeoJSON`. Against an empty Ontology collection this is always null.
+   *
+   * Resolved outlines are memoised on the instance, keyed by collection, role
+   * and id — they are bootstrap shapes, so the cache is never invalidated;
+   * `clearOutlineCache()` exists for tests and for anything that reloads region
+   * data in-process. Only thumbnails are held: caching detail geometry would be
+   * ~780 KB per resident state.
+   *
+   * @param {object} [opts]
+   * @param {string} [opts.resourceId] - a specific region, e.g. `"gov:state-IL"`.
+   *   Wins over `point` when both are given.
+   * @param {[number, number]} [opts.point] - `[lng, lat]`; the region containing
+   *   it. GeoJSON order, matching `bold:spatialRange.properties.centroid.coordinates`
+   *   — nothing to swap.
+   * @param {string} [opts.collection="gov"] - registered collection to look in.
+   *   An unregistered name is null, not a throw: a host that has not bootstrapped
+   *   region data should degrade to a rangeless figure, not a 500.
+   * @param {string} [opts.type="gov:State"] - `@type` a candidate must carry,
+   *   for the `point` scan
+   * @param {string} [opts.depictionRole="thumbnail"] - which fidelity to return
+   * @returns {Promise<{_id: string, label: string, feature: object}|null>} null
+   *   when nothing contains the point, or when the match carries no depiction in
+   *   the requested role — never a depiction in another role
+   */
+  async outline(opts = {}) {
+    const collectionName = opts.collection ?? GeoApi.OUTLINE_COLLECTION;
+    const collection = this.collections[collectionName];
+    if (!collection) return null;
+
+    const role = opts.depictionRole ?? GeoApi.OUTLINE_ROLE;
+    // One cache per call, shared across every candidate: the property lookup
+    // for bold:spatialDepiction is the same for all of them.
+    const ontologyCache = new Map();
+
+    if (opts.resourceId) {
+      const doc = await collection.findOne({ _id: opts.resourceId });
+      if (!doc) return null;
+      const entry = await this._outlineFor(doc, collectionName, role, ontologyCache);
+      return entry?.result ?? null;
+    }
+
+    const point = opts.point;
+    if (!Array.isArray(point) || point.length !== 2) return null;
+    const [lng, lat] = point;
+    if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null;
+
+    const docs = await collection.find({ "@type": opts.type ?? GeoApi.OUTLINE_TYPE }).toArray();
+    for (const doc of docs) {
+      const entry = await this._outlineFor(doc, collectionName, role, ontologyCache);
+      if (!entry) continue;
+      // Tested against the thumbnail, not the detail ring: 218 vertices rather
+      // than 21,667, and accurate to ~1 km, which is far more than "which
+      // state" needs. The bbox prefilter makes the common case one comparison.
+      if (entry.bbox && !pointInBbox([lng, lat], entry.bbox)) continue;
+      if (pointInGeometry([lng, lat], entry.result.feature)) return entry.result;
+    }
+    return null;
+  }
+
+  /** Drop the memoised outlines. For tests, and for in-process data reloads. */
+  clearOutlineCache() {
+    this._outlineCache?.clear();
+  }
+
+  /**
+   * One region's outline, memoised.
+   *
+   * Returns the bbox alongside the payload so the scan does not recompute it
+   * per point, and a `result` object that is exactly what `outline` returns —
+   * the bbox is a scan detail and has no business on the wire.
+   *
+   * @param {object} doc - a region resource
+   * @param {string} collectionName
+   * @param {string} role - depiction role
+   * @param {Map} ontologyCache
+   * @returns {Promise<{result: object, bbox: Array<number>|null}|null>}
+   * @private
+   */
+  async _outlineFor(doc, collectionName, role, ontologyCache) {
+    const id = doc._id ?? doc["@id"];
+    if (!id) return null;
+
+    this._outlineCache ??= new Map();
+    // NUL as the separator, as HttpCollectionAdapter#_key does: it cannot occur
+    // in a collection name, a role or a QName, so no pair of parts can collide.
+    // Written as an escape, never as a literal byte — a raw NUL in source makes
+    // grep and diff treat the whole file as binary.
+    const key = `${collectionName}\u0000${role}\u0000${id}`;
+    if (this._outlineCache.has(key)) return this._outlineCache.get(key);
+
+    const feature = await this.getSpatialDepiction(doc, {
+      depictionRole: role,
+      strictRole: true,
+      ontologyCache
+    });
+
+    const label = Array.isArray(doc["rdfs:label"]) ? doc["rdfs:label"][0] : doc["rdfs:label"];
+    const entry = feature
+      ? { result: { _id: id, label: label ?? id, feature }, bbox: geometryBbox(feature) }
+      : null;
+    this._outlineCache.set(key, entry);
+    return entry;
   }
 
   /**
