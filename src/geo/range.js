@@ -150,7 +150,7 @@ function ringFromEdges(edges, points) {
  * than an absolute distance — the same value behaves sensibly for a home range
  * and for a continent. `alpha: 0` keeps everything, which is the convex hull.
  *
- * Same rule as `imports/lib/hullUtils.js`, which is what `RangeExtentPlugin`
+ * Same rule as `bold-vue/geo-plugins/hullUtils.js`, which is what `RangeExtentPlugin`
  * draws, so a stored range agrees with the live overlay.
  *
  * @param {Array<[number, number]>} points - planar [x, y], already deduped

@@ -355,7 +355,7 @@ export class GeoApi extends ApiNamespace {
    * rejected, so one bad id shrinks the range visibly instead of silently.
    *
    * `hullType: "concave"` uses the same alpha-shape rule as
-   * `imports/lib/hullUtils.js`, so a stored range agrees with the hull
+   * `bold-vue/geo-plugins/hullUtils.js`, so a stored range agrees with the hull
    * `RangeExtentPlugin` draws live for the same points.
    *
    * Like `getSpatialDepiction`, this needs the ontology loaded: a depiction is
