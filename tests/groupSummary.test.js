@@ -43,6 +43,39 @@ describe("buildSummaryPipeline", function() {
   it("throws when the group property is missing", function() {
     assert.throws(() => buildSummaryPipeline({ cellField: "_h3_7" }), /groupProperty/);
   });
+
+  it("omits the last-point accumulator by default", function() {
+    const pipeline = buildSummaryPipeline({ groupProperty: "bold:animal", cellField: "_h3_7" });
+    assert.notProperty(pipeline[1].$group, "lastPoint");
+  });
+
+  it("accumulates the newest document's position when asked", function() {
+    const pipeline = buildSummaryPipeline({
+      groupProperty: "bold:animal", cellField: "_h3_7", includeLastPoint: true,
+    });
+
+    assert.deepEqual(pipeline[1].$group.lastPoint, {
+      $top: { sortBy: { _whenMs: -1 }, output: ["$geo:lat", "$geo:long"] },
+    });
+  });
+
+  it("sorts the last point by the same clock as the time bounds", function() {
+    const pipeline = buildSummaryPipeline({
+      groupProperty: "bold:animal", cellField: "_h3_7",
+      includeLastPoint: true, timeProperty: "_observedMs",
+    });
+
+    assert.deepEqual(pipeline[1].$group.lastPoint.$top.sortBy, { _observedMs: -1 });
+  });
+
+  it("honours non-default position properties", function() {
+    const pipeline = buildSummaryPipeline({
+      groupProperty: "bold:animal", cellField: "_h3_7", includeLastPoint: true,
+      latProperty: "wgs:lat", lngProperty: "wgs:long",
+    });
+
+    assert.deepEqual(pipeline[1].$group.lastPoint.$top.output, ["$wgs:lat", "$wgs:long"]);
+  });
 });
 
 describe("mergeSummaries", function() {
@@ -97,6 +130,67 @@ describe("mergeSummaries", function() {
   it("returns an empty map for empty input", function() {
     assert.equal(mergeSummaries([]).size, 0);
     assert.equal(mergeSummaries([[], null]).size, 0);
+  });
+
+  it("carries the last point through when one batch supplies it", function() {
+    const merged = mergeSummaries([
+      [{ _id: "a:1", firstMs: 1, lastMs: 900, count: 1, cells: [], lastPoint: [41.9, -88.0] }],
+    ]);
+    assert.deepEqual(merged.get("a:1").lastPoint, [41.9, -88.0]);
+  });
+
+  it("is null when no batch supplies a last point", function() {
+    const merged = mergeSummaries([[{ _id: "a:1", firstMs: 1, lastMs: 2, count: 1, cells: [] }]]);
+    assert.isNull(merged.get("a:1").lastPoint);
+  });
+
+  // The point must follow lastMs, not batch order: the same animal seen through
+  // two collections is merged, and the newer collection may arrive second.
+  it("keeps the point belonging to the greater lastMs, whatever the batch order", function() {
+    const older = { _id: "a:1", firstMs: 1, lastMs: 100, count: 1, cells: [], lastPoint: [40.0, -88.0] };
+    const newer = { _id: "a:1", firstMs: 1, lastMs: 900, count: 1, cells: [], lastPoint: [41.9, -88.2] };
+
+    assert.deepEqual(mergeSummaries([[older], [newer]]).get("a:1").lastPoint, [41.9, -88.2]);
+    assert.deepEqual(mergeSummaries([[newer], [older]]).get("a:1").lastPoint, [41.9, -88.2]);
+  });
+
+  // $top emits the output array with missing paths elided, so a newest document
+  // that carries no position yields [] — not a pair of nulls.
+  it("rejects a malformed point rather than reporting a half-position", function() {
+    const merged = mergeSummaries([
+      [{ _id: "a:1", firstMs: 1, lastMs: 2, count: 1, cells: [], lastPoint: [] }],
+      [{ _id: "a:2", firstMs: 1, lastMs: 2, count: 1, cells: [], lastPoint: [41.9, null] }],
+      [{ _id: "a:3", firstMs: 1, lastMs: 2, count: 1, cells: [], lastPoint: ["41.9", "-88.0"] }],
+    ]);
+
+    assert.isNull(merged.get("a:1").lastPoint);
+    assert.isNull(merged.get("a:2").lastPoint);
+    assert.isNull(merged.get("a:3").lastPoint);
+  });
+
+  it("takes a real point when the batch holding the greater lastMs has none", function() {
+    const merged = mergeSummaries([
+      [{ _id: "a:1", firstMs: 1, lastMs: 900, count: 1, cells: [], lastPoint: [] }],
+      [{ _id: "a:1", firstMs: 1, lastMs: 100, count: 1, cells: [], lastPoint: [40.0, -88.0] }],
+    ]);
+    assert.deepEqual(merged.get("a:1").lastPoint, [40.0, -88.0]);
+  });
+
+  // Without this the info panel would pair a position from one document with a
+  // timestamp from another and read as a fix that never happened.
+  it("times the point by its own document, not by lastMs", function() {
+    const merged = mergeSummaries([
+      [{ _id: "a:1", firstMs: 1, lastMs: 900, count: 1, cells: [], lastPoint: [] }],
+      [{ _id: "a:1", firstMs: 1, lastMs: 100, count: 1, cells: [], lastPoint: [40.0, -88.0] }],
+    ]);
+
+    assert.equal(merged.get("a:1").lastMs, 900, "the time bound still reports the newest document");
+    assert.equal(merged.get("a:1").lastPointMs, 100, "but the point carries the time of the fix it came from");
+  });
+
+  it("has a null lastPointMs when there is no point", function() {
+    const merged = mergeSummaries([[{ _id: "a:1", firstMs: 1, lastMs: 900, count: 1, cells: [] }]]);
+    assert.isNull(merged.get("a:1").lastPointMs);
   });
 });
 

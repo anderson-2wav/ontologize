@@ -22,14 +22,33 @@ import { pointInGeometry } from "./pointInPolygon.js";
  * stand in for 32,732 points at H3 resolution 7. The caller enforces a ceiling
  * on the total (see GeoApi.getGroupSummary) because `$addToSet` itself has none.
  *
+ * `includeLastPoint` is opt-in rather than always-on because the two callers
+ * want opposite things. The animal roster runs this pipeline over every animal
+ * on every filter change and needs no position; the per-animal info panel runs
+ * it for one animal and needs exactly one. `$top` sorts within each group, so
+ * making it unconditional would put a per-group sort on the roster path to
+ * serve a field the roster discards.
+ *
+ * `$top` (MongoDB 5.2+) rather than a `$sort` stage before `$group`: sorting
+ * the whole geo collection to learn one document per group is the expensive
+ * way to ask. Note its output array elides missing paths, so a newest document
+ * carrying no position yields `[]` — `mergeSummaries` is what rejects that.
+ *
  * @param {object} opts
  * @param {object} [opts.selector={}] - match stage for the geo collection
  * @param {string} opts.groupProperty - property naming the group, e.g. "bold:animal"
  * @param {string} opts.cellField - stored H3 field, e.g. "_h3_7"
  * @param {string} [opts.timeProperty="_whenMs"] - epoch-ms field to bound
+ * @param {boolean} [opts.includeLastPoint=false] - also accumulate the position
+ *   of the newest document in each group, as `lastPoint`
+ * @param {string} [opts.latProperty="geo:lat"] - latitude field, when included
+ * @param {string} [opts.lngProperty="geo:long"] - longitude field, when included
  * @returns {Array<object>} aggregation pipeline
  */
-export function buildSummaryPipeline({ selector = {}, groupProperty, cellField, timeProperty = "_whenMs" } = {}) {
+export function buildSummaryPipeline({
+  selector = {}, groupProperty, cellField, timeProperty = "_whenMs",
+  includeLastPoint = false, latProperty = "geo:lat", lngProperty = "geo:long",
+} = {}) {
   if (typeof groupProperty !== "string" || groupProperty.length === 0) {
     throw new Error("buildSummaryPipeline: groupProperty is required");
   }
@@ -44,6 +63,15 @@ export function buildSummaryPipeline({ selector = {}, groupProperty, cellField, 
       lastMs:  { $max: `$${timeProperty}` },
       count:   { $sum: 1 },
       cells:   { $addToSet: `$${cellField}` },
+      // Sorted by the same clock as firstMs/lastMs, so the point returned is
+      // the one whose time `lastMs` already reports — the caller needs no
+      // second timestamp.
+      ...(includeLastPoint ? {
+        lastPoint: { $top: {
+          sortBy: { [timeProperty]: -1 },
+          output: [`$${latProperty}`, `$${lngProperty}`],
+        } },
+      } : {}),
     } },
   ];
 }
@@ -60,6 +88,23 @@ function maxOrNull(a, b) {
   if (a === null || a === undefined) return b ?? null;
   if (b === null || b === undefined) return a;
   return Math.max(a, b);
+}
+
+/**
+ * A `[lat, lng]` pair, or null for anything else.
+ *
+ * `$top`'s output array elides missing field paths, so a group whose newest
+ * document carries no position arrives as `[]` and one missing a single
+ * coordinate as `[41.9]` — both must read as "no position" rather than as a
+ * half-position that would render as `41.9, undefined`.
+ *
+ * @private
+ */
+function pointOrNull(value) {
+  if (!Array.isArray(value) || value.length !== 2) return null;
+  const [lat, lng] = value;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return [lat, lng];
 }
 
 /**
@@ -86,6 +131,13 @@ export function mergeSummaries(batches) {
       if (typeof id !== "string" || id.length === 0) continue;
 
       const cells = (row.cells ?? []).filter(c => typeof c === "string" && c.length > 0);
+      const point = pointOrNull(row.lastPoint);
+      // The point's own time, not the group's. They differ when the newest
+      // document in a batch carries no position: `lastMs` still reports it,
+      // but the position on offer belongs to an earlier fix, and pairing the
+      // two would render a fix that never happened.
+      const pointMs = point ? (row.lastMs ?? null) : null;
+
       const prev = out.get(id);
       if (!prev) {
         out.set(id, {
@@ -93,6 +145,8 @@ export function mergeSummaries(batches) {
           lastMs:  row.lastMs ?? null,
           count:   row.count ?? 0,
           cells:   new Set(cells),
+          lastPoint:   point,
+          lastPointMs: pointMs,
         });
         continue;
       }
@@ -100,6 +154,12 @@ export function mergeSummaries(batches) {
       prev.lastMs  = maxOrNull(prev.lastMs, row.lastMs);
       prev.count  += row.count ?? 0;
       for (const cell of cells) prev.cells.add(cell);
+      // Batch order says nothing about recency, so the newer point wins on its
+      // timestamp. A point with no timestamp only fills an empty slot.
+      if (point && (prev.lastPoint === null || (pointMs ?? -Infinity) > (prev.lastPointMs ?? -Infinity))) {
+        prev.lastPoint   = point;
+        prev.lastPointMs = pointMs;
+      }
     }
   }
   return out;

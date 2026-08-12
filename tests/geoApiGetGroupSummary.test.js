@@ -40,6 +40,20 @@ function collectionOf(docs = [], aggregateResults = []) {
   };
 }
 
+/** Like `collectionOf`, but records every pipeline it is handed. */
+function recordingCollectionOf(aggregateResults = []) {
+  const pipelines = [];
+  let call = 0;
+  return {
+    pipelines,
+    aggregate: (pipeline) => {
+      pipelines.push(pipeline);
+      return { toArray: async () => aggregateResults[call++] ?? [] };
+    },
+    find: () => ({ toArray: async () => [] }),
+  };
+}
+
 function makeApi(collections) {
   return new GeoApi({ collections });
 }
@@ -220,6 +234,60 @@ describe("GeoApi.getGroupSummary", function() {
     assert.deepEqual(out.resources, []);
     assert.deepEqual(out.summary, {});
     assert.equal(out.meta.groupCount, 0);
+  });
+
+  it("reports no last point unless one was asked for", async function() {
+    const api = makeApi({
+      track: collectionOf([], [[{ _id: "a:1", firstMs: 1, lastMs: 900, count: 2, cells: [CELL_NORTH] }]]),
+      animal: collectionOf([{ _id: "a:1" }]),
+    });
+
+    const out = await api.getGroupSummary({
+      queries: [{ dataCollection: "track", dataSelector: {}, resourceCollection: "animal" }],
+      groupProperty: "bold:animal",
+    });
+
+    assert.isNull(out.summary["a:1"].lastPoint);
+    assert.isNull(out.summary["a:1"].lastPointMs);
+  });
+
+  it("returns the newest position and its time when asked for a last point", async function() {
+    const api = makeApi({
+      track: collectionOf([], [[{
+        _id: "a:1", firstMs: 1, lastMs: 900, count: 2,
+        cells: [CELL_NORTH], lastPoint: [41.9518756, -88.0172475],
+      }]]),
+      animal: collectionOf([{ _id: "a:1" }]),
+    });
+
+    const out = await api.getGroupSummary({
+      queries: [{ dataCollection: "track", dataSelector: {}, resourceCollection: "animal" }],
+      groupProperty: "bold:animal",
+      includeLastPoint: true,
+    });
+
+    // Unrounded: the caller formats it. Cells round to 4dp because a cell is
+    // ~1.2 km wide; a fix is a fix.
+    assert.deepEqual(out.summary["a:1"].lastPoint, [41.9518756, -88.0172475]);
+    assert.equal(out.summary["a:1"].lastPointMs, 900);
+  });
+
+  it("puts the last-point accumulator in the pipeline only when asked", async function() {
+    const withPoint = recordingCollectionOf([[]]);
+    const without   = recordingCollectionOf([[]]);
+
+    await makeApi({ track: withPoint, animal: collectionOf([]) }).getGroupSummary({
+      queries: [{ dataCollection: "track", dataSelector: {}, resourceCollection: "animal" }],
+      groupProperty: "bold:animal",
+      includeLastPoint: true,
+    });
+    await makeApi({ track: without, animal: collectionOf([]) }).getGroupSummary({
+      queries: [{ dataCollection: "track", dataSelector: {}, resourceCollection: "animal" }],
+      groupProperty: "bold:animal",
+    });
+
+    assert.property(withPoint.pipelines[0][1].$group, "lastPoint");
+    assert.notProperty(without.pipelines[0][1].$group, "lastPoint");
   });
 
   it("names the registered collections when one is unknown", async function() {

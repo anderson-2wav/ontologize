@@ -66,6 +66,10 @@ export class GeoApi extends ApiNamespace {
   /** Ceiling on centroids returned across all groups before stepping coarser. */
   static SUMMARY_MAX_CELLS = 20000;
 
+  /** Position fields read by `getGroupSummary`'s opt-in last-point accumulator. */
+  static SUMMARY_LAT_PROPERTY = "geo:lat";
+  static SUMMARY_LNG_PROPERTY = "geo:long";
+
   /** Collection `outline` scans for containing regions. */
   static OUTLINE_COLLECTION = "gov";
 
@@ -601,6 +605,12 @@ export class GeoApi extends ApiNamespace {
    * @param {number} [opts.maxCells=20000] - ceiling before stepping coarser
    * @param {{collection: string, selector: object, geometryProperty: string}} [opts.regions]
    * @param {string} [opts.timeProperty="_whenMs"]
+   * @param {boolean} [opts.includeLastPoint=false] - also return each group's
+   *   newest position as `summary[id].lastPoint` (`[lat, lng]`, unrounded) and
+   *   its time as `lastPointMs`, both null when the group has no usable one.
+   *   Opt-in: it costs a per-group sort, and the roster path does not want it.
+   * @param {string} [opts.latProperty="geo:lat"] - with `includeLastPoint`
+   * @param {string} [opts.lngProperty="geo:long"] - with `includeLastPoint`
    * @returns {Promise<{resources: object[], summary: object, regions: object[], meta: object}>}
    * @throws {Error} if a data or resource collection is not registered. A bad
    *   *region* config does not throw: region tagging degrades to no tags and
@@ -611,6 +621,7 @@ export class GeoApi extends ApiNamespace {
     const groupProperty = opts.groupProperty ?? "bold:animal";
     const timeProperty = opts.timeProperty ?? "_whenMs";
     const maxCells = opts.maxCells ?? GeoApi.SUMMARY_MAX_CELLS;
+    const includeLastPoint = opts.includeLastPoint === true;
 
     // Resolution ladder: the requested resolution, then every coarser stored
     // one. h3FieldName throws for resolutions the importer never wrote, so a
@@ -634,6 +645,9 @@ export class GeoApi extends ApiNamespace {
           groupProperty,
           cellField,
           timeProperty,
+          includeLastPoint,
+          latProperty: opts.latProperty ?? GeoApi.SUMMARY_LAT_PROPERTY,
+          lngProperty: opts.lngProperty ?? GeoApi.SUMMARY_LNG_PROPERTY,
         });
         batches.push(await collection.aggregate(pipeline).toArray());
       }
@@ -691,6 +705,10 @@ export class GeoApi extends ApiNamespace {
         count:   facts.count,
         cells,
         regions: regionDocs.length > 0 ? tagRegions(cells, regionDocs) : [],
+        // Unrounded, unlike `cells`: a cell centroid stands for a ~1.2 km
+        // hexagon and rounds to 4dp, but this is an actual fix.
+        lastPoint:   facts.lastPoint ?? null,
+        lastPointMs: facts.lastPointMs ?? null,
       };
     }
 
