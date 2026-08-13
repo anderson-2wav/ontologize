@@ -54,8 +54,19 @@ function recordingCollectionOf(aggregateResults = []) {
   };
 }
 
+/**
+ * A host standing in for an Ontologize instance. `publicCollection` is part of
+ * the contract GeoApi relies on — it is how the public-data time window reaches
+ * a read path — so the double implements it. Here it is an identity, which is
+ * what a real instance returns for a collection not listed in
+ * `opts.publicDataCollections`; the window itself is tested in
+ * `timeWindow.test.js` and `windowedCollection.test.js`.
+ */
 function makeApi(collections) {
-  return new GeoApi({ collections });
+  return new GeoApi({
+    collections,
+    publicCollection: async name => collections[name],
+  });
 }
 
 describe("GeoApi.getGroupSummary", function() {

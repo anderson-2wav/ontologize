@@ -13,6 +13,7 @@ import { GeoApi } from "./api/GeoApi.js";
 import { SchemaApi } from "./api/SchemaApi.js";
 import { DisplayApi } from "./api/DisplayApi.js";
 import { CLIENT_FLAT_API, installFlatApi } from "./api/flatApi.js";
+import { createWindowProvider, windowCollection } from "./geo/windowedCollection.js";
 
 /**
  * Ontologize - Utilities for working with ontology data in JSON-LD format
@@ -113,6 +114,15 @@ export class Ontologize {
     this.opts.dateFormat = this.opts.dateFormat || "M/d/yyyy";
     this.opts.dateTimeFormat = this.opts.dateTimeFormat || "M/d/yyyy h:mm a ZZ";
     this.opts.dateTimeZone = this.opts.dateTimeZone || "America/Los_Angeles";
+    // Defaults to 0 — no delay. BOLD is a general library and must not silently
+    // hide a third of a year of anyone's data; the delay is a deployment policy,
+    // so an app that wants one sets it. See getPublicDataDelayDays.
+    this.opts.publicDataDelayDays = this.opts.publicDataDelayDays ?? 0;
+    // Which collections the public-data window applies to. Empty by default and
+    // strictly opt-in, because the window filters on a time property: applied to
+    // a collection whose documents have no `_whenMs` it would match nothing and
+    // silently empty that collection instead of trimming it.
+    this.opts.publicDataCollections = this.opts.publicDataCollections || [];
     if (this.opts.collections) {
       Object.assign(this.collections, this.opts.collections);
     }
@@ -231,6 +241,69 @@ export class Ontologize {
    */
   get geo() {
     return this._geoApi ??= new GeoApi(this);
+  }
+
+  /**
+   * How many days of the most recent time-stamped geo data are withheld from
+   * publication.
+   *
+   * **The single seam for this policy.** It reads `opts.publicDataDelayDays`
+   * today, which comes from settings. The value is meant to become an
+   * admin-editable setting stored in the database; when it does, only this
+   * method changes — every caller already asks the question here rather than
+   * reaching for the option directly.
+   *
+   * @returns {number} days; 0 means no delay
+   */
+  getPublicDataDelayDays() {
+    const days = this.opts.publicDataDelayDays;
+    return typeof days === "number" && Number.isFinite(days) && days > 0 ? days : 0;
+  }
+
+  /**
+   * Resolver for the current public-data window clause, shared by every read
+   * path so the individuals' bounds are read once per TTL rather than per query.
+   * @returns {{clause: function(): Promise<object|null>, invalidate: function(): void}}
+   */
+  get windowProvider() {
+    return this._windowProvider ??= createWindowProvider({
+      animalCollection: this.collections[this.opts.publicDataIndividualsCollection ?? "animal"],
+      timeZone: this.opts.dateTimeZone,
+      // A getter, not a snapshot: the delay is meant to become an
+      // admin-editable setting, and this way it is read per request.
+      delayDays: () => this.getPublicDataDelayDays(),
+    });
+  }
+
+  /**
+   * A registered collection with the public-data window applied — **the read
+   * accessor**. Every path that answers a client should use this.
+   *
+   * Maintenance and write paths must keep using `collections[name]` directly:
+   * a reasoning pass over a windowed view would stamp only the visible
+   * documents and never revisit the rest, and an H3 backfill that skipped
+   * recent documents would leave them with no cell field, invisible on the map
+   * even after the delay released them.
+   *
+   * Returns the collection untouched when it is not in
+   * `opts.publicDataCollections`, so a collection with no time property is
+   * never accidentally emptied.
+   *
+   * Not memoised: the clause is resolved per call, so a long-lived caller
+   * cannot pin yesterday's window.
+   *
+   * @param {string} name - registered collection name
+   * @returns {Promise<object>}
+   */
+  async publicCollection(name) {
+    const collection = this.collections[name];
+    if (!collection) {
+      throw new Error(
+        `publicCollection: unknown collection "${name}" — registered: ${Object.keys(this.collections).join(", ")}`
+      );
+    }
+    if (!this.opts.publicDataCollections.includes(name)) return collection;
+    return windowCollection(collection, this.windowProvider);
   }
 
   /**

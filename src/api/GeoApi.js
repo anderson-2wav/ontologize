@@ -583,6 +583,27 @@ export class GeoApi extends ApiNamespace {
   }
 
   /**
+   * The same, with the public-data window applied — for anything answering a
+   * client. `Ontologize#publicCollection` returns the collection untouched
+   * unless it is listed in `opts.publicDataCollections`, so this is safe for
+   * collections that carry no time property.
+   *
+   * `updateSpatialRange` deliberately does **not** use this: it is a
+   * maintenance path that recomputes and stores a hull, so it reads the full
+   * collection like the reasoner does. The consequence — a stored
+   * `bold:spatialRange` describing suppressed locations — is a known,
+   * deliberately deferred gap; see the time-window spec.
+   *
+   * @param {string} name
+   * @returns {Promise<object>}
+   * @private
+   */
+  async _requirePublicCollection(name) {
+    this._requireCollection(name);   // throws with the registered-names message
+    return this.ontologize.publicCollection(name);
+  }
+
+  /**
    * Per-group facts for the GeoView group selector: time bounds, document
    * count, a compact spatial footprint, and region tags.
    *
@@ -639,7 +660,12 @@ export class GeoApi extends ApiNamespace {
       const cellField = h3FieldName(cellRes);
       const batches = [];
       for (const query of queries) {
-        const collection = this._requireCollection(query.dataCollection);
+        // Windowed. Everything the animal roster and CritterInfo display is
+        // derived from this one aggregation — the report count, the first/last
+        // range, the final-location row, the H3 footprint, the region tags, and
+        // roster membership itself — so suppressing here suppresses all of it
+        // consistently, with no client-side cooperation required.
+        const collection = await this._requirePublicCollection(query.dataCollection);
         const pipeline = buildSummaryPipeline({
           selector: query.dataSelector ?? {},
           groupProperty,

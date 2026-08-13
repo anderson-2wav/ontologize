@@ -89,13 +89,27 @@ function binTimes(times, minMs, maxMs) {
  * index.js for a Critter Track example). Throws if the name is unknown so
  * caller / route-level validation catches bad input early.
  */
-function resolveCollection(ontologize, name) {
+async function resolveCollection(ontologize, name) {
   const col = ontologize?.collections?.[name];
   if (!col) {
     const known = Object.keys(ontologize?.collections ?? {}).join(", ") || "(none)";
     throw new Error(`Unknown collection "${name}". Known: ${known}`);
   }
-  return col;
+  // Windowed: this is the path that ships whole raw documents to the browser.
+  // `publicCollection` returns the collection untouched unless it is configured
+  // for windowing, so hosts that set no policy are unaffected. Kept in lockstep
+  // with the app-side twin in /server/lib/geoCellFetcher.js — the Meteor and
+  // Nuxt hosts must not diverge on what they publish.
+  //
+  // A host that cannot answer this is a throw, never a fall-back to `col`:
+  // silently serving unwindowed documents is the exact failure this guards.
+  if (typeof ontologize.publicCollection !== "function") {
+    throw new Error(
+      "cellFetcher: the ontologize instance does not implement publicCollection(), " +
+      "so the public-data window cannot be applied; refusing to read unwindowed"
+    );
+  }
+  return ontologize.publicCollection(name);
 }
 
 /**
@@ -145,7 +159,7 @@ export async function getDocsInCell({
   const resolution = h3.getResolution(cellId);
   const fieldName = h3FieldName(resolution); // throws if resolution isn't stored
 
-  const col = resolveCollection(ontologize, collection);
+  const col = await resolveCollection(ontologize, collection);
   const match = { ...baseSelector, [fieldName]: cellId };
 
   // Probe with a +1 limit so we can tell raw-vs-summary in one round trip.
