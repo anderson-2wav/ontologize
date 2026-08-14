@@ -38,6 +38,15 @@ export class Ontologize {
   // here for back-compat with callers reading Ontologize.DEFAULT_COLOR_SCHEME.
   static DEFAULT_COLOR_SCHEME = DisplayApi.DEFAULT_COLOR_SCHEME;
 
+  /** Namespace collection holding user-adjustable application settings. */
+  static APP_COLLECTION = "app";
+
+  /** The singleton settings resource within it. */
+  static APP_SETTINGS_ID = "app:settings";
+
+  /** Days of the most recent geo data withheld from publication. */
+  static PUBLIC_DATA_DELAY_PROPERTY = "track:publicDataDelayDays";
+
   // Singleton instance
   static _instance = null;
 
@@ -255,9 +264,44 @@ export class Ontologize {
    *
    * @returns {number} days; 0 means no delay
    */
-  getPublicDataDelayDays() {
-    const days = this.opts.publicDataDelayDays;
-    return typeof days === "number" && Number.isFinite(days) && days > 0 ? days : 0;
+  async getPublicDataDelayDays() {
+    const fromSettings = await this.getAppSetting(Ontologize.PUBLIC_DATA_DELAY_PROPERTY);
+    // `>= 0`, not `> 0`: zero is a meaningful stored value — it is how an admin
+    // turns the rolling delay off — and must win over the settings.json default
+    // rather than reading as "absent".
+    if (typeof fromSettings === "number" && Number.isFinite(fromSettings) && fromSettings >= 0) {
+      return fromSettings;
+    }
+    const fallback = this.opts.publicDataDelayDays;
+    return typeof fallback === "number" && Number.isFinite(fallback) && fallback > 0 ? fallback : 0;
+  }
+
+  /**
+   * One property off the singleton application-settings resource.
+   *
+   * These are *application* settings an admin adjusts at runtime, as distinct
+   * from deployment config in settings.json. They live in the graph rather than
+   * an ad-hoc collection so an agent can see them alongside everything else.
+   *
+   * Returns undefined — never throws — when the collection is unregistered, the
+   * resource has not been bootstrapped, or the read fails. Every caller pairs
+   * this with a deployment-config fallback, so a BOLD app that never bootstraps
+   * `app:settings` behaves exactly as it did before the collection existed.
+   *
+   * @param {string} property - compacted property name, e.g. "track:publicDataDelayDays"
+   * @returns {Promise<*>} the value, or undefined
+   */
+  async getAppSetting(property) {
+    const collection = this.collections[this.opts.appSettingsCollection ?? Ontologize.APP_COLLECTION];
+    if (!collection) return undefined;
+    try {
+      const doc = await collection.findOne({ _id: this.opts.appSettingsId ?? Ontologize.APP_SETTINGS_ID });
+      return doc?.[property];
+    }
+    catch (err) {
+      console.warn(`getAppSetting("${property}") failed: ${err?.message ?? err}`);
+      return undefined;
+    }
   }
 
   /**

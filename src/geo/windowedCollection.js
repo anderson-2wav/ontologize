@@ -56,12 +56,20 @@ export function createWindowProvider({
   animalCollection, timeZone, delayDays, nowFn = Date.now, ttlMs = DEFAULT_TTL_MS,
   groupProperty = "bold:animal", timeProperty = "_whenMs",
 } = {}) {
-  let cachedBounds = null;
+  let cached = null;   // { bounds, days }
   let cachedAtMs = -Infinity;
 
-  async function bounds() {
+  /**
+   * Both inputs to the clause, under one TTL.
+   *
+   * The delay is cached with the bounds rather than read per query because it
+   * now comes from the `app:settings` resource — a database read like the
+   * bounds, and an admin edit to either should take effect on the same
+   * schedule.
+   */
+  async function inputs() {
     const now = nowFn();
-    if (cachedBounds !== null && now - cachedAtMs < ttlMs) return cachedBounds;
+    if (cached !== null && now - cachedAtMs < ttlMs) return cached;
 
     // Deliberately unguarded: a failure here must propagate. Falling back to
     // "no bounds" would publish exactly the documents this module hides, and
@@ -70,27 +78,29 @@ export function createWindowProvider({
       { $or: [{ [START_PROPERTY]: { $exists: true } }, { [END_PROPERTY]: { $exists: true } }] },
       { projection: { _id: 1, [START_PROPERTY]: 1, [END_PROPERTY]: 1 } }
     ).toArray();
+    // `await` on a plain number is harmless, so a caller may still pass one.
+    const days = await (typeof delayDays === "function" ? delayDays() : delayDays);
 
-    // Assigned only after the await resolves, so a throw leaves the previous
+    // Assigned only after the awaits resolve, so a throw leaves the previous
     // value in place and is not itself cached.
-    cachedBounds = parseAnimalBounds(docs, timeZone);
+    cached = { bounds: parseAnimalBounds(docs, timeZone), days };
     cachedAtMs = now;
-    return cachedBounds;
+    return cached;
   }
 
   return {
     async clause() {
-      const days = typeof delayDays === "function" ? delayDays() : delayDays;
+      const { bounds, days } = await inputs();
       return buildWindowClause({
         cutoffMs: dayCutoffMs(nowFn(), days, timeZone),
-        bounds: await bounds(),
+        bounds,
         groupProperty,
         timeProperty,
       });
     },
-    /** Drop the cached bounds; for tests and for an in-process bounds edit. */
+    /** Drop the cache; for tests and for an in-process settings or bounds edit. */
     invalidate() {
-      cachedBounds = null;
+      cached = null;
       cachedAtMs = -Infinity;
     },
   };
