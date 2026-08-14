@@ -14,7 +14,7 @@ import { getSpatialRange, positionsOf, HULL_TYPES } from "../geo/range.js";
 import { simplifyShape, DEFAULT_TOLERANCE } from "../geo/simplify.js";
 import { pickDepictionByRole, withDepictionRole } from "../geo/depiction.js";
 import { pointInGeometry, geometryBbox, pointInBbox } from "../geo/pointInPolygon.js";
-import { buildSummaryPipeline, mergeSummaries, centroidsForCells, tagRegions } from "../geo/groupSummary.js";
+import { buildSummaryPipeline, mergeSummaries, centroidsForCells, tagRegions, normalizeRegionSets } from "../geo/groupSummary.js";
 import { h3FieldName, PARENT_RESOLUTIONS } from "../geo/h3.js";
 import { Query } from "../Query.js";
 
@@ -624,7 +624,14 @@ export class GeoApi extends ApiNamespace {
    * @param {number} [opts.cellRes=7] - stored H3 resolution to summarise
    * @param {string[]} [opts.fields] - roster projection; omit for whole documents
    * @param {number} [opts.maxCells=20000] - ceiling before stepping coarser
-   * @param {{collection: string, selector: object, geometryProperty: string}} [opts.regions]
+   * @param {object|Array<object>} [opts.regions] - one region config, or a list
+   *   of independent ones. Each is `{key, collection, selector,
+   *   geometryProperty}`; `key` names the scheme and defaults to `"region"`.
+   *   Several sets tag the same groups against different partitions — IDNR's
+   *   three administrative regions and its five wildlife regions, say — and a
+   *   group carries tags from all of them in one flat `summary[id].regions`.
+   *   The returned `regions` catalog carries `set` so a client can separate
+   *   them, and `meta.regionSets` reports availability per key.
    * @param {string} [opts.timeProperty="_whenMs"]
    * @param {boolean} [opts.includeLastPoint=false] - also return each group's
    *   newest position as `summary[id].lastPoint` (`[lat, lng]`, unrounded) and
@@ -688,32 +695,63 @@ export class GeoApi extends ApiNamespace {
       if (i === ladder.length - 1) break;
     }
 
-    // Region documents: three rows, fetched once, never shipped — the polygons
-    // are far too heavy for a field client.
+    // Region documents: a handful of rows, fetched once, never shipped — the
+    // polygons are far too heavy for a field client.
+    //
+    // One flat list across every configured set, because that is exactly what
+    // `tagRegions` consumes and what `summary[id].regions` holds: a group's tags
+    // are region *ids*, and which scheme each id belongs to is answered by the
+    // catalog, not by splitting the tags. That keeps the per-group shape
+    // unchanged while supporting any number of schemes.
+    const regionSets = normalizeRegionSets(opts.regions);
     const regionDocs = [];
-    if (opts.regions?.collection) {
+    const regionSetsAvailable = {};
+
+    for (const set of regionSets) {
+      regionSetsAvailable[set.key] = false;
       // Region tagging degrades, never fails. An unregistered collection, a
       // malformed selector, or an unreadable region collection leaves the
-      // roster intact with no tags and `regionsAvailable: false` — a missing
+      // roster intact with no tags and that set's flag false — a missing
       // region config must never blank the animal list. Only this block is
       // wrapped: a failure of the summary aggregation or the roster fetch is
       // still a failed request.
+      //
+      // Scoped to one set so a bad config in one scheme cannot take out a good
+      // one beside it, which is the whole reason the sets are independent.
+      // Where this set's rows start, so a mid-iteration failure can be rolled
+      // back to exactly this set's contribution rather than discarding a
+      // healthy set's rows alongside it.
+      const mark = regionDocs.length;
       try {
-        const geometryProperty = opts.regions.geometryProperty ?? "bold:spatialDepiction";
-        const collection = this._requireCollection(opts.regions.collection);
-        const rows = await collection.find(opts.regions.selector ?? {}).toArray();
+        const collection = this._requireCollection(set.collection);
+        const rows = await collection.find(set.selector).toArray();
         for (const row of rows) {
+          // Resolved rather than read raw. `bold:spatialDepiction` is
+          // multi-valued: a resource carrying a [detail, thumbnail] pair stores
+          // an **array**, and an array has no `.type`, so `pointInGeometry`
+          // returns false for every point — the region silently tags nothing
+          // and the filter reports "0 animals" with total confidence. The three
+          // IDNR regions never hit this only because their single depiction
+          // collapses to a bare object on import.
+          //
+          // Detail, and non-strict: a region with only a thumbnail should tag
+          // at ~1 km accuracy rather than not at all, which is well inside what
+          // "which region is this animal in" needs.
+          const geometry = pickDepictionByRole(row[set.geometryProperty], "detail");
+          if (geometry !== null) regionSetsAvailable[set.key] = true;
           regionDocs.push({
             _id: row._id,
             label: row["rdfs:label"] ?? row["foaf:name"] ?? row._id,
-            geometry: row[geometryProperty] ?? null,
+            set: set.key,
+            geometry,
           });
         }
       }
       catch (err) {
-        regionDocs.length = 0;
+        regionDocs.length = mark;
+        regionSetsAvailable[set.key] = false;
         console.warn(
-          `getGroupSummary: region tagging skipped — ${err?.message ?? err}`
+          `getGroupSummary: region tagging skipped for "${set.key}" — ${err?.message ?? err}`
         );
       }
     }
@@ -762,14 +800,19 @@ export class GeoApi extends ApiNamespace {
     return {
       resources,
       summary,
-      regions: regionDocs.map(({ _id, label }) => ({ _id, label })),
+      // `set` is what lets a client with two region filters tell which catalog
+      // entries belong to which. A single-set caller can ignore it.
+      regions: regionDocs.map(({ _id, label, set }) => ({ _id, label, set })),
       meta: {
         cellProperty: h3FieldName(cellRes),
         cellRes,
         groupCount: merged.size,
         cellsAvailable,
         timeAvailable,
+        // Kept as the any-set reading it has always been, so a single-set
+        // caller's gating is unchanged. Per-set gating reads `regionSets`.
         regionsAvailable: regionDocs.some(r => r.geometry !== null),
+        regionSets: regionSetsAvailable,
         truncated,
       },
     };

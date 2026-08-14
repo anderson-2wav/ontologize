@@ -20,16 +20,26 @@ const NORTH_GEOMETRY = {
 
 /**
  * Minimal collection: `aggregate` replays canned rows per call, `find` filters
- * by `_id: {$in}` and honours a projection's field list.
+ * by `_id: {$in}` and by top-level field equality, and honours a projection's
+ * field list.
+ *
+ * The equality pass exists because region selectors are `{"@type": "…"}`. A
+ * fake that ignored them returned every region document to every region set,
+ * which made a multi-set test report tags no real query would produce — the
+ * fixture failing rather than the code.
  */
 function collectionOf(docs = [], aggregateResults = []) {
   let call = 0;
+  const matches = (doc, selector) => Object.entries(selector).every(([key, want]) => {
+    if (key === "_id" && want?.$in) return want.$in.includes(doc._id);
+    const have = doc[key];
+    return Array.isArray(have) ? have.includes(want) : have === want;
+  });
   return {
     aggregate: () => ({ toArray: async () => aggregateResults[call++] ?? [] }),
     find: (selector = {}, options = {}) => ({
       toArray: async () => {
-        const ids = selector?._id?.$in;
-        const rows = ids ? docs.filter(d => ids.includes(d._id)) : docs;
+        const rows = docs.filter(d => matches(d, selector ?? {}));
         const fields = options.projection && Object.keys(options.projection).filter(k => options.projection[k]);
         if (!fields) return rows.map(r => ({ ...r }));
         return rows.map(r => Object.fromEntries(
@@ -109,7 +119,7 @@ describe("GeoApi.getGroupSummary", function() {
       track: collectionOf([], [[{ _id: "a:1", firstMs: 1, lastMs: 2, count: 1, cells: [CELL_NORTH] }],
                                [{ _id: "a:2", firstMs: 1, lastMs: 2, count: 1, cells: [CELL_SOUTH] }]]),
       animal: collectionOf([{ _id: "a:1" }, { _id: "a:2" }]),
-      gov: collectionOf([{ _id: "gov:north", "rdfs:label": "North", "bold:spatialDepiction": NORTH_GEOMETRY }]),
+      gov: collectionOf([{ _id: "gov:north", "@type": "gov:IDNRRegion", "rdfs:label": "North", "bold:spatialDepiction": NORTH_GEOMETRY }]),
     });
 
     const out = await api.getGroupSummary({
@@ -119,7 +129,124 @@ describe("GeoApi.getGroupSummary", function() {
     });
 
     assert.deepEqual(out.summary["a:1"].regions, ["gov:north"]);
-    assert.deepEqual(out.regions, [{ _id: "gov:north", label: "North" }]);
+    // The single-object form normalizes to one set keyed "region".
+    assert.deepEqual(out.regions, [{ _id: "gov:north", label: "North", set: "region" }]);
+    assert.isTrue(out.meta.regionsAvailable);
+    assert.deepEqual(out.meta.regionSets, { region: true });
+  });
+
+  it("tags against several independent region sets at once", async function() {
+    const api = makeApi({
+      track: collectionOf([], [[{ _id: "a:1", firstMs: 1, lastMs: 2, count: 1, cells: [CELL_NORTH] }]]),
+      animal: collectionOf([{ _id: "a:1" }]),
+      gov: collectionOf([
+        { _id: "gov:north", "@type": "gov:IDNRRegion", "rdfs:label": "North", "bold:spatialDepiction": NORTH_GEOMETRY },
+        { _id: "gov:wild-1", "@type": "gov:IDNRWildlifeRegion", "rdfs:label": "Region 1", "bold:spatialDepiction": NORTH_GEOMETRY },
+      ]),
+    });
+
+    const out = await api.getGroupSummary({
+      queries: [{ dataCollection: "track", dataSelector: {}, resourceCollection: "animal" }],
+      groupProperty: "bold:animal",
+      regions: [
+        { key: "region", collection: "gov", selector: { "@type": "gov:IDNRRegion" } },
+        { key: "wildlifeRegion", collection: "gov", selector: { "@type": "gov:IDNRWildlifeRegion" } },
+      ],
+    });
+
+    // Tags stay one flat list of region ids; the catalog is what separates the
+    // two schemes. Both cover the same point, so the animal carries both.
+    assert.deepEqual(out.summary["a:1"].regions.sort(), ["gov:north", "gov:wild-1"]);
+    assert.deepEqual(
+      out.regions.map(r => [r._id, r.set]).sort(),
+      [["gov:north", "region"], ["gov:wild-1", "wildlifeRegion"]]
+    );
+    assert.deepEqual(out.meta.regionSets, { region: true, wildlifeRegion: true });
+  });
+
+  it("tags against a region carrying a [detail, thumbnail] depiction pair", async function() {
+    // `bold:spatialDepiction` is multi-valued. A region with two depictions
+    // stores an array, and an array has no `.type` — read raw, pointInGeometry
+    // returns false for every point and the region tags nothing at all, with no
+    // error anywhere. Found on the five gov:IDNRWildlifeRegion resources, which
+    // are the first region docs to carry a pair.
+    const thumbnail = {
+      type: "Feature",
+      properties: { "bold:depictionRole": "thumbnail" },
+      // Deliberately somewhere else, so a pass here cannot be the thumbnail's.
+      geometry: { type: "Polygon", coordinates: [[[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]]] },
+    };
+    const api = makeApi({
+      track: collectionOf([], [[{ _id: "a:1", firstMs: 1, lastMs: 2, count: 1, cells: [CELL_NORTH] }]]),
+      animal: collectionOf([{ _id: "a:1" }]),
+      gov: collectionOf([{
+        _id: "gov:wild-1",
+        "@type": "gov:IDNRWildlifeRegion",
+        "rdfs:label": "Region 1",
+        "bold:spatialDepiction": [NORTH_GEOMETRY, thumbnail],
+      }]),
+    });
+
+    const out = await api.getGroupSummary({
+      queries: [{ dataCollection: "track", dataSelector: {}, resourceCollection: "animal" }],
+      groupProperty: "bold:animal",
+      regions: { key: "wildlifeRegion", collection: "gov", selector: {} },
+    });
+
+    assert.deepEqual(out.summary["a:1"].regions, ["gov:wild-1"]);
+    assert.deepEqual(out.meta.regionSets, { wildlifeRegion: true });
+  });
+
+  it("falls back to a thumbnail when that is the only depiction", async function() {
+    // ~1 km accuracy beats not tagging at all, which is why the role lookup is
+    // non-strict here and strict in geo.outlines.
+    const api = makeApi({
+      track: collectionOf([], [[{ _id: "a:1", firstMs: 1, lastMs: 2, count: 1, cells: [CELL_NORTH] }]]),
+      animal: collectionOf([{ _id: "a:1" }]),
+      gov: collectionOf([{
+        _id: "gov:wild-1",
+        "rdfs:label": "Region 1",
+        "bold:spatialDepiction": [{ ...NORTH_GEOMETRY, properties: { "bold:depictionRole": "thumbnail" } }],
+      }]),
+    });
+
+    const out = await api.getGroupSummary({
+      queries: [{ dataCollection: "track", dataSelector: {}, resourceCollection: "animal" }],
+      groupProperty: "bold:animal",
+      regions: { collection: "gov", selector: {} },
+    });
+
+    assert.deepEqual(out.summary["a:1"].regions, ["gov:wild-1"]);
+  });
+
+  it("keeps a healthy region set when another set is misconfigured", async function() {
+    const api = makeApi({
+      track: collectionOf([], [[{ _id: "a:1", firstMs: 1, lastMs: 2, count: 1, cells: [CELL_NORTH] }]]),
+      animal: collectionOf([{ _id: "a:1" }]),
+      gov: collectionOf([{ _id: "gov:north", "rdfs:label": "North", "bold:spatialDepiction": NORTH_GEOMETRY }]),
+    });
+
+    const realWarn = console.warn;
+    console.warn = () => {};
+    let out;
+    try {
+      out = await api.getGroupSummary({
+        queries: [{ dataCollection: "track", dataSelector: {}, resourceCollection: "animal" }],
+        groupProperty: "bold:animal",
+        regions: [
+          { key: "region", collection: "gov", selector: {} },
+          { key: "wildlifeRegion", collection: "nope", selector: {} },
+        ],
+      });
+    }
+    finally {
+      console.warn = realWarn;
+    }
+
+    // The bad set is skipped; the good one still tags. This is the property the
+    // per-set try/catch exists for — one bad config must not take out its neighbour.
+    assert.deepEqual(out.summary["a:1"].regions, ["gov:north"]);
+    assert.deepEqual(out.meta.regionSets, { region: true, wildlifeRegion: false });
     assert.isTrue(out.meta.regionsAvailable);
   });
 

@@ -210,6 +210,62 @@ export function centroidsForCells(cellIds, precision = 4) {
  * @param {Array<{_id: string, geometry: object}>} regions
  * @returns {string[]} region ids, in the order the regions were given
  */
+/**
+ * The set key an unkeyed region config gets. Named for the filter it drives on
+ * the client, which is where the key surfaces (`meta.regionSets.region`).
+ */
+export const DEFAULT_REGION_SET_KEY = "region";
+
+/** Where a region set's geometry lives, absent a `geometryProperty`. */
+export const DEFAULT_REGION_GEOMETRY_PROPERTY = "bold:spatialDepiction";
+
+/**
+ * Normalize the `regions` option into a list of keyed region sets.
+ *
+ * A caller may tag groups against **several independent region schemes** at
+ * once — IDNR's three administrative regions and its five wildlife-management
+ * regions are two different partitions of the same 102 counties, not a
+ * hierarchy, and an animal carries tags from both. Each set gets a `key` so the
+ * client can tell one scheme's tags from another's in the returned catalog.
+ *
+ * The single-object form is the original contract and still works, normalizing
+ * to one set keyed `"region"` — so every existing caller is unaffected.
+ *
+ * Nothing here is Illinois-specific; the keys and selectors are configuration,
+ * which is the property that keeps this in the LGPL module at all. See the spec
+ * §3, "Nothing server-side is Illinois-specific".
+ *
+ * A duplicate key would make two schemes indistinguishable in the catalog, so
+ * the later one is dropped rather than silently shadowing — a config error that
+ * degrades like every other region misconfiguration rather than throwing.
+ *
+ * @param {object|Array<object>|null} regions - one config or a list of them
+ * @returns {Array<{key: string, collection: string, selector: object, geometryProperty: string}>}
+ */
+export function normalizeRegionSets(regions) {
+  if (!regions) return [];
+  const list = Array.isArray(regions) ? regions : [regions];
+
+  const out = [];
+  const seen = new Set();
+  for (const entry of list) {
+    if (!entry?.collection) continue;
+    const key = entry.key ?? DEFAULT_REGION_SET_KEY;
+    if (seen.has(key)) {
+      console.warn(`getGroupSummary: duplicate region set key "${key}" — ignoring the later one`);
+      continue;
+    }
+    seen.add(key);
+    out.push({
+      key,
+      collection: entry.collection,
+      selector: entry.selector ?? {},
+      geometryProperty: entry.geometryProperty ?? DEFAULT_REGION_GEOMETRY_PROPERTY,
+    });
+  }
+  return out;
+}
+
 export function tagRegions(centroids, regions) {
   const tags = [];
   for (const region of regions ?? []) {

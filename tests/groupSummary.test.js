@@ -9,7 +9,10 @@
  */
 
 import { assert } from "chai";
-import { buildSummaryPipeline, mergeSummaries, centroidsForCells, tagRegions } from "../src/geo/groupSummary.js";
+import {
+  buildSummaryPipeline, mergeSummaries, centroidsForCells, tagRegions,
+  normalizeRegionSets, DEFAULT_REGION_GEOMETRY_PROPERTY
+} from "../src/geo/groupSummary.js";
 import { latLngToCell } from "h3-js";
 
 describe("buildSummaryPipeline", function() {
@@ -265,5 +268,60 @@ describe("tagRegions", function() {
   it("returns an empty array for empty inputs", function() {
     assert.deepEqual(tagRegions([], [NORTH]), []);
     assert.deepEqual(tagRegions([[42, -88.5]], []), []);
+  });
+});
+
+describe("normalizeRegionSets", function() {
+  it("normalizes the single-object form to one set keyed \"region\"", function() {
+    // The original contract. Every caller written before region sets existed
+    // passes this shape, and must keep working unchanged.
+    assert.deepEqual(
+      normalizeRegionSets({ collection: "gov", selector: { "@type": "gov:IDNRRegion" } }),
+      [{
+        key: "region",
+        collection: "gov",
+        selector: { "@type": "gov:IDNRRegion" },
+        geometryProperty: DEFAULT_REGION_GEOMETRY_PROPERTY
+      }]
+    );
+  });
+
+  it("keeps each set's own key, selector and geometry property", function() {
+    const out = normalizeRegionSets([
+      { key: "region", collection: "gov", selector: { a: 1 }, geometryProperty: "x:geom" },
+      { key: "wildlifeRegion", collection: "gov", selector: { b: 2 } },
+    ]);
+    assert.deepEqual(out.map(s => s.key), ["region", "wildlifeRegion"]);
+    assert.equal(out[0].geometryProperty, "x:geom");
+    assert.equal(out[1].geometryProperty, DEFAULT_REGION_GEOMETRY_PROPERTY);
+    assert.deepEqual(out[1].selector, { b: 2 });
+  });
+
+  it("drops a duplicate key rather than shadowing the first", function() {
+    // Two sets under one key would be indistinguishable in the returned
+    // catalog, which is the one thing the key exists to prevent.
+    const realWarn = console.warn;
+    const warnings = [];
+    console.warn = (...args) => warnings.push(args.join(" "));
+    let out;
+    try {
+      out = normalizeRegionSets([
+        { key: "region", collection: "gov", selector: { first: true } },
+        { key: "region", collection: "gov", selector: { second: true } },
+      ]);
+    }
+    finally {
+      console.warn = realWarn;
+    }
+    assert.lengthOf(out, 1);
+    assert.deepEqual(out[0].selector, { first: true });
+    assert.lengthOf(warnings, 1);
+  });
+
+  it("skips entries with no collection, and handles absent config", function() {
+    assert.deepEqual(normalizeRegionSets(null), []);
+    assert.deepEqual(normalizeRegionSets(undefined), []);
+    assert.deepEqual(normalizeRegionSets([]), []);
+    assert.deepEqual(normalizeRegionSets([{ key: "region" }, null]), []);
   });
 });
