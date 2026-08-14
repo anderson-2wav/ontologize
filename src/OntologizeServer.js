@@ -211,6 +211,24 @@ export class OntologizeServer extends Ontologize {
     const types = Array.isArray(resource["@type"]) ? resource["@type"] : [resource["@type"]];
 
     // Support both compacted (e.g., "owl:Class") and expanded (e.g., "http://www.w3.org/2002/07/owl#Class") forms
+    //
+    // The line this list draws is *what the resource says something about*, not
+    // whether it looks like OWL. A type belongs here when the resource
+    // describes the schema — a class, a property, a property's characteristics,
+    // an axiom relating classes. It does NOT belong here when the resource
+    // describes individuals, however OWL-flavoured its type is:
+    // `owl:NamedIndividual`, `owl:AllDifferent` and
+    // `owl:NegativePropertyAssertion` are all assertions about instances, and
+    // classifying them as TBox would move real instance data into the ontology
+    // collection and out of reasoning's reach.
+    //
+    // Getting an omission wrong in the other direction is quiet rather than
+    // loud: a TBox node missing from this list is routed to the ABox catch-all,
+    // where it is an instance of nothing. The reasoner derives nothing about it,
+    // so `reasonCollection` never stamps it `bold:reasoned`, so every pass
+    // re-selects it and reports it as permanently unreasoned. BFO's five
+    // `owl:AllDisjointClasses` blank nodes did exactly this — they were the
+    // entire residue of a full Critter Track rebuild.
     const ontologyTypes = [
       "owl:Class", "http://www.w3.org/2002/07/owl#Class",
       "rdfs:Class", "http://www.w3.org/2000/01/rdf-schema#Class",
@@ -222,7 +240,22 @@ export class OntologizeServer extends Ontologize {
       "owl:Ontology", "http://www.w3.org/2002/07/owl#Ontology",
       "owl:Restriction", "http://www.w3.org/2002/07/owl#Restriction",
       "owl:FunctionalProperty", "http://www.w3.org/2002/07/owl#FunctionalProperty",
-      "owl:InverseFunctionalProperty", "http://www.w3.org/2002/07/owl#InverseFunctionalProperty"
+      "owl:InverseFunctionalProperty", "http://www.w3.org/2002/07/owl#InverseFunctionalProperty",
+
+      // Axiom nodes. Usually blank nodes carrying only `owl:members`, so no
+      // other type is available to route them by.
+      "owl:AllDisjointClasses", "http://www.w3.org/2002/07/owl#AllDisjointClasses",
+      "owl:AllDisjointProperties", "http://www.w3.org/2002/07/owl#AllDisjointProperties",
+
+      // Property characteristics. Every one of these in the current corpus is
+      // co-typed `owl:ObjectProperty` and so already routed correctly — by
+      // accident of the co-typing, not by this list. A property declared with
+      // only its characteristic would have fallen through.
+      "owl:TransitiveProperty", "http://www.w3.org/2002/07/owl#TransitiveProperty",
+      "owl:SymmetricProperty", "http://www.w3.org/2002/07/owl#SymmetricProperty",
+      "owl:AsymmetricProperty", "http://www.w3.org/2002/07/owl#AsymmetricProperty",
+      "owl:ReflexiveProperty", "http://www.w3.org/2002/07/owl#ReflexiveProperty",
+      "owl:IrreflexiveProperty", "http://www.w3.org/2002/07/owl#IrreflexiveProperty"
     ];
 
     return types.some(type => ontologyTypes.includes(type));

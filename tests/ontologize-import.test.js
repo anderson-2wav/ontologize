@@ -329,6 +329,69 @@ describe("OntologizeServer Import", function () {
 
       assert.isFalse(await ontologizeServer.isTBoxResource(resource));
     });
+
+    // OWL axiom nodes. These carry no type but their own, so an omission from
+    // the recognised list routes them to the ABox collection — where they are
+    // instances of nothing, the reasoner derives nothing about them, and
+    // `reasonCollection` never stamps them `bold:reasoned`, so every pass
+    // re-selects them forever. BFO ships five owl:AllDisjointClasses blank
+    // nodes, which were exactly the residue a full Critter Track rebuild
+    // reported as permanently unreasoned.
+    it("should identify owl:AllDisjointClasses as TBox resource", async function () {
+      const resource = {
+        "_id": "_:genid154",
+        "@type": ["owl:AllDisjointClasses"],
+        "owl:members": { "@list": ["ex:A", "ex:B"] }
+      };
+
+      assert.isTrue(await ontologizeServer.isTBoxResource(resource));
+    });
+
+    it("should identify owl:AllDisjointProperties as TBox resource", async function () {
+      const resource = {
+        "_id": "_:genid200",
+        "@type": ["owl:AllDisjointProperties"]
+      };
+
+      assert.isTrue(await ontologizeServer.isTBoxResource(resource));
+    });
+
+    // Property characteristics. In the current corpus every one of these is
+    // co-typed owl:ObjectProperty and so routes correctly by accident; a
+    // property declared with only its characteristic would not. Asserted
+    // individually so the accident is not what the suite is testing.
+    for (const characteristic of [
+      "owl:TransitiveProperty", "owl:SymmetricProperty", "owl:AsymmetricProperty",
+      "owl:ReflexiveProperty", "owl:IrreflexiveProperty"
+    ]) {
+      it(`should identify ${characteristic} alone as TBox resource`, async function () {
+        assert.isTrue(await ontologizeServer.isTBoxResource({
+          "_id": "ex:someProperty",
+          "@type": [characteristic]
+        }));
+      });
+    }
+
+    it("should identify the expanded IRI form of an axiom type", async function () {
+      assert.isTrue(await ontologizeServer.isTBoxResource({
+        "_id": "_:genid154",
+        "@type": ["http://www.w3.org/2002/07/owl#AllDisjointClasses"]
+      }));
+    });
+
+    // The dangerous direction. These are OWL constructs too, but they assert
+    // things about *individuals*, so classifying them as TBox would move real
+    // instance data out of the ABox collections and out of reasoning's reach.
+    for (const aboxType of [
+      "owl:NamedIndividual", "owl:AllDifferent", "owl:NegativePropertyAssertion"
+    ]) {
+      it(`should NOT identify ${aboxType} as TBox resource`, async function () {
+        assert.isFalse(await ontologizeServer.isTBoxResource({
+          "_id": "ex:individual",
+          "@type": [aboxType]
+        }));
+      });
+    }
   });
 
   describe("real file import", function () {
